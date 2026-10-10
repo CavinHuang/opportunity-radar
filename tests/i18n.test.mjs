@@ -76,3 +76,13 @@ test('new source scheduling labels are translated',()=>{
   assert.equal(translate('下次扫描：','en-US'),'Next scan: ');
   assert.equal(translate('连续失败','en-US'),'Consecutive failures');
 });
+
+test('source feedback has genuine English labels and numeric counters',()=>{
+ assert.equal(translate('信息源质量反馈','en-US'),'Source quality feedback');
+ assert.equal(translate('研判该来源','en-US'),'Review this source');
+ assert.equal(translate('收录 12 条','en-US'),'12 captured');
+ assert.equal(translate('收藏 3 · 忽略 4','en-US'),'3 saved · 4 dismissed');
+ assert.equal(translate('关联机会 2','en-US'),'2 linked opportunities');
+ assert.equal(translate('人工核查原文 1','en-US'),'1 originals reviewed');
+ assert.equal(translate('7 条关联证据待核查','en-US'),'7 associated stories need review');
+});
