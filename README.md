@@ -2,7 +2,28 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.3 本地运行版本**，不是已完成真实消费者试点的产品。主界面为中文，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.5 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+
+## 界面截图 / Screenshots
+
+> 以下为**真实应用前端截图**，使用隔离的临时 SQLite 数据库和明确标记为 `[DEMO]` 的记录，不代表真实消费者研究。截图环境限制 Chromium 直接访问本地 HTTP，脚本将浏览器 API 请求转发给真实本地服务；这不等于完成直接联网的浏览器 E2E 验收。
+
+**机会简报 · 简体中文**
+
+![Northstar 机会简报（演示数据）](docs/screenshots/dashboard-zh.webp)
+
+**Agent 接入中心 · English**
+
+![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
+
+复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v0.5 Agent 接入中心
+
+- 在「当前主实验 → Agent 接入」查看 Agent API 的配置状态、12 项 P0 工具、有效租约、待领任务及同步信息。
+- 复制 MCP stdio 命令、HTTP MCP 地址与当前实验 ID；页面**不会暴露 Agent Token**。
+- 新增由 Owner 权限保护的只读 API：`GET /api/agent/setup?project_id=<project-id>`，提供安全的集成概要。
+- 支持中文与英文切换，离线状态不冒充正在运行。雷达不管理外部 Agent 进程。
 
 ## 运行
 
