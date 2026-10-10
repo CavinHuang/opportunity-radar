@@ -134,6 +134,8 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             assert any(t.get('ownerKickoff') for t in call('/api/projects/'+linked['id'])['tasks'])
             page.locator('[data-tab="agent"]').click()
             page.get_by_text('外部 Agent 同步可信度').first.wait_for(timeout=10000)
+            page.get_by_text('5. 启动本地专业 Coding Agent（v1.3）').first.wait_for(timeout=10000)
+            assert page.locator('[data-action="copy-pilot-command"]').count()==1
             assert page.get_by_text('尚无 Agent 进度报告').count()>=1
             assert page.get_by_text('过期租约').count()>=1
             assert page.get_by_text('待返工').count()>=1
