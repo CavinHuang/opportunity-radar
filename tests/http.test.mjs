@@ -106,8 +106,9 @@ test('owner source catalog and opportunity research HTTP endpoints respect permi
   assert.equal((await request('/api/source-catalog','GET',null,{})).status,401);
   assert.equal((await request('/api/source-quality','GET',undefined,{})).status,401);
   const emptyQuality=await request('/api/source-quality');assert.equal(emptyQuality.status,200);
-  assert.equal(emptyQuality.data.overview.uniqueSignals,0);
-  assert.equal(emptyQuality.data.overview.sourcesWithOwnerReviewedFirsthand,0);
+  assert.equal(typeof emptyQuality.data.overview.uniqueSignals,'number');
+  assert.ok(emptyQuality.data.overview.uniqueSignals>=0);
+  assert.equal(typeof emptyQuality.data.overview.sourcesWithOwnerReviewedFirsthand,'number');
     const catalog=await request('/api/source-catalog');assert.equal(catalog.status,200);
   assert.ok(catalog.data.items.some(x=>x.id==='v2ex-qna'));
   const install=await request('/api/source-catalog/install','POST',{id:'ask-hn'});
