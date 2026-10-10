@@ -4,6 +4,25 @@ export const LANGUAGES = Object.freeze({ 'zh-CN': '简体中文', 'en-US': 'Engl
 export const LANGUAGE_STORAGE_KEY = 'radar-locale';
 
 const en = {
+ '标记为同一问题线索':'Mark as related problem leads',
+ '人工标记待进一步验证':'Owner-marked as related, not validated',
+ '人工研判：':'Owner review: ',
+ '人工核查理由（至少10字）':'Review rationale (at least 10 characters)',
+ '描述两条原文为什么可能是同一消费者问题，以及仍缺什么证据':'Describe why the originals might address the same problem and what evidence is still missing',
+ '只是人工认为同类问题，仍不代表不同消费者或付费需求。请先阅读原文。':'Owner believes these describe a similar problem, not proof of different consumers or paid demand. Read the originals first.',
+ '共同标题词：':'Shared title terms: ',
+ '组内最低标题相似度：':'Minimum within-group title similarity: ',
+ '可能转载 / 重复发帖 · 请逐条对照原文':'Possible syndication / repeat posts · Review each original',
+ '疑似重复转发':'Possible reposts','已人工标注':'Owner-labeled',
+ '同一问题待验证':'Related but unvalidated',
+ '人工排除':'Owner dismissed',
+ '不同问题误报':'Unrelated topic false positives',
+ '这些仅是当前候选窗口的人工判断计数，不是模型准确率、独立用户数量或市场需求指标。':'Owner judgments from the current candidate window only; not measured model precision, unique consumers or market demand.',
+ '误报原因分类':'Reason category',
+ '疑似转载或重复发帖':'Possible repost / syndication',
+ '实际是不同问题':'Different problems',
+ '与消费者问题无关':'Not a consumer problem',
+ '其他原因':'Other reason',
  '重复问题候选':'Repeated-problem candidates','仅标题相似 · 需要人工核查':'Title similarity only · Human review required',
  '仅看待核查':'Show pending only','查看已忽略':'Show dismissed','跨站点候选':'Cross-site lead','同站点候选':'Same-site lead',
  '独立消费者数量未知':'Independent consumer count unknown','已人工忽略':'Dismissed by owner','待人工核查':'Needs manual review',
@@ -267,6 +286,14 @@ const en = {
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
+ [/^共同标题词：(.+)$/,(_m,x)=>'Shared title terms: '+x],
+ [/^组内最低标题相似度：(.+)$/,(_m,x)=>'Minimum within-group title similarity: '+x],
+ [/^疑似重复转发 (\d+) 组$/,(_m,x)=>x+' possible repost groups'],
+ [/^已人工标注 (\d+) 组$/,(_m,x)=>x+' Owner-labeled groups'],
+ [/^同一问题待验证 (\d+) 组$/,(_m,x)=>x+' related but unvalidated groups'],
+ [/^人工排除 (\d+) 组$/,(_m,x)=>x+' Owner-dismissed groups'],
+ [/^不同问题误报 (\d+) 组$/,(_m,x)=>x+' different-problem false-positive groups'],
+
  [/^(\d+) 条不同 URL · (\d+) 个站点 · 独立消费者数量未知 · (.+)$/,(_m,n,d,st)=>n+' distinct URLs · '+d+' sites · Unique consumer count unknown · '+(en[st]||st)],
  [/^已检查最近 (\d+) 条信号，找到 (\d+) 组候选；其中 (\d+) 组来自多个站点，(\d+) 组已人工忽略。$/,(_m,a,b,c,d)=>'Examined '+a+' recent signals, found '+b+' candidate groups; '+c+' cross-site, '+d+' dismissed.'],
  [/^较早的 (\d+) 条线索尚未参与本次聚合。$/,(_m,n)=>n+' older signals are outside this scan window.'],
