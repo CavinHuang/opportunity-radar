@@ -47,3 +47,8 @@ This is a single-run availability result from a GitHub Runner, not a guarantee o
 Open the post, verify whether it is a firsthand experience, assess whether it is independent of known claims, and record reasons and time. Multiple links from the same identified author/site count as one firsthand consumer. Untested posts remain unreviewed. Even two manually corroborated independent posts cannot establish market size, user retention or willingness to pay.
 
 API: `GET /api/source-catalog`, `POST /api/source-catalog/install`, `GET /api/opportunities/:id/research`, `POST /api/opportunities/:id/evidence/review`.
+
+
+## v0.9 观察数据与来源效果复盘
+
+来源目录的质量提示不等于市场证据。进入「信息源与信号」后，每条已安装来源都有来自 SQLite 的观察数据：实际采集数量、收藏与忽略、关联机会、人工核查的原文及 Owner 分类的独立第一手经历。点击「研判该来源」可查看该源仍待处理的帖子。相同帖子在不同 RSS 中出现时，不能将来源侧计数相加为独立消费者数量。任何统计都不自动代表用户规模、付费意愿或需求已被证实。
