@@ -158,7 +158,7 @@ export async function scanSources(store,{ids,fetchImpl=fetch,dnsLookup=lookup,on
               if(!existing.feedIds?.includes(feed.id))store.put('sources',{...existing,feedIds:[...(existing.feedIds||[]),feed.id]},existing.revision);
               continue;
             }
-            store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,publishedAt:candidate.publishedAt||null,createdAt:time(),status:'new',linkedOpportunityId:null});added++;
+            store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:candidate.publishedAt||null,createdAt:time(),status:'new',linkedOpportunityId:null});added++;
           }
         }
         scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
@@ -181,7 +181,7 @@ export async function scanSources(store,{ids,fetchImpl=fetch,dnsLookup=lookup,on
 }
 export function addManualSignal(store,data){
   let url;try{url=new URL(String(data.url||''));}catch{throw error('BAD_SIGNAL_URL','需要可追溯的原始网页 URL');}
-  if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw error('BAD_SIGNAL_URL','仅允许公开的 HTTP(S) 网页 URL');
+  if(url.protocol!=='https:'||url.username||url.password)throw error('BAD_SIGNAL_URL','机会证据必须使用公开 HTTPS 网页 URL');
   const title=clean(data.title,220),description=clean(data.description,500);
   if(!title||!description)throw error('BAD_REQUEST','标题和真实摘要不能为空');
   const canonical=canonicalArticleUrl(url.href),id=hash(canonical);
