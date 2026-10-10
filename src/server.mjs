@@ -113,6 +113,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:service.startExperiment(await body(req))});
     if(pathname==='/api/history'&&req.method==='GET')return send(res,200,{projects:store.list('projects'),ledger:store.list('ledger')});
+    const kickoff=/^\/api\/projects\/([^/]+)\/kickoff$/.exec(pathname);
+    if(kickoff&&req.method==='POST')return send(res,200,service.prepareKickoff(kickoff[1]));
     const projectFeedback=/^\/api\/projects\/([^/]+)\/feedback$/.exec(pathname);
     if(projectFeedback&&req.method==='GET')return send(res,200,{result:feedbackOverview(store,projectFeedback[1])});
     if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
