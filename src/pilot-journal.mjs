@@ -1,4 +1,4 @@
-import {mkdirSync,lstatSync,openSync,writeFileSync,closeSync,renameSync,unlinkSync,readdirSync,readFileSync,statSync,chmodSync} from 'node:fs';
+import {mkdirSync,lstatSync,openSync,writeFileSync,closeSync,renameSync,unlinkSync,readdirSync,readFileSync,chmodSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 
@@ -57,7 +57,8 @@ export function listRunReceipts({projectId,dir,limit=20}={}){
   if(!/^run-[0-9a-f-]{36}\.json$/i.test(name))continue;
   const path=join(dest,name);
   try{
-   if(!statSync(path).isFile()||statSync(path).size>16_384)continue;
+   const fileStat=lstatSync(path);
+   if(!fileStat.isFile()||fileStat.isSymbolicLink()||fileStat.size>16_384)continue;
    const item=JSON.parse(readFileSync(path,'utf8'));
    if(projectId&&item.projectId!==projectId)continue;
    output.push(receiptSummary(item));
