@@ -13,7 +13,7 @@ const definitions={
   'task.transition':object({task_id:str,status:{type:'string',enum:['in_progress','blocked','submitted','rework']},expected_revision:integer,lease_token:str,idempotency_key:str},['task_id','status','expected_revision','lease_token','idempotency_key']),
   'task.release':object({task_id:str,expected_revision:integer,lease_token:str,idempotency_key:str},['task_id','expected_revision','lease_token','idempotency_key']),
   'progress.report':object({project_id:str,summary:str,limitations:{type:'array',items:str},idempotency_key:str},['project_id','summary','idempotency_key']),
-  'evidence.attach':object({project_id:str,milestone_id:str,type:str,source_uri:str,repo:str,commit_sha:str,criteria_ids:{type:'array',items:str},idempotency_key:str},['project_id','type','idempotency_key']),
+  'evidence.attach':object({project_id:str,milestone_id:str,task_id:str,type:str,source_uri:str,repo:str,commit_sha:str,criteria_ids:{type:'array',items:str},idempotency_key:str},['project_id','type','idempotency_key']),
   'issue.raise_blocker':object({project_id:str,summary:str,options:{type:'array',items:str},idempotency_key:str},['project_id','summary','idempotency_key']),
   'decision.request':object({project_id:str,kind:str,summary:str,impact:str,alternatives:{type:'array',items:str},idempotency_key:str},['project_id','kind','summary','idempotency_key']),
   'handoff.submit':object({project_id:str,milestone_id:str,baseline_revision:integer,commit_sha:str,evidence_ids:{type:'array',items:str},preview_link:str,known_gaps:{type:'array',items:str},idempotency_key:str},['project_id','milestone_id','baseline_revision','idempotency_key'])
