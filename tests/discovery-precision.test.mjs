@@ -22,7 +22,7 @@ test('group diagnostics explain actual lexical matches and flag possible syndica
  const c={title:'How to organize purchase receipts for online orders?',url:'https://one.example/p/3',author:'Mia',description:'An unrelated description of a personal experience.'};
  const sameAuthor=groupDiagnostics([a,c]);
  assert.ok(sameAuthor.possibleRepostReasons.includes('repeated_attributed_author'));
- assert.equal(groupDiagnostics([{...a,title:'Need help organizing receipts from orders'},{...b,title:'Organizing purchase receipts after ordering online'}]).possibleRepost,false);
+ assert.equal(groupDiagnostics([{...a,title:'Need help organizing receipts from orders'},{...b,author:'An independent pen name',description:'A completely different summary describing a personal workflow and how the search changed.',title:'Organizing purchase receipts after ordering online'}]).possibleRepost,false);
 });
 test('human related label is versioned, remains unverified, and new article invalidates previous label',()=>{
  const {store,close}=setup();try{
