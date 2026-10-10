@@ -109,6 +109,26 @@ export function discoveryClusters(store,{includeDismissed=false,limit=12,maxSign
 }
 /** Resolve a current membership signature before any Owner-approved bulk association.
  * All members are stored as UNREVIEWED evidence; lexical similarity is not validation. */
+/** Labeled feedback is a human assessment, NOT ground-truth market evidence.
+ * Review statistics are limited to groups currently in the candidate window. */
+export function discoveryQualityReport(store){
+ const all=discoveryClusters(store,{includeDismissed:true,limit:300});
+ const reviewed=all.items.filter(g=>g.state==='dismissed'||g.state==='reviewed_related');
+ const related=reviewed.filter(g=>g.state==='reviewed_related').length;
+ const dismissed=reviewed.length-related;
+ const classifications={possible_repost:0,different_problem:0,not_consumer_problem:0,other:0};
+ for(const g of reviewed)if(g.state==='dismissed'&&Object.hasOwn(classifications,g.reviewClass))
+  classifications[g.reviewClass]++;
+ return {generatedAt:new Date().toISOString(),currentCandidateGroups:all.stats.proposedGroups,
+  currentLabeledGroups:reviewed.length,ownerMarkedRelated:related,ownerDismissed:dismissed,
+  unlabeledGroups:all.stats.proposedGroups-reviewed.length,
+  possibleReposts:all.stats.possibleReposts,classificationCounts:classifications,
+  ownerLabelAgreementRatio:reviewed.length>=5?Number((related/reviewed.length).toFixed(3)):null,
+  labelCoverage:all.stats.proposedGroups?Number((reviewed.length/all.stats.proposedGroups).toFixed(3)):null,
+  caveats:['Only Owner labels for current candidate memberships are counted; ignored prior versions are not ground truth.',
+   'Repost flags use matching titles, summaries, or author strings and may be false positives.',
+   'Owner labels are not independent consumer identity, demand, willingness to pay, or objective precision measurements.']};
+}
 export function currentDiscoveryGroup(store,id,fingerprint){
  const current=discoveryClusters(store,{includeDismissed:true,limit:300}).items.find(g=>g.id===id);
  if(!current)throw fail('NOT_FOUND','候选组已不存在或不满足聚合条件',404);
@@ -125,7 +145,7 @@ export function reviewDiscoveryCluster(store,id,{action,fingerprint,reason='',cl
  const group=groups.items.find(x=>x.id===id);
  if(!group)throw fail('NOT_FOUND','候选组不存在或已不满足聚合条件',404);
  if(group.fingerprint!==fingerprint)throw fail('CLUSTER_CHANGED','候选组新增或减少了信号，请刷新',409);
- if(action==='dismiss'&&!DISMISS_CLASSES.includes(classification))
+ if(action==='dismiss'&&classification!==undefined&&!DISMISS_CLASSES.includes(classification))
   throw fail('BAD_REVIEW_CLASS','请选择具体误报/噪音类别');
  if(['dismiss','confirm'].includes(action)&&(String(reason).trim().length<10||String(reason).trim().length>500))
   throw fail('REVIEW_REASON_REQUIRED','忽略候选组需要 10–500 字的核查理由');
@@ -137,7 +157,7 @@ export function reviewDiscoveryCluster(store,id,{action,fingerprint,reason='',cl
   if(expected_revision!==undefined&&expected_revision!==(fresh?.revision||0))
    throw fail('REVISION_CONFLICT','候选组已被其他操作修改',409);
   const row=store.put('discovery_reviews',{id,status:action==='dismiss'?'dismissed':action==='confirm'?'reviewed_related':'active',
-   fingerprint,classification:action==='dismiss'?classification:action==='confirm'?'same_problem_unverified':null,
+   fingerprint,classification:action==='dismiss'?(classification||'other'):action==='confirm'?'same_problem_unverified':null,
    reason:action==='restore'?null:String(reason).trim(),
    reviewedBy:'owner',reviewedAt:new Date().toISOString()},fresh?.revision||0);
   store.event('discovery.cluster.reviewed',id,'owner',{action,fingerprint,count:group.signalCount,classification:row.classification});
