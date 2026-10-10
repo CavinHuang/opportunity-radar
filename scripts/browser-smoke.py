@@ -138,6 +138,8 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.get_by_text('6. 查看交付与恢复中断任务（v1.4）').first.wait_for(timeout=10000)
             assert page.locator('[data-action="copy-pilot-status"]').count()==1
             assert page.locator('[data-action="copy-pilot-recover"]').count()==1
+            assert page.locator('[data-action="copy-pilot-run"]').count()==1
+            page.get_by_text('运行默认最长 90 分钟').first.wait_for(timeout=10000)
             assert page.locator('[data-action="copy-pilot-command"]').count()==1
             assert page.get_by_text('尚无 Agent 进度报告').count()>=1
             assert page.get_by_text('过期租约').count()>=1

@@ -3,6 +3,8 @@ import {randomUUID,createHash} from 'node:crypto';
 import {existsSync,realpathSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {runCodingProcess,parseTimeoutMinutes} from './pilot-supervisor.mjs';
+import {listRunReceipts} from './pilot-journal.mjs';
 
 const fail=(code,message)=>Object.assign(new Error(message),{code});
 const uuid=()=>randomUUID();
@@ -13,7 +15,7 @@ export function parseArgs(argv){
  const [action,...rest]=argv;
  if(!['doctor','plan','run','submit','status','recover'].includes(action))throw fail('BAD_COMMAND','Use doctor, plan, run, status, recover or submit');
  const config={action};
- const fields=new Set(['project','task','workspace','provider','base-url','pr','sha','confirm','json','help','recovery-note']);
+ const fields=new Set(['project','task','workspace','provider','base-url','pr','sha','confirm','json','help','recovery-note','timeout-minutes','journal-dir']);
  for(let i=0;i<rest.length;i++){
   const entry=rest[i];if(!entry.startsWith('--'))throw fail('BAD_ARGUMENT','Unexpected argument: '+entry);
   const field=entry.slice(2);if(!fields.has(field)||Object.hasOwn(config,field))throw fail('BAD_ARGUMENT','Unknown or repeated argument: '+field);
@@ -138,55 +140,11 @@ export function commandFor(provider,workspace){
  if(provider==='claude')return {command:'claude',args:['-p','--permission-mode','acceptEdits'],viaStdin:true};
  throw fail('BAD_PROVIDER','Supported providers: '+supportedProviders.join(', '));
 }
-function childExit(child,prompt){
- return new Promise((ok,reject)=>{
-  let finished=false;
-  child.once('error',err=>{if(!finished){finished=true;reject(err);}});
-  child.once('close',(code,signal)=>{if(!finished){finished=true;ok({code,signal});}});
-  if(child.stdin){
-   child.stdin.on('error',()=>{});child.stdin.end(prompt);
-  }
- });
-}
-export async function executePilot({call,projectId,taskId,workspace,provider,confirmed=false,spawnImpl=spawn,gitImpl=git,renewIntervalMs=300000}){
- if(!confirmed)throw fail('CONFIRM_REQUIRED','Execution requires --confirm');
- const info=inspectWorkspace(workspace,{gitImpl});
- const {context,task,prompt}=await getReadyWork(call,projectId,taskId);
- const command=commandFor(provider,info.workspace);
- const claim=await call('task.claim',{project_id:projectId,task_id:task.id,baseline_revision:context.baseline.revision,
-  expected_revision:task.revision,idempotency_key:uuid()});
- let latest=claim.task,token=claim.lease_token,renewalFailed=null,busy=false;
- let child,interval,exit,releaseError;
- try{
-  child=spawnImpl(command.command,command.args,{cwd:info.workspace,env:sanitizedEnv(),stdio:['pipe','inherit','inherit'],shell:false});
-  interval=setInterval(async()=>{
-   if(busy)return;busy=true;
-   try{
-    const result=await call('task.claim',{project_id:projectId,task_id:task.id,baseline_revision:context.baseline.revision,
-      expected_revision:latest.revision,lease_token:token,idempotency_key:uuid()});
-    latest=result.task;token=result.lease_token;
-   }catch(e){renewalFailed=e;child.kill('SIGTERM');}
-   finally{busy=false;}
-  },renewIntervalMs);
-  exit=await childExit(child,prompt);
-  if(renewalFailed)throw fail('LEASE_RENEWAL_FAILED','Cannot continue safely after lost lease: '+renewalFailed.message);
-  const success=exit.code===0&&exit.signal===null;
-  await call('progress.report',{project_id:projectId,summary:success
-   ?provider+' local coding command exited 0; awaiting human review, a real PR and independently verified CI.'
-   :provider+' local coding command failed/terminated; task not submitted.',
-   limitations:['Local exit code does not prove a working product or passing CI.'],idempotency_key:uuid()});
-  return {taskId:task.id,workspace:info.workspace,provider,exitCode:exit.code,signal:exit.signal,submitted:false,requiresHumanReview:true};
- }finally{
-  if(interval)clearInterval(interval);
-  if(child&&!exit)child.kill('SIGTERM');
-  try{
-   // Leave the task open for a later explicit submit; process success is not a delivery.
-   const live=await call('project.get_context',{project_id:projectId});
-   const current=live.project.tasks.find(x=>x.id===task.id);
-   if(current?.lease?.token===token)await call('task.release',{task_id:task.id,lease_token:token,
-     expected_revision:current.revision,idempotency_key:uuid()});
-  }catch(e){releaseError=e;process.stderr.write('Lease release requires manual reconciliation: '+e.message+'\n');}
- }
+export {parseTimeoutMinutes};
+export async function executePilot(options){
+ const {gitImpl=git,spawnImpl=spawn,...rest}=options;
+ return runCodingProcess({...rest,spawnImpl,inspectWorkspace:(workspace)=>inspectWorkspace(workspace,{gitImpl}),
+  getReadyWork,commandFor,git:gitImpl,sanitizedEnv});
 }
 export function deliveryKey(step,{projectId,taskId,sha,pr}){
  return 'pilot-v1.4-'+step+'-'+createHash('sha256').update([projectId,taskId,sha,pr].join('|')).digest('hex').slice(0,36);
@@ -205,7 +163,7 @@ export async function getDeliveryWork(call,projectId,taskId){
    taskId?'The selected task is not part of the current approved deliverable':'Specify --task to avoid submitting the wrong product task');
  return {context,task,milestone};
 }
-export async function statusPilot({call,projectId}){
+export async function statusPilot({call,projectId,journalDir}){
  const context=await call('project.get_context',{project_id:required(projectId,'project')});
  const tasks=context.project.tasks.map(t=>({
   id:t.id,title:t.title,status:t.status,baselineRevision:t.baselineRevision||null,
@@ -215,7 +173,8 @@ export async function statusPilot({call,projectId}){
    tasks,submissions:context.project.submissions.map(s=>({id:s.id,milestoneId:s.milestoneId,
      commitSha:s.commitSha,baselineRevision:s.baselineRevision,state:s.acceptanceState,
      coverage:s.g2State,evidenceIds:s.evidenceIds})),
-   warning:'A lease expiry does not establish that an external coding process has stopped; no lease tokens are printed.'};
+   localRuns:listRunReceipts({projectId,dir:journalDir,limit:10}),
+   warning:'Local receipts do not prove current process health. A lease expiry does not prove the external process stopped; no tokens are printed.'};
 }
 export async function recoverPilot({call,projectId,taskId,recoveryNote,confirmed=false}){
  if(!confirmed)throw fail('CONFIRM_REQUIRED','Recovery requires --confirm after checking external processes and side effects');
@@ -297,12 +256,12 @@ export async function submitPilot({call,projectId,taskId,workspace,pr,sha,confir
 }
 export async function main(argv=process.argv.slice(2),env=process.env){
  const opts=parseArgs(argv);
- if(opts.help){process.stdout.write('Usage: node scripts/agent-pilot.mjs doctor|plan|run|status|recover|submit --project ID --workspace DIR [--provider codex|claude] [--task ID] [--confirm] [--pr URL --sha SHA] [--recovery-note TEXT]\n');return;}
+ if(opts.help){process.stdout.write('Usage: node scripts/agent-pilot.mjs doctor|plan|run|status|recover|submit --project ID --workspace DIR [--provider codex|claude] [--task ID] [--confirm] [--pr URL --sha SHA] [--recovery-note TEXT] [--timeout-minutes 90] [--journal-dir PATH]\n');return;}
  const projectId=required(opts.project,'--project');
  const call=agentApi({baseUrl:opts['base-url']||env.RADAR_BASE_URL,token:env.RADAR_AGENT_TOKEN});
  let output;
  if(opts.action==='status'){
-  output=await statusPilot({call,projectId});
+  output=await statusPilot({call,projectId,journalDir:opts['journal-dir']});
  }else if(opts.action==='recover'){
   output=await recoverPilot({call,projectId,taskId:opts.task,recoveryNote:opts['recovery-note'],confirmed:opts.confirm});
  }else if(opts.action==='doctor'){
@@ -316,8 +275,13 @@ export async function main(argv=process.argv.slice(2),env=process.env){
   const data=await getReadyWork(call,projectId,opts.task);
   output=opts.json?{projectId,taskId:data.task.id,prompt:data.prompt}:data.prompt;
  }else if(opts.action==='run'){
-  output=await executePilot({call,projectId,taskId:opts.task,workspace:opts.workspace,
-   provider:opts.provider||'codex',confirmed:opts.confirm});
+  const controller=new AbortController(),stop=()=>controller.abort();
+  process.once('SIGINT',stop);process.once('SIGTERM',stop);
+  try{output=await executePilot({call,projectId,taskId:opts.task,workspace:opts.workspace,
+   provider:opts.provider||'codex',confirmed:opts.confirm,
+   timeoutMs:parseTimeoutMinutes(opts['timeout-minutes'])*60000,
+   journalDir:opts['journal-dir'],signal:controller.signal});}
+  finally{process.off('SIGINT',stop);process.off('SIGTERM',stop);}
  }else{
   output=await submitPilot({call,projectId,taskId:opts.task,workspace:opts.workspace,
    pr:opts.pr,sha:opts.sha,confirmed:opts.confirm});

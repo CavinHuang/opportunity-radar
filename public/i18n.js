@@ -60,6 +60,8 @@ const en = {
  '交付失败或终端关闭后，先查看任务、证据及提交状态。重复提交同一 PR 和 SHA 不会重复生成交付申请。':'After a failed handoff or closed terminal, inspect task, evidence and submission states. Retrying the same PR and SHA does not duplicate the handoff.',
  '复制状态检查命令':'Copy status command','复制人工恢复模板':'Copy manual recovery template',
  '仅在确认旧进程的实际工作、副作用以及租约确已过期后才能恢复；这不会自动终止外部进程。':'Recover only after inspecting the old process, external side effects and expired lease. This does not stop the external process automatically.',
+ '复制受控运行命令':'Copy supervised execution command',
+ '运行默认最长 90 分钟，可用 --timeout-minutes 设置 1–240 分钟；Ctrl+C 会请求取消。仅在本机保存脱敏执行记录（~/.opportunity-radar/runs），可通过 status 查看。执行完成不代表 PR 已提交，仍需人工检查源码、CI 和验收。':'Runs time out after 90 minutes by default; --timeout-minutes supports 1–240. Ctrl+C requests cancellation. Redacted local receipts (~/.opportunity-radar/runs) are visible through status. A finished run is not a PR and still requires source review, CI checks, and Owner acceptance.',
  '语言':'Language','Language / 语言':'Language','主实验':'Main experiment', 'Northstar · 把时间留给真正值得尝试的事':'Northstar · Make time for ideas worth testing',
  '尚未配置 RSS 来源；在 .env 中设置 RADAR_FEED_URLS。原始信号不能直接当成真实市场需求。':'No RSS feeds configured. Set RADAR_FEED_URLS in .env. Raw signals are not proof of consumer demand.',
  '尚未同步':'Not synced yet', '请输入你的 Radar Owner Token（仅存储于当前浏览器会话）':'Enter your Radar Owner Token (stored only for this browser session)', '请求失败':'Request failed',

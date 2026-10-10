@@ -1,4 +1,4 @@
-# v1.3 · 真实 Coding Agent 接入试点
+# v1.5 · 真实 Coding Agent 接入与可靠运行试点
 
 本工具让已经在本机安装、登录的 **Codex CLI** 或 **Claude Code CLI** 在明确的 Git 工作目录里执行雷达已批准的任务。它不附带模型、不会替你进行模型登录，不会自动创建 PR、push、合并或人工验收。
 
@@ -98,3 +98,41 @@ npm run agent:pilot -- submit --project <PROJECT_ID> --task <TASK_ID> \
 ### 验证边界
 
 测试覆盖真实 Node HTTP Agent 认证、SQLite、临时 Git 仓库和故障注入；故障注入仍为自动化模拟，不能证明本机 Codex/Claude 已经完成真实交付。应用不自动创建或合并 PR，也不授予自己 G4 验收权限。
+
+## v1.5：受控执行、Ctrl+C 与本地运行回执
+
+Codex / Claude Code 可能需要很长时间修改工程；过去桥接器缺少超时策略，任务租约虽然可以恢复，但很难重建上次编码命令的运行结果。
+
+现在建议使用：
+
+```bash
+# 默认为 90 分钟；可设置 1–240 分钟
+npm run agent:pilot -- run --project <PROJECT_ID> --task <TASK_ID> \
+  --workspace /path/to/product --provider codex \
+  --timeout-minutes 90 --confirm
+
+# 查看雷达任务状态 + 此台机器最近 10 次本地运行回执
+npm run agent:pilot -- status --project <PROJECT_ID>
+
+# 可选：将回执放在另一个本地私有目录
+npm run agent:pilot -- status --project <PROJECT_ID> \
+  --journal-dir /private/location/radar-runs
+```
+
+### 一次运行到底会留下什么？
+
+运行回执默认放在 `~/.opportunity-radar/runs/run-<UUID>.json`，目录权限 `0700`、文件权限 `0600`。回执只保留项目与任务 ID、执行模型工具、批准基线、Git 分支与前后 HEAD、修改文件数量、开始结束时间、退出码与终止原因。**不保存完整指令、模型的 stdout/stderr、Token、环境变量、访谈内容或代码 Diff**。如需迁移机器，先了解目录只属于当前电脑；它不会自动上传到 Radar 服务或 GitHub。
+
+- `local_process_exited_zero`：编码 CLI 返回 0，只代表本地进程退出，并非应用验收成功。
+- `local_process_failed`：进程非零退出，不会自动提交任务或证据。
+- `timed_out`：超时请求终止（运行命令退出码 124）。
+- `cancelled`：用户发送 Ctrl+C / SIGTERM，请求停止（退出码 130）。
+- `lease_lost`：续租失败时请求停止（退出码 125），需要检查后使用既有 `recover` 步骤。
+- `running` / `starting`：仅表示最后一次成功写入回执时的状态。**机器崩溃后可能仍停留在 running，不能依此断言进程正在运行。**
+
+### 退出及安全边界
+
+- Pilot 向直接启动的 CLI 发出 SIGTERM，如果超过宽限期则尝试 SIGKILL。**这个操作不保证终止 CLI 派生的所有子进程，也不撤销已经执行的 Git push、远端部署或网络请求**。
+- 终止后会尝试释放自己持有的有效任务租约；若 Radar 不可达，先人工检查实际进程、Git 分支、远程部署和其他副作用，等待租约过期后再用 `recover`。
+- 即使留下了完整的执行回执，也必须审阅真实代码、运行测试并人工 push/创建 PR。最终 `submit` 仍需独立 GitHub CI 核验与 Owner 验收。
+- 编码工具自己的登录和沙箱由它们独立控制，Pilot 不向子进程传入 RADAR 或 GitHub Token，但工具仍可能读取其工作区中的其他文件或调用获准的外部命令。
