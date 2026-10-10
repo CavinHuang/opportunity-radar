@@ -93,7 +93,7 @@ test('first-launch readiness reports gaps as work to do, never confirms nonexist
   assert.equal(first.counts.previouslySuccessfulFeeds,1);
   assert.equal(first.counts.publicSignals,1);
   assert.equal(first.counts.opportunities,1);
-  assert.equal(first.checks.find(x=>x.id==='backup').ok,false);
+  assert.equal(first.checks.find(x=>x.id==='backup').ok,null);
   assert.match(first.warnings.join(' '),/not proof/);
   assert.ok(!JSON.stringify(first).includes('PRIVATE_FAKE_INTERVIEW_CONTENT'));
  }finally{x.close();}
