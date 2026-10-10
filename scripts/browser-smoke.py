@@ -59,6 +59,37 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             assert feed_id is not None
             quality=call('/api/source-quality')
             assert any(item['feedId']==feed_id for item in quality['items'])
+            # Isolated manually-entered TEST data: grouping never implies real demand.
+            for index,host in enumerate(['example.net','example.com'],start=1):
+                call('/api/signals/manual',{
+                    'title':'Lost receipts after buying online orders',
+                    'description':'[DEMO] Synthetic recurring topic, not a real consumer experience.',
+                    'url':'https://'+host+'/demo/source-'+str(index),
+                    'market':'International'
+                })
+            page.locator('[data-action="manage-sources"]').first.click() if page.locator('[data-action="manage-sources"]').count() else page.reload(wait_until='networkidle')
+            page.get_by_text('重复问题候选').first.wait_for(timeout=10000)
+            before=call('/api/discovery/clusters')
+            assert before['total']==1
+            assert before['items'][0]['signalCount']==2
+            page.locator('[data-action="cluster-dismiss"]').first.click()
+            page.locator('textarea[name="reason"]').fill('The two demonstration posts are synthetic duplicates, not real customers.')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            assert call('/api/discovery/clusters')['total']==0
+            page.locator('[data-action="toggle-cluster-history"]').first.click()
+            page.locator('[data-action="cluster-restore"]').first.click()
+            assert call('/api/discovery/clusters')['total']==1
+            page.locator('[data-action="cluster-link"]').first.click()
+            page.locator('[name="opportunity_id"]').select_option(oid)
+            page.locator('[name="acknowledgeUnverified"]').check()
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            after=call('/api/opportunities')
+            linked=next(o for o in after['items'] if o['id']==oid)
+            assert len(linked['sources'])==3
+            assert all(e.get('firsthand')==False and e.get('independent')==False for e in linked['sources'][-2:])
+            assert call('/api/discovery/clusters')['total']==0
             page.locator('[data-action="focus-source"]').first.click()
             page.wait_for_function("(feedId) => document.querySelector('#feed-filter')?.value === feedId",arg=feed_id,timeout=8000)
             page.locator('[data-action="show-opportunities"]').first.click()
