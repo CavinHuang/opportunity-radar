@@ -97,6 +97,15 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('#dialog-form button[type="submit"]').click()
             page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
             assert call('/api/opportunities/'+oid+'/validation')['result']['latestPlan']['outcome']=='inconclusive'
+            page.locator('[data-action="show-research"]').first.click()
+            page.get_by_text('反证与未知项').wait_for(timeout=10000)
+            assert page.get_by_text('核查来源').count()>=1
+            page.locator('[data-action="review-source"]').first.click()
+            page.locator('input[name="reviewed_original"]').check()
+            page.locator('textarea[name="note"]').fill('The reviewer has read the source and verified it is a synthetic demo, not a genuine customer account.')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.wait_for_timeout(500)
+            assert call('/api/opportunities/'+oid+'/research')['report']['stage']=='unverified'
             # An approved second research round becomes a linked, Owner-approved experiment.
             approved_plan=call('/api/opportunities/'+oid+'/validation',plan_inputs)['item']
             call('/api/opportunities/'+oid+'/validation/'+approved_plan['id']+'/observations',{
@@ -127,15 +136,6 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[data-tab="ledger"]').click()
             assert page.locator('[data-action="add-product-feedback"]').is_disabled()
             page.locator('[data-nav="brief"]').click()
-            page.locator('[data-action="show-research"]').first.click()
-            page.get_by_text('反证与未知项').wait_for(timeout=10000)
-            assert page.get_by_text('核查来源').count()>=1
-            page.locator('[data-action="review-source"]').first.click()
-            page.locator('input[name="reviewed_original"]').check()
-            page.locator('textarea[name="note"]').fill('The reviewer has read the source and verified it is a synthetic demo, not a genuine customer account.')
-            page.locator('#dialog-form button[type="submit"]').click()
-            page.wait_for_timeout(500)
-            assert call('/api/opportunities/'+oid+'/research')['report']['stage']=='unverified'
             page.locator('#locale-switch').select_option('en-US')
             assert page.locator('html').get_attribute('lang')=='en-US'
             assert not errors,errors
