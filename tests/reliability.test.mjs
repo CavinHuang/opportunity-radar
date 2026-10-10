@@ -96,3 +96,14 @@ test('GitHub G1 rejects mismatched SHA and prioritizes newer failed reruns',asyn
   checks=[{...checks[0],head_sha:sha,status:'in_progress'}];
   assert.equal((await verifyGitHubEvidence(e,'',{fetchImpl:mock,requiredChecks:'test'})).state,'pending');
 });
+
+
+test('product delivery cannot use non-GitHub owner attestation to bypass G1',()=>{
+  const {db,service:s,project:p,milestone:m}=setup();
+  try{
+    const e=attach(s,p,m,p.baselines[0].criteria.map(c=>c.id));
+    s.store.put('evidence',{...e,verificationState:'owner_attested'},e.revision);
+    const sub=s.tool('handoff.submit',{project_id:p.id,milestone_id:m.id,baseline_revision:1,commit_sha:sha,evidence_ids:[e.id],idempotency_key:'owner-attested-sub'});
+    assert.throws(()=>s.ownerDecision(p.id,{action:'accept',submissionId:sub.id,reason:'reviewed'}),{code:'GITHUB_G1_REQUIRED'});
+  }finally{db.close();}
+});
