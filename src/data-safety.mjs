@@ -1,6 +1,6 @@
 import {DatabaseSync} from 'node:sqlite';
 import {createHash,randomUUID} from 'node:crypto';
-import {copyFileSync,existsSync,lstatSync,linkSync,mkdirSync,openSync,closeSync,readFileSync,rmSync,statSync,chmodSync,writeFileSync} from 'node:fs';
+import {copyFileSync,existsSync,lstatSync,linkSync,mkdirSync,openSync,closeSync,readFileSync,readSync,rmSync,statSync,chmodSync,writeFileSync} from 'node:fs';
 import {dirname,resolve,basename,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -10,7 +10,12 @@ export const defaultDatabasePath=()=>resolve(process.env.RADAR_DB||join(root,'.d
 const tables=['records','events','idem'];
 const fileExists=p=>{try{lstatSync(p);return true}catch(e){if(e.code==='ENOENT')return false;throw e;}};
 const fileSafe=p=>{const stat=lstatSync(p);if(!stat.isFile()||stat.isSymbolicLink())throw fail('UNSAFE_FILE','Database/backup must be a regular non-symlink file');return stat;};
-const digestFile=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
+const digestFile=p=>{
+ const hash=createHash('sha256'),fd=openSync(p,'r'),block=Buffer.allocUnsafe(1024*1024);
+ try{let count;while((count=readSync(fd,block,0,block.length,null))>0)hash.update(block.subarray(0,count));}
+ finally{closeSync(fd);}
+ return hash.digest('hex');
+};
 function readonly(path){
  const p=resolve(path);
  if(!fileExists(p))throw fail('DATA_NOT_FOUND','Database not found: '+p);
