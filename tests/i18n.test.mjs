@@ -101,3 +101,11 @@ test('repeated-problem research inbox has bilingual labels and observable counte
  assert.equal(translate('2 条不同 URL · 2 个站点 · 独立消费者数量未知 · 待人工核查','en-US'),
    '2 distinct URLs · 2 sites · Unique consumer count unknown · Needs manual review');
 });
+
+test('candidate review classifications and repost warnings are translated',()=>{
+ assert.equal(translate('标记为同一问题线索','en-US'),'Mark as related problem leads');
+ assert.equal(translate('疑似转载或重复发帖','en-US'),'Possible repost / syndication');
+ assert.equal(translate('实际是不同问题','en-US'),'Different problems');
+ assert.equal(translate('疑似重复转发 2 组','en-US'),'2 possible repost groups');
+ assert.equal(translate('组内最低标题相似度：0.72','en-US'),'Minimum within-group title similarity: 0.72');
+});
