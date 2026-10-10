@@ -76,6 +76,13 @@ export function createService(store, options={}){
       const reason=required(data.reason,'reason'); const e=store.list('evidence').filter(x=>sub.evidenceIds.includes(x.id));
       if(action==='accept' && (!e.length || e.some(x=>!['verified','owner_attested'].includes(x.verificationState)) || sub.g2State!=='covered'))throw err('EVIDENCE_NOT_VERIFIED','证据尚未全部核验且验收条件未覆盖，不能批准',409);
       const m=get('milestones',sub.milestoneId);
+      if(action==='accept' && m.order===2 && (!sub.commitSha || !e.some(item=>
+        item.verificationState==='verified' &&
+        item.commitSha?.toLowerCase()===sub.commitSha.toLowerCase() &&
+        /^https:\/\/github\.com\//i.test(item.sourceUri||'') &&
+        Array.isArray(item.checks) && item.checks.length>0))){
+        throw err('GITHUB_G1_REQUIRED','产品代码交付必须有与提交 SHA 一致、已核实必需 CI 的 GitHub 证据',409);
+      }
       const nextSub=store.put('submissions',{...sub,acceptanceState:action==='accept'?'accepted':'rejected',decisionReason:reason,decidedAt:now(),decidedBy:owner},sub.revision);
       store.put('milestones',{...m,acceptanceState:action==='accept'?'accepted':'rejected',executionState:action==='accept'?'submitted':'rework',evidenceState:action==='accept'?'verified':m.evidenceState},m.revision);
       store.put('projects',{...p,status:action==='accept'?(m.order===1?'execution':m.order===2?'promotion':'review'):'execution',stage:action==='accept'?(m.order===1?'execution':m.order===2?'promotion':'review'):'execution'},p.revision);
