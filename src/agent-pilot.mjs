@@ -236,6 +236,7 @@ export async function main(argv=process.argv.slice(2),env=process.env){
    pr:opts.pr,sha:opts.sha,confirmed:opts.confirm});
  }
  process.stdout.write(typeof output==='string'?output+'\n':JSON.stringify(output,null,2)+'\n');
+ if(opts.action==='run'&&output.exitCode!==0)process.exitCode=output.exitCode||1;
 }
 const entry=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
 if(entry)main().catch(e=>{process.stderr.write((e.code||'ERROR')+': '+e.message+'\n');process.exitCode=1;});
