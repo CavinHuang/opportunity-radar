@@ -6,3 +6,9 @@ node_modules/
 .env
 .DS_Store
 coverage/
+
+# Private backup manifests and snapshots must never enter Git.
+private-backups/
+*.sqlite.manifest.json
+*.sqlite3
+*.sqlite3.manifest.json

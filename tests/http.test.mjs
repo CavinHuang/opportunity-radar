@@ -293,3 +293,26 @@ test('discovery quality counts Owner classifications without granting Agent visi
   assert.equal(invalid.body.error,'BAD_REVIEW_CLASS');
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('first-run readiness is Owner-only, meaningful with empty data, and does not leak research notes',async()=>{
+ const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const base='http://127.0.0.1:'+server.address().port;
+ try{
+  const deny=await fetch(base+'/api/operations/readiness');
+  assert.equal(deny.status,401);
+  const denyAgent=await fetch(base+'/api/operations/readiness',{headers:{Authorization:'Bearer test-agent-token'}});
+  assert.equal(denyAgent.status,401);
+  const ready=await fetch(base+'/api/operations/readiness',{headers:{'X-Radar-Owner-Key':'test-owner-token'}});
+  assert.equal(ready.status,200);
+  const report=await ready.json();
+  assert.equal(report.mode,'local-first');
+  assert.equal(report.ownerProtected,true);
+  assert.ok(report.checks.some(c=>c.id==='source_setup'));
+  assert.ok(report.checks.some(c=>c.id==='source_connectivity'));
+  assert.ok(report.checks.some(c=>c.id==='backup'&&c.ok===null));
+  assert.ok(Number.isInteger(report.counts.enabledFeeds));
+  assert.ok(!JSON.stringify(report).includes('PRIVATE_FAKE_INTERVIEW_CONTENT'));
+  assert.ok(report.warnings.some(x=>x.includes('not proof')));
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});

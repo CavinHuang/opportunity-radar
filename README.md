@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.7 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.8 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,21 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.8 · 本地可用性、首次配置和可靠的数据恢复
+
+这一版不再增加无验证的商业机会评分，而是打通**首次运行 → 真实信息源 → 研究记录 → 安全备份和故障恢复**所需要的基本运营能力：
+
+- **首次使用引导**：没有真实来源时，首页优先引导添加来源。信息源页新增「首次使用与数据安全」，显示启用数量、是否曾成功采集、待人工处理的实际信号和保存机会的状况；不能把默认订阅或演示信号当作连通性成功。
+- **完整本地备份**：新增 `npm run data -- backup --output /path/private.sqlite`，支持应用运行时通过 SQLite `VACUUM INTO` 读取一致性 WAL 快照，包含来源、机会、访谈、任务、账本及事件。生成 SHA-256 manifest，同步验证 SQLite 完整性和应用记录字段。
+- **备份验证**：`npm run data -- verify --input /path/private.sqlite`，比对文件校验和、格式、记录数量，损坏、缺少 manifest 或不匹配会明确失败。大数据库按 1MB 数据块计算 SHA，避免整库一次性载入内存。
+- **安全恢复**：`npm run data -- restore --input /path/private.sqlite --destination /path/recovered.sqlite --confirm`。恢复前后核查内容，**只创建新的数据库路径，不覆盖现有数据**；通过 `RADAR_DB` 切换。新增 `data doctor` 供迁移前检查。
+- **隐私保护**：备份为**未加密**的本地 SQLite，可能含私人访谈或未发布研发材料；只通过受信任的本地 CLI 生成与恢复，不增加网页远程下载数据库的接口。默认 `private-backups/` 和 manifest 已加入 Git 忽略规则。
+- 覆盖真实 Node HTTP 认证与首次状态、Chromium 页面、SQLite WAL 运行中备份、跨进程 CLI、数据损坏拒绝、现有路径保护以及恢复后继续读取实际机会的数据测试。
+
+**本地完整使用与灾难恢复手册**：[docs/LOCAL_OPERATIONS.md](docs/LOCAL_OPERATIONS.md)
+
+> 功能链在单机可以运行，但不意味着外部公网来源的长期可用性、真实专业 Coding Agent 自主开发或真实消费者愿意付费已通过生产环境测试；这些仍需要在你的运行环境完成实际验收。
 
 ## v1.7 · 机会发现质量反馈与转载风险识别
 
