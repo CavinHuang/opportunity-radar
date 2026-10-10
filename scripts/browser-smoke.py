@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             quality=call('/api/source-quality')
             assert any(item['feedId']==feed_id for item in quality['items'])
             page.locator('[data-action="focus-source"]').first.click()
-            assert page.locator('#feed-filter').input_value()==feed_id
+            page.wait_for_function("(feedId) => document.querySelector('#feed-filter')?.value === feedId",arg=feed_id,timeout=8000)
             page.locator('[data-action="show-opportunities"]').first.click()
             page.locator('[data-action="show-research"]').first.click()
             page.get_by_text('反证与未知项').wait_for(timeout=10000)
