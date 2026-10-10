@@ -2,3 +2,12 @@
 
 /* Language selector: keyboard accessible and compact in the existing toolbar. */
 .language-control{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #dae2dc;border-radius:9px;background:#fff;color:#40574b;white-space:nowrap;min-width:112px}.language-control:focus-within{outline:2px solid #69a985;outline-offset:2px}.language-control select{color:inherit;background:transparent;border:0;outline:0;min-width:88px;cursor:pointer;font:inherit;font-size:12px}.language-mark{font-size:14px}.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){.language-control{min-width:auto;padding:5px 6px}.language-control select{min-width:74px}.top-pill{display:none}}
+
+/* Read-only Agent integration status; no credentials or external execution are exposed. */
+.agent-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:18px 0}
+.agent-metrics .metric{background:#f7f9f7;border:1px solid #e6ebe6;border-radius:10px;padding:13px 12px;display:flex;flex-direction:column;gap:6px}
+.agent-metrics .metric small{font-size:10px;color:#77877c}
+.agent-metrics .metric b{font-size:13px;color:#304b39}.agent-metrics .metric b.ready{color:#347752}.agent-metrics .metric b.warn{color:#976c38}
+.integration-step{border-top:1px solid #edf0ed;padding:17px 0}.integration-step strong{font-size:12px}
+.agent-code{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;background:#f2f5f2;color:#354c3b;padding:13px;border-radius:9px;margin:10px 0}
+@media(max-width:700px){.agent-metrics{grid-template-columns:1fr}.tab-strip{overflow-x:auto;max-width:100%}}

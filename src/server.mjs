@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
 import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
+import { agentSetupSummary } from './agent-setup.mjs';
 import {scanFeeds, configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -49,6 +50,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(signal&&req.method==='POST'){
       const item=store.get('sources',signal[1]);if(!item)return send(res,404,{error:'NOT_FOUND'});
       return send(res,200,{suggestion:await analyzeSignal(item,{locale:(await body(req)).locale}),source:item});}
+    if(pathname==='/api/agent/setup'&&req.method==='GET'){
+      const projectId=u.searchParams.get('project_id');
+      const project=projectId?service.getFullProject(projectId):null;
+      return send(res,200,agentSetupSummary(projectId,project,{enabled:Boolean(process.env.RADAR_AGENT_TOKEN),tools:service.tools}));
+    }
     if(pathname==='/api/dashboard'&&req.method==='GET')return send(res,200,{...service.brief(),projects:store.list('projects')});
     if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
     if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
