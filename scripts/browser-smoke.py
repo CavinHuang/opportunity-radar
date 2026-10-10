@@ -41,12 +41,12 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[data-action="manage-sources"]').first.click()
             try:
                 page.get_by_text('精选公开信息源').wait_for(timeout=10000)
-            page.get_by_text('首次使用与数据安全').first.wait_for(timeout=10000)
-            page.get_by_text('备份你的研究资料').first.wait_for(timeout=10000)
-            assert page.locator('[data-action="copy-data-backup"]').count()==1
-            readiness=call('/api/operations/readiness')
-            assert any(c['id']=='backup' and c['ok'] is None for c in readiness['checks'])
-            assert readiness['mode']=='local-first'
+                page.get_by_text('首次使用与数据安全').first.wait_for(timeout=10000)
+                page.get_by_text('备份你的研究资料').first.wait_for(timeout=10000)
+                assert page.locator('[data-action="copy-data-backup"]').count()==1
+                readiness=call('/api/operations/readiness')
+                assert any(c['id']=='backup' and c['ok'] is None for c in readiness['checks'])
+                assert readiness['mode']=='local-first'
 
             except Exception:
                 out=ROOT/'artifacts'/'browser-smoke'
