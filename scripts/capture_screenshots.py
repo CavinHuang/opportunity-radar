@@ -52,6 +52,24 @@ with tempfile.TemporaryDirectory(prefix='radar-screenshot-') as directory:
           'stopCondition':'Stop after ten hours without useful evidence',
           'hours':10,'cash':0
         })['project']
+        # Populate an isolated, clearly labelled demonstration feed/signal through the real API/store.
+        feed=call('/api/sources',{
+          'url':'https://community.example.org/rss',
+          'title':'[DEMO] Consumer conversation feed',
+          'market':'International',
+          'keywords':'photos, warranty'
+        })['item']
+        seed_script="""import {openDatabase} from './src/db.mjs';
+const store=openDatabase(process.env.RADAR_DB);
+store.put('sources',{id:'demo-source-signal',title:'[DEMO] Finding family warranty receipts',
+description:'[DEMO DATA] Fictional consumer scenario, not a real interview or market result.',
+url:'https://consumer.example.org/discussion/123',feed:'https://community.example.org/rss',
+feedIds:[process.env.FEED_ID],market:'International',status:'new',
+createdAt:new Date().toISOString()});
+store.close();"""
+        subprocess.run(['node','--input-type=module','-e',seed_script],
+                       cwd=ROOT,env={**env,'FEED_ID':feed['id']},check=True,
+                       stdout=subprocess.DEVNULL)
         call('/api/agent/tools/progress.report',{
           'project_id':project['id'],
           'summary':'[DEMO] Scope reviewed. Preparing a minimal prototype.',
@@ -102,6 +120,19 @@ with tempfile.TemporaryDirectory(prefix='radar-screenshot-') as directory:
             page.locator('.hero-title').wait_for(timeout=15000)
             assert page.get_by_text('机会简报').count()>0
             capture('dashboard-zh')
+            # Actual frontend interactions: open inbox, save, filter and import a signal.
+            page.locator('[data-action="manage-sources"]').first.click()
+            page.get_by_text('信息源管理').wait_for(timeout=10000)
+            page.get_by_text('[DEMO] Finding family warranty receipts').wait_for(timeout=10000)
+            capture('sources-zh')
+            page.locator('[data-action="triage-signal"][data-status="saved"]').first.click()
+            page.locator('[data-action="filter-signals"][data-status="saved"]').click()
+            page.get_by_text('[DEMO] Finding family warranty receipts').wait_for(timeout=10000)
+            page.locator('[data-action="import-signal"]').first.click()
+            page.locator('input[name="title"]').fill('[DEMO] Warranty organizer idea')
+            page.locator('textarea[name="problem"]').fill('[DEMO DATA] Need to find warranty papers later')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('[data-action="show-opportunities"]').first.click()
             page.locator('#locale-switch').select_option('en-US')
             assert 'What is worth your attention today?' in page.locator('h1').inner_text()
             page.locator('[data-nav="project"]').click()

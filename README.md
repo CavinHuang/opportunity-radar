@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.5 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.6 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -12,11 +12,27 @@
 
 ![Northstar 机会简报（演示数据）](docs/screenshots/dashboard-zh.webp)
 
+**信息源管理与原始信号工作台（演示数据）**
+
+![Northstar 信息源与信号管理](docs/screenshots/sources-zh.webp)
+
 **Agent 接入中心 · English**
 
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v0.6 信息源与机会发现
+
+- 页面中直接管理公开 RSS / Atom 来源：添加、编辑、暂停、恢复、手动扫描，查看采集结果与失败原因。
+- 支持关键词、目标市场、信号搜索、分页、收藏、忽略与恢复；原始来源 URL 保持可追溯。
+- 已收藏信号可转换为新的消费者机会，或关联已有机会；重复导入受保护。
+- 不提供 RSS 的网站可手动保存公开网页线索，避免自动推断消费者的真实需求。
+- 周度高优先级机会仍控制在 3 项，但支持查看完整机会池，而不是隐藏其他机会。
+- 支持可选的公开订阅源模板；不会在未授权时自动抓取私密内容。
+- 详细使用方法参见 [信息源与机会发现使用指南](docs/SOURCE_DISCOVERY.md)。
+
+> README 截图由真实前端和独立的演示 SQLite 数据库生成。演示信息不是经过用户访谈验证的需求，也不能等同于真实市场机会。
 
 ## v0.5 Agent 接入中心
 
