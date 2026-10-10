@@ -250,3 +250,46 @@ test('discovery API is Owner-only and bulk association preserves unverified prov
   assert.equal(repeat.status,404);
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('discovery quality counts Owner classifications without granting Agent visibility or certifying market demand',async()=>{
+ const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ const url='http://127.0.0.1:'+server.address().port;
+ const owner={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const agent={'Content-Type':'application/json',Authorization:'Bearer test-agent-token'};
+ const request=async(route,method='GET',value,headers=owner)=>{
+  const response=await fetch(url+route,{method,headers,body:value===undefined?undefined:JSON.stringify(value)});
+  return {status:response.status,body:await response.json()};
+ };
+ try{
+  assert.equal((await request('/api/discovery/quality','GET',undefined,{})).status,401);
+  assert.equal((await request('/api/discovery/quality','GET',undefined,agent)).status,401);
+  const first=await request('/api/signals/manual','POST',{
+   title:'How to store personal receipts from grocery shopping',
+   description:'[DEMO] This is entirely hypothetical and not consumer evidence.',
+   url:'https://retail-q.example/testing/quality-a',market:'International'});
+  const second=await request('/api/signals/manual','POST',{
+   title:'How to store personal receipts from grocery shopping',
+   description:'[DEMO] This is entirely hypothetical and not consumer evidence.',
+   url:'https://retail-r.example/testing/quality-b',market:'International'});
+  assert.equal(first.status,201);assert.equal(second.status,201);
+  const discovered=await request('/api/discovery/clusters');
+  const g=discovered.body.items.find(x=>x.signals.some(s=>s.id===first.body.item.id));
+  assert.ok(g);assert.equal(g.diagnostics.possibleRepost,true);
+  const review=await request('/api/discovery/clusters/'+g.id+'/review','POST',{
+   action:'confirm',fingerprint:g.fingerprint,expected_revision:g.reviewRevision,
+   reason:'This is only test data; the same general problem appears in the two synthetic titles.'});
+  assert.equal(review.status,200);
+  assert.equal(review.body.item.status,'reviewed_related');
+  const overview=await request('/api/discovery/quality');
+  assert.equal(overview.status,200);
+  assert.ok(overview.body.ownerMarkedRelated>=1);
+  assert.equal(overview.body.ownerLabelAgreementRatio,null);
+  assert.ok(overview.body.caveats.some(x=>x.includes('not independent consumer')));
+  const invalid=await request('/api/discovery/clusters/'+g.id+'/review','POST',{
+   action:'dismiss',fingerprint:g.fingerprint,classification:'approved_customer_demand',
+   reason:'Not a valid issue review category in this dataset'});
+  assert.equal(invalid.status,400);
+  assert.equal(invalid.body.error,'BAD_REVIEW_CLASS');
+ }finally{await new Promise(done=>server.close(done));}
+});
