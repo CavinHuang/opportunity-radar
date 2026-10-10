@@ -4,6 +4,10 @@ export const LANGUAGES = Object.freeze({ 'zh-CN': '简体中文', 'en-US': 'Engl
 export const LANGUAGE_STORAGE_KEY = 'radar-locale';
 
 const en = {
+ '信息源质量反馈':'Source quality feedback','优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。':'Prioritize traceable consumer experiences over raw article volume. Metrics update with human research.',
+ '观察数据 · 非商机评分':'Observed data · Not an opportunity score',
+ '去重公开信号':'Unique observed signals','已关联机会':'Linked opportunities','含人工核查经历的来源':'Sources with Owner-reviewed experiences','当前采集异常':'Current source failures',
+ '同一帖子可被多个来源收录，来源统计不可相加为独立用户；“第一手经历”仅代表人工阅读分类，未验证发帖人身份，也不能证明付费意愿。':'A single story may appear in several feeds. Source counts are not unique consumers; firsthand classifications reflect manual review, not identity or purchasing intent.',
  '语言':'Language','Language / 语言':'Language','主实验':'Main experiment', 'Northstar · 把时间留给真正值得尝试的事':'Northstar · Make time for ideas worth testing',
  '尚未配置 RSS 来源；在 .env 中设置 RADAR_FEED_URLS。原始信号不能直接当成真实市场需求。':'No RSS feeds configured. Set RADAR_FEED_URLS in .env. Raw signals are not proof of consumer demand.',
  '尚未同步':'Not synced yet', '请输入你的 Radar Owner Token（仅存储于当前浏览器会话）':'Enter your Radar Owner Token (stored only for this browser session)', '请求失败':'Request failed',
@@ -193,6 +197,12 @@ const en = {
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
+ [/^收录\\s*(\\d+)\\s*条$/,(_m,n)=>`${n} captured`],
+ [/^收藏\\s*(\\d+)\\s*·\\s*忽略\\s*(\\d+)$/,(_m,a,b)=>`${a} saved · ${b} dismissed`],
+ [/^关联机会\\s*(\\d+)$/,(_m,n)=>`${n} linked opportunities`],
+ [/^人工核查原文\\s*(\\d+)$/,(_m,n)=>`${n} originals reviewed`],
+ [/^归类独立第一手\\s*(\\d+)$/,(_m,n)=>`${n} owner-classified independent stories`],
+ [/^(\\d+)\\s*条关联证据待核查$/,(_m,n)=>`${n} associated stories need review`],
  [/^每周最多推送\s*(\d+)\s*项$/,(_m,n)=>`Up to ${n} opportunities per week`],
  [/^独立线索\s*(\d+)\s*·\s*(.*)$/,(_m,n,l)=>`Independent sources ${n} · ${l}`],
  [/^已配置\s*(\d+)\s*个可信 RSS 源$/,(_m,n)=>`${n} trusted RSS feeds configured`],
