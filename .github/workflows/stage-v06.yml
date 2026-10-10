@@ -22,8 +22,8 @@ jobs:
       - name: Apply source patch from local-tested commit
         run: |
           base64 --decode .release/v0.6-code.patch.xz.b64 | xz -d > /tmp/v06.patch
-          git apply --check /tmp/v06.patch
-          git apply /tmp/v06.patch
+          git apply --check --exclude=README.md --exclude=public/i18n.js --exclude=scripts/capture_screenshots.py /tmp/v06.patch
+          git apply --exclude=README.md --exclude=public/i18n.js --exclude=scripts/capture_screenshots.py /tmp/v06.patch
       - name: Verify application source
         run: npm run check
       - name: Set up browser screenshots
