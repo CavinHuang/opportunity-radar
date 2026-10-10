@@ -1,35 +1,35 @@
-# Implementation status · v0.1
+# Implementation status · v0.3
 
 Date: 2026-10-10
 
-## Completed locally
+## Implemented
 
-- Zero-install Node HTTP application + native SQLite persistence.
-- Chinese responsive UI: Opportunity Brief, Current Experiment, History & Review.
-- Explicit evidence-first manual intake and RSS/Atom polling; optional OpenAI-compatible analysis and drafts.
-- One active project; versioned approved baselines; independent owner/agent authority.
-- 12 JSON Agent tool actions, separate bearer token, fencing lease, idempotency/revision checks, change cursor.
-- Evidence and submissions with SHA matching; GitHub public/authorized API verification endpoint; formal user G4 decision.
-- Content draft/review/manual publication records, user activity vs Agent activity costs, refund-aware contribution ledger.
-- Automated Node unit and HTTP integration tests.
+- Local-first Node.js 22 web app, native SQLite storage and Chinese responsive UI.
+- Evidence-first opportunity capture, up to 3 weekly recommendations, optional RSS / LLM-assisted drafts.
+- Single approved experiment, immutable versioned product baseline, explicit budget/approval decisions.
+- Twelve P0 business tools exposed via HTTP, MCP HTTP and MCP stdio; fencing lease and event cursor.
+- Strict idempotency request fingerprints (SQLite auto migration), milestone-scoped evidence, current submission acceptance guard.
+- GitHub commit/PR/required CI verification tied to exact SHA; cannot manually attest GitHub evidence to bypass G1.
+- Manual content approval/publication logs, actual vs estimate ledger, separate human and Agent time.
 
 ## Verification
 
-- `npm run check`: PASS in container (Node 22.16).
-- Node integration HTTP tests: PASS.
-- Manual screenshot/visual browser QA: NOT RUN — browser navigation is blocked by environment policy.
-- Live GitHub Actions: NOT RUN — no GitHub repository has been created; connector has no repository-creation method.
-- Real external Coding Agent proof T1/T2/T3: NOT RUN.
-- Real consumer launch and feedback T4: NOT RUN.
+- `npm run check` on Node.js 22.16: **24/24 passed**.
+- HTTP end-to-end API and MCP stdio/HTTP tests: passed locally.
+- Browser empty-state rendering via mock API: passed, no page script errors; screenshot `opportunity-radar-v0.3-ui-preview.png` is a mock-rendering preview, not a real consumer session.
+- Browser navigation to local HTTP is blocked by this execution environment; full live UI-to-API browser flow remains unverified.
+- Remote GitHub PR and CI statuses must be checked on GitHub. No test consumers or real external Coding Agent run have yet occurred.
 
-## Scope excluded by V1.2
+## Explicitly not complete
 
-- Agent process spawning, embedded IDE, multi-agent P1 handoff, automatic social posting, paid ads, payment/CRM platform, always-on global web listening.
+- T1–T3 real independent Coding Agent development/repair/offline-recovery, T4 real To C field trial.
+- Multi-Agent handoff P1, automated social publishing, integrated IDE, Agent process orchestration, ads and payments.
+- GitHub evidence for a specific delivery must be bound to approved repo and G4 reviewed by the user in a live experiment.
 
-## Known follow-up work
+## Next priorities
 
-- Create GitHub repository and publish current commit, then observe CI result.
-- Add a transport-level MCP adapter exposing the same 12 enabled business actions.
-- Complete real external agent contract / failure-injection trials against a selected repository.
-- Evaluate first actual To C source/channel/market, ensure privacy & consent before collecting real consumer data.
-- Browser QA on Windows/macOS local environment.
+1. Observe GitHub CI success for v0.3 before merging.
+2. Real external coding client against the 12 MCP tools with an approved experimental project, record genuine PR/CI + acceptance.
+3. Run T2 rejection/repair and T3 lease recovery against real external processes.
+4. Perform visual end-to-end browser review on an environment allowed to access the local host.
+5. Conduct one real To C opportunity test and manually reviewed launch.
