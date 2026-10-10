@@ -58,6 +58,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     const discoveryReview=/^\/api\/discovery\/clusters\/([a-zA-Z0-9_-]+)\/review$/.exec(pathname);
     if(discoveryReview&&req.method==='POST')return send(res,200,{item:reviewDiscoveryCluster(store,discoveryReview[1],await body(req))});
+    const discoveryLink=/^\/api\/discovery\/clusters\/([a-zA-Z0-9_-]+)\/link$/.exec(pathname);
+    if(discoveryLink&&req.method==='POST')return send(res,200,service.linkDiscoveryCluster(discoveryLink[1],await body(req)));
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
