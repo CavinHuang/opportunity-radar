@@ -60,6 +60,36 @@ export function createService(store, options={}){
     const saved=store.put('projects',p,p.revision);
     store.put('opportunities',{...o,status:'experiment'},o.revision);event('experiment.approved',pId,owner,{baselineRevision:1,researchPlanId:researchBasis.planId||null,researchStatus:researchBasis.status},pId);return saved;
   });}
+  function prepareKickoff(id){
+    return store.transaction(()=>{
+      const project=assertActive(id);
+      const b=baseline(id);
+      const milestone=store.list('milestones').find(m=>m.projectId===id&&m.order===2);
+      if(!milestone)throw err('NOT_FOUND','产品交付里程碑不存在',404);
+      const existing=store.list('tasks').find(t=>t.projectId===id&&t.ownerKickoff===true&&t.baselineRevision===b.revision);
+      if(existing)return {task:existing,alreadyPrepared:true};
+      // Old baselines must not create new work on expired authorization.
+      for(const t of store.list('tasks').filter(t=>t.projectId===id&&t.ownerKickoff===true&&t.baselineRevision!==b.revision&&['open','rework'].includes(t.status))){
+        store.put('tasks',{...t,status:'blocked',blockedReason:'Product baseline was revised; the old kickoff is obsolete'},t.revision);
+      }
+      const description=[
+        'Owner-approved development kickoff. Human acceptance remains mandatory.',
+        'Goal: '+b.goal,
+        'Scope: '+(b.scope||'Only the approved goal and criteria'),
+        'Out of scope: '+(b.nonGoals||'Unapproved additions'),
+        'Acceptance criteria: '+b.criteria.map(x=>x.text).join(' | '),
+        'Research status: '+(project.researchBasis?.status||'unlinked'),
+        'Research caveat: '+(project.researchBasis?.warning||'No consumer-demand verification'),
+        'Stop condition: '+b.stopCondition,
+        'Return GitHub commit/PR and exact-SHA CI evidence. Do not approve your own delivery.'
+      ].join('\n');
+      const task=store.put('tasks',{id:randomUUID(),projectId:id,milestoneId:milestone.id,
+        title:'交付当前批准基线 r'+b.revision+' 的最小产品',description,baselineRevision:b.revision,
+        ownerKickoff:true,origin:'owner',status:'open',dependencies:[],lease:null,createdAt:now()});
+      event('task.kickoff_prepared',task.id,owner,{baselineRevision:b.revision,milestoneId:milestone.id},id);
+      return {task,alreadyPrepared:false};
+    });
+  }
   function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id)};}
   function ownerDecision(id,data){const p=getProject(id);const action=required(data.action,'action');
     if(action==='pause'||action==='stop'||action==='resume'){
@@ -180,5 +210,5 @@ export function createService(store, options={}){
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);
   }
   const tools=['project.get_context','project.get_next_work','project.watch_changes','task.claim','task.upsert','task.transition','task.release','progress.report','evidence.attach','issue.raise_blocker','decision.request','handoff.submit'];
-  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,brief,startExperiment,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
+  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
 }
