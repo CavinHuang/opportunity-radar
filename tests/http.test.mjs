@@ -92,3 +92,33 @@ test('source scheduling preferences and health are served by real HTTP routes',a
    assert.equal((await request('/api/sources','GET',null)).data.items.some(f=>f.id===item.id),true);
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('owner source catalog and opportunity research HTTP endpoints respect permissions',async()=>{
+ const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ const base='http://127.0.0.1:'+server.address().port;
+ const owner={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const request=async(path,method='GET',data,headers=owner)=>{
+  const r=await fetch(base+path,{method,headers,body:data?JSON.stringify(data):undefined});
+  return {status:r.status,data:await r.json()};
+ };
+ try{
+  assert.equal((await request('/api/source-catalog','GET',null,{})).status,401);
+  const catalog=await request('/api/source-catalog');assert.equal(catalog.status,200);
+  assert.ok(catalog.data.items.some(x=>x.id==='v2ex-qna'));
+  const install=await request('/api/source-catalog/install','POST',{id:'ask-hn'});
+  assert.equal(install.status,200);assert.equal(install.data.item.catalogId,'ask-hn');
+  const opp=await request('/api/opportunities','POST',{title:'Receipts',problem:'I lose warranties',market:'International',
+   sources:[{url:'https://consumer.example.org/post/8',quote:'I lost warranty paper'}]});
+  assert.equal(opp.status,201);const id=opp.data.item.id;
+  const before=await request('/api/opportunities/'+id+'/research');
+  assert.equal(before.status,200);assert.equal(before.data.report.stage,'unverified');
+  const review={source_url:'https://consumer.example.org/post/8',expected_revision:opp.data.item.revision,
+   reviewed_original:true,firsthand:true,independent:true,
+   note:'I read the original post and confirmed it is a firsthand account from the poster.'};
+  assert.equal((await request('/api/opportunities/'+id+'/evidence/review','POST',review,{})).status,401);
+  const saved=await request('/api/opportunities/'+id+'/evidence/review','POST',review);
+  assert.equal(saved.status,200);
+  assert.equal((await request('/api/opportunities/'+id+'/research')).data.report.stage,'single_observation');
+ }finally{await new Promise(done=>server.close(done));}
+});

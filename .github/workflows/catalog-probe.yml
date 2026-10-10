@@ -1,0 +1,24 @@
+name: Public source reachability probe
+on:
+  pull_request:
+    paths:
+      - 'src/source-catalog.mjs'
+      - 'src/source-hub.mjs'
+      - 'src/signals.mjs'
+      - 'scripts/probe-source-catalog.mjs'
+      - '.github/workflows/catalog-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run catalog:probe
+        env:
+          PROBE_CATALOG_IDS: v2ex-qna,v2ex-life,v2ex-apple,ask-hn,superuser,webapps
