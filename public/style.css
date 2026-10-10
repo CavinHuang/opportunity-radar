@@ -50,3 +50,14 @@
 .discovery-explain span,.discovery-metrics span{font-size:11px;line-height:1.65;color:#546957;background:#f3f6f3;border:1px solid #e7eee7;border-radius:7px;padding:4px 8px}
 .discovery-explain .discovery-warning{color:#906341;background:#fff8ec;border-color:#f2e1bd}
 .discovery-metrics{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 12px}
+
+/* v1.8 operational readiness: simple first-use steps and private backup instructions. */
+.readiness-panel{margin:18px 0 24px}
+.readiness-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:9px;margin:17px 0 15px}
+.readiness-check{display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.65;color:#445b4b}
+.readiness-state{display:inline-flex;justify-content:center;align-items:center;flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:#eef5ed;color:#3f7655;font-size:11px;font-weight:700}
+.readiness-check:has(.readiness-state:first-child){min-width:0}
+.readiness-backup{border-top:1px solid #ebefeb;padding:15px 0 0;margin-top:14px}
+.readiness-backup>strong{display:block;font-size:13px;color:#263c2d;margin-bottom:6px}
+.readiness-backup .agent-code{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:680px){.readiness-grid{grid-template-columns:1fr}}
