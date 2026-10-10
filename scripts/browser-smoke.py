@@ -52,8 +52,15 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
                 raise
             first=page.locator('[data-action="install-catalog"][data-id="v2ex-qna"]')
             assert first.count()==1
+            page.get_by_text('信息源质量反馈').wait_for(timeout=10000)
+            assert page.get_by_text('观察数据 · 非商机评分').count()==1
             first.click()
-            assert call('/api/source-catalog')['items'][0]['installedFeedId'] is not None
+            feed_id=call('/api/source-catalog')['items'][0]['installedFeedId']
+            assert feed_id is not None
+            quality=call('/api/source-quality')
+            assert any(item['feedId']==feed_id for item in quality['items'])
+            page.locator('[data-action="focus-source"]').first.click()
+            assert page.locator('#feed-filter').input_value()==feed_id
             page.locator('[data-action="show-opportunities"]').first.click()
             page.locator('[data-action="show-research"]').first.click()
             page.get_by_text('反证与未知项').wait_for(timeout=10000)
