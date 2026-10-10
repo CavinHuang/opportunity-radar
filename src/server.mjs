@@ -71,6 +71,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const e=store.get('evidence',attest[2]);if(!e||e.projectId!==attest[1])return send(res,404,{error:'NOT_FOUND'});
       const data=await body(req);if(typeof data.reason!=='string'||data.reason.trim().length<8)return send(res,400,{error:'REASON_REQUIRED',message:'人工核查需要填写具体的可复查理由（至少8个字）'});
       if(!e.sourceUri)return send(res,409,{error:'SOURCE_REQUIRED',message:'无来源的内容不能通过人工核查'});
+      if(/^https:\/\/github\.com\//i.test(e.sourceUri)||/^github_/i.test(e.type))return send(res,409,{error:'GITHUB_AUTOMATED_CHECK_REQUIRED',message:'GitHub 交付证据必须通过 GitHub API 检查，不允许人工确认绕过 CI'});
       const item=store.put('evidence',{...e,verificationState:'owner_attested',verificationReason:data.reason,verifiedAt:new Date().toISOString()},e.revision);
       store.event('evidence.owner_attested',e.id,'owner',{reason:data.reason},e.projectId);return send(res,200,{item});}
     const verify=/^\/api\/projects\/([^/]+)\/evidence\/([^/]+)\/verify$/.exec(pathname);

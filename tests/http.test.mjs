@@ -24,6 +24,10 @@ test('HTTP contract enforces role separation and end-to-end workflow',async()=>{
   const task=await call('/api/agent/tools/task.upsert','POST',{project_id:pid,milestone_id:p.milestones[1].id,title:'Implement usable prototype',idempotency_key:'int-task-1'},agent);assert.equal(task.status,200);
   const claim=await call('/api/agent/tools/task.claim','POST',{project_id:pid,task_id:task.data.result.id,idempotency_key:'int-claim-1'},agent);assert.equal(claim.status,200);
   const report=await call('/api/agent/tools/progress.report','POST',{project_id:pid,summary:'Working on prototype',idempotency_key:'int-report-1'},agent);assert.equal(report.status,200);
+  const githubEvidence=await call('/api/agent/tools/evidence.attach','POST',{project_id:pid,milestone_id:p.milestones[1].id,type:'github_pr',source_uri:'https://github.com/a/b/pull/1',commit_sha:'a'.repeat(40),criteria_ids:p.baselines[0].criteria.map(c=>c.id),idempotency_key:'http-gh-evidence'},agent);
+  assert.equal(githubEvidence.status,200);
+  const bypass=await call('/api/projects/'+pid+'/evidence/'+githubEvidence.data.result.id+'/attest','POST',{reason:'Manually approved without GitHub CI'});
+  assert.equal(bypass.status,409);assert.equal(bypass.data.error,'GITHUB_AUTOMATED_CHECK_REQUIRED');
   const decision=await call('/api/agent/tools/decision.request','POST',{project_id:pid,kind:'scope_change',summary:'Need a larger scope',idempotency_key:'int-request-1'},agent);assert.equal(decision.data.result.status,'pending');
   assert.equal((await call('/api/projects/'+pid)).data.baselines.length,1);
   const pause=await call('/api/projects/'+pid+'/decide','POST',{action:'pause',reason:'budget check'});assert.equal(pause.status,200);

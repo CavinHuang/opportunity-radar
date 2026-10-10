@@ -9,7 +9,8 @@ export function openDatabase(path=':memory:') {
   db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
   db.exec(`CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL, id TEXT NOT NULL, json TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(kind,id));
   CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, kind TEXT NOT NULL, entity_id TEXT, actor TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS idem (actor TEXT NOT NULL, key TEXT NOT NULL, response TEXT NOT NULL, PRIMARY KEY(actor,key));`);
+  CREATE TABLE IF NOT EXISTS idem (actor TEXT NOT NULL, key TEXT NOT NULL, response TEXT NOT NULL, signature TEXT, PRIMARY KEY(actor,key));`);
+  if(!db.prepare('PRAGMA table_info(idem)').all().some(col=>col.name==='signature')) db.exec('ALTER TABLE idem ADD COLUMN signature TEXT');
   function ensureKind(kind){ if(!entities.includes(kind)) throw Object.assign(new Error('invalid collection'),{code:'BAD_REQUEST'}); }
   const q = {
     get(db,kind,id){ensureKind(kind);const r=db.prepare('SELECT json FROM records WHERE kind=? AND id=?').get(kind,id); return r?JSON.parse(r.json):null;},
@@ -23,10 +24,10 @@ export function openDatabase(path=':memory:') {
     event(db,kind,entityId,actor,detail,projectId=null){const at=new Date().toISOString(); const result=db.prepare('INSERT INTO events(project_id,kind,entity_id,actor,detail,created_at) VALUES(?,?,?,?,?,?)').run(projectId,kind,entityId,actor,JSON.stringify(detail),at); return Number(result.lastInsertRowid);},
     events(db,after=0,projectId){const rows=projectId?db.prepare('SELECT * FROM events WHERE seq>? AND (project_id=? OR project_id IS NULL) ORDER BY seq LIMIT 100').all(after,projectId):db.prepare('SELECT * FROM events WHERE seq>? ORDER BY seq LIMIT 100').all(after);return rows.map(r=>({...r,detail:JSON.parse(r.detail)}));},
     transaction(db,fn){db.exec('BEGIN IMMEDIATE');try {const result=fn();db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}},
-    idempotent(db,actor,key,fn){if(!key || typeof key!=='string') throw Object.assign(new Error('idempotency_key is required'),{code:'BAD_REQUEST',status:400});return q.transaction(db,()=>{
-      const old=db.prepare('SELECT response FROM idem WHERE actor=? AND key=?').get(actor,key);
-      if(old) return JSON.parse(old.response);
-      const value=fn();db.prepare('INSERT INTO idem(actor,key,response) VALUES(?,?,?)').run(actor,key,JSON.stringify(value));return value;
+    idempotent(db,actor,key,fn,signature){if(!key || typeof key!=='string') throw Object.assign(new Error('idempotency_key is required'),{code:'BAD_REQUEST',status:400});return q.transaction(db,()=>{
+      const old=db.prepare('SELECT response,signature FROM idem WHERE actor=? AND key=?').get(actor,key);
+      if(old){if(!signature||old.signature!==signature)throw Object.assign(new Error('同一幂等键不能用于不同的请求'),{code:'IDEMPOTENCY_CONFLICT',status:409});return JSON.parse(old.response);}
+      const value=fn();db.prepare('INSERT INTO idem(actor,key,response,signature) VALUES(?,?,?,?)').run(actor,key,JSON.stringify(value),signature||null);return value;
     });}
   };
   return {db,...Object.fromEntries(Object.entries(q).map(([k,v])=>[k,(...args)=>v(db,...args)])),close:()=>db.close()};
