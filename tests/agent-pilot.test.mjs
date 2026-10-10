@@ -7,7 +7,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import {openDatabase} from '../src/db.mjs';
 import {createService} from '../src/service.mjs';
 import {parseArgs,checkEndpoint,agentApi,inspectWorkspace,validateSubmission,sanitizedEnv,
- formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor,verifyPullHead,getDeliveryWork,statusPilot,recoverPilot,deliveryKey} from '../src/agent-pilot.mjs';
+ formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor,verifyPullHead,getDeliveryWork,statusPilot,recoverPilot,deliveryKey,parseTimeoutMinutes} from '../src/agent-pilot.mjs';
 const cmd=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
 function fixture(){
  const path=mkdtempSync(join(tmpdir(),'radar-cli-v13-'));
@@ -259,5 +259,56 @@ test('multiple candidate tasks require a specific task id for handoff',async()=>
   assert.equal(chosen.task.id,x.kickoff.id);
   assert.equal(deliveryKey('handoff',{projectId:'a',taskId:'b',sha:'c',pr:'d'}),
     deliveryKey('handoff',{projectId:'a',taskId:'b',sha:'c',pr:'d'}));
+ }finally{x.cleanup();}
+});
+
+test('hanging external coding process times out, records a bounded failure and releases its lease',async()=>{
+ const x=fixture();try{
+  const journalDir=join(x.path,'audit');
+  const spawnImpl=(_exe,_args,options)=>spawn(process.execPath,['-e',
+    "process.stdin.resume();setInterval(()=>{},1000);"],options);
+  const run=await executePilot({call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
+    workspace:x.path,provider:'codex',confirmed:true,spawnImpl,
+    timeoutMs:120,graceMs:120,renewIntervalMs:300000,journalDir});
+  assert.equal(run.exitCode,124);
+  assert.equal(run.terminationReason,'timeout');
+  assert.equal(run.submitted,false);
+  const receipt=JSON.parse(readFileSync(run.receiptFile,'utf8'));
+  assert.equal(receipt.status,'timed_out');
+  assert.equal(receipt.manualReviewRequired,true);
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+  assert.equal(x.db.list('submissions').length,0);
+  const status=await statusPilot({call:x.call,projectId:x.project.id,journalDir});
+  assert.equal(status.localRuns[0].runId,undefined); // no secret execution internals
+  assert.equal(status.localRuns[0].id,run.runId);
+ }finally{x.cleanup();}
+});
+test('operator cancellation terminates coder, records cancellation, and does not submit',async()=>{
+ const x=fixture();try{
+  const controller=new AbortController(),journalDir=join(x.path,'audit');
+  const spawnImpl=(_exe,_args,options)=>spawn(process.execPath,['-e',
+    "process.stdin.resume();setInterval(()=>{},1000);"],options);
+  const work=executePilot({call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
+    workspace:x.path,provider:'claude',confirmed:true,spawnImpl,
+    signal:controller.signal,timeoutMs:4000,graceMs:100,journalDir});
+  setTimeout(()=>controller.abort(),140);
+  const result=await work;
+  assert.equal(result.exitCode,130);
+  assert.equal(result.terminationReason,'cancelled');
+  assert.equal(JSON.parse(readFileSync(result.receiptFile,'utf8')).status,'cancelled');
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+  assert.equal(x.db.list('submissions').length,0);
+ }finally{x.cleanup();}
+});
+test('non-zero coder exit is audited as a local failure, never an accepted delivery',async()=>{
+ const x=fixture();try{
+  const spawnImpl=(_exe,_args,options)=>spawn(process.execPath,['-e','process.exit(7)'],options);
+  const result=await executePilot({call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
+    workspace:x.path,provider:'codex',confirmed:true,spawnImpl,
+    timeoutMs:3000,journalDir:join(x.path,'audit')});
+  assert.equal(result.exitCode,7);
+  assert.equal(JSON.parse(readFileSync(result.receiptFile,'utf8')).status,'local_process_failed');
+  assert.equal(x.db.get('tasks',x.kickoff.id).status,'open');
+  assert.equal(x.db.list('evidence').length,0);
  }finally{x.cleanup();}
 });
