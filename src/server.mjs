@@ -15,6 +15,7 @@ import {researchReport,reviewOpportunityEvidence} from './research.mjs';
 import {validationOverview,validationSummary,createValidationPlan,recordValidationObservation,closeValidationPlan} from './validation.mjs';
 import {feedbackOverview,recordProductFeedback} from './delivery-trace.mjs';
 import {sourceQualityReport} from './source-quality.mjs';
+import {discoveryClusters,reviewDiscoveryCluster} from './discovery.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
@@ -52,6 +53,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
     if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
+    if(pathname==='/api/discovery/clusters'&&req.method==='GET'){
+      return send(res,200,discoveryClusters(store,{includeDismissed:u.searchParams.get('include_dismissed')==='1'}));
+    }
+    const discoveryReview=/^\/api\/discovery\/clusters\/([a-zA-Z0-9_-]+)\/review$/.exec(pathname);
+    if(discoveryReview&&req.method==='POST')return send(res,200,{item:reviewDiscoveryCluster(store,discoveryReview[1],await body(req))});
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
