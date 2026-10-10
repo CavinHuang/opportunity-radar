@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import {approvedResearchBasis} from './delivery-trace.mjs';
 
 const now=()=>new Date().toISOString();
 const err=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
@@ -50,15 +51,16 @@ export function createService(store, options={}){
     const cash=nonNegative(data.cash??0,'cash');
     const criteria=(data.criteria||[]).map(x=>required(x,'criterion'));if(!criteria.length)throw err('BAD_REQUEST','需要至少一条可验证验收标准');
     const goal=required(data.goal,'goal'), hypothesis=required(data.hypothesis,'hypothesis'), stopCondition=required(data.stopCondition,'stopCondition');
+    const researchBasis=approvedResearchBasis(store,o.id,data.validationPlanId||null);
     const pId=randomUUID();
-    const b={revision:1,approvedAt:now(),approvedBy:owner,goal,hypothesis,scope:data.scope||'',nonGoals:data.nonGoals||'',stopCondition,criteria:criteria.map(text=>({id:randomUUID(),text})),budget:{weeklyUserHours:hours,cash},evidenceIds:[]};
-    const p=store.put('projects',{id:pId,opportunityId:o.id,name:o.title,market:data.market||o.market,channel:data.channel||o.channel,status:'research',stage:'research',baselines:[b],milestoneIds:[],latestAgentReport:null,agentLastSync:null,createdAt:now(),lastDecision:'实验已批准',externalProcessState:'unknown'});
+    const b={revision:1,approvedAt:now(),approvedBy:owner,goal,hypothesis,scope:data.scope||'',nonGoals:data.nonGoals||'',stopCondition,criteria:criteria.map(text=>({id:randomUUID(),text})),budget:{weeklyUserHours:hours,cash},evidenceIds:[],researchBasis};
+    const p=store.put('projects',{id:pId,opportunityId:o.id,name:o.title,market:data.market||o.market,channel:data.channel||o.channel,status:'research',stage:'research',baselines:[b],milestoneIds:[],latestAgentReport:null,agentLastSync:null,createdAt:now(),lastDecision:'实验已批准',externalProcessState:'unknown',researchBasis});
     const items=[{title:'消费者需求取证',description:'获得可追溯的独立需求线索',acceptanceIds:[]},{title:'最小产品交付',description:'按批准的验收要求提供可运行原型',acceptanceIds:b.criteria.map(x=>x.id)},{title:'宣发与真实反馈',description:'人工发布并记录真实用户行为',acceptanceIds:[]}];
     for(let i=0;i<items.length;i++){const m=store.put('milestones',{id:randomUUID(),projectId:pId,order:i+1,...items[i],executionState:'not_started',evidenceState:'not_verified',acceptanceState:'pending',createdAt:now()});p.milestoneIds.push(m.id);}
     const saved=store.put('projects',p,p.revision);
-    store.put('opportunities',{...o,status:'experiment'},o.revision);event('experiment.approved',pId,owner,{baselineRevision:1},pId);return saved;
+    store.put('opportunities',{...o,status:'experiment'},o.revision);event('experiment.approved',pId,owner,{baselineRevision:1,researchPlanId:researchBasis.planId||null,researchStatus:researchBasis.status},pId);return saved;
   });}
-  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id)};}
+  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id)};}
   function ownerDecision(id,data){const p=getProject(id);const action=required(data.action,'action');
     if(action==='pause'||action==='stop'||action==='resume'){
       if(action==='resume' && p.status!=='paused')throw err('BAD_STATE','只有暂停项目才能恢复',409);
@@ -133,7 +135,7 @@ export function createService(store, options={}){
   function summaryLedger(entries){const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
 
   function tool(name,p={}){
-    if(name==='project.get_context'){const x=getFullProject(p.project_id);return {project:{id:x.id,name:x.name,status:x.status,stage:x.stage,agentLastSync:x.agentLastSync,milestones:x.milestones,tasks:x.tasks,evidence:x.evidence,submissions:x.submissions,decisions:x.decisions.filter(d=>['pending','approved','rejected'].includes(d.status)).map(d=>({id:d.id,kind:d.kind,summary:d.summary,status:d.status}))},baseline:baseline(p.project_id),serverTime:now()};}
+    if(name==='project.get_context'){const x=getFullProject(p.project_id);return {project:{id:x.id,name:x.name,status:x.status,stage:x.stage,agentLastSync:x.agentLastSync,milestones:x.milestones,tasks:x.tasks,evidence:x.evidence,submissions:x.submissions,decisions:x.decisions.filter(d=>['pending','approved','rejected'].includes(d.status)).map(d=>({id:d.id,kind:d.kind,summary:d.summary,status:d.status}))},baseline:baseline(p.project_id),researchBasis:x.researchBasis||{status:'unlinked'},serverTime:now()};}
     if(name==='project.get_next_work'){assertActive(p.project_id);return {tasks:store.list('tasks').filter(x=>x.projectId===p.project_id&&['open','rework'].includes(x.status)).filter(x=>x.dependencies.every(id=>store.get('tasks',id)?.status==='submitted')).slice(0,20)};}
     if(name==='project.watch_changes'){
       getProject(p.project_id);const original=store.events(Number(p.cursor)||0,p.project_id);
