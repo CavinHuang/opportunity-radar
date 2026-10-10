@@ -34,5 +34,6 @@ test('HTTP contract enforces role separation and end-to-end workflow',async()=>{
   const blocked=await call('/api/agent/tools/task.upsert','POST',{project_id:pid,milestone_id:p.milestones[1].id,title:'Should fail',idempotency_key:'paused-task'},agent);assert.equal(blocked.status,409);
   const home=await fetch(base+'/');assert.equal(home.status,200);assert.ok((await home.text()).includes('northstar')===false); // title is Northstar; UI mount root is static
   const staticJs=await fetch(base+'/app.js');assert.equal(staticJs.status,200);assert.ok((await staticJs.text()).includes('机会简报'));
+  const i18nJs=await fetch(base+'/i18n.js');assert.equal(i18nJs.status,200);assert.ok((await i18nJs.text()).includes('LANGUAGES'));
  }finally{await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});}
 });

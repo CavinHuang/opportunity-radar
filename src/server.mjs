@@ -12,7 +12,7 @@ const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
 if(!['127.0.0.1','localhost','::1'].includes(host)&&!process.env.RADAR_OWNER_TOKEN)throw new Error('RADAR_OWNER_TOKEN is required when binding to a non-loopback host');
 const store=openDatabase(dbPath);const service=createService(store);
-const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js'};
+const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/i18n.js':'i18n.js'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8'};
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
 function authorize(req,role){
@@ -48,7 +48,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const signal=/^\/api\/signals\/([^/]+)\/analyze$/.exec(pathname);
     if(signal&&req.method==='POST'){
       const item=store.get('sources',signal[1]);if(!item)return send(res,404,{error:'NOT_FOUND'});
-      return send(res,200,{suggestion:await analyzeSignal(item),source:item});}
+      return send(res,200,{suggestion:await analyzeSignal(item,{locale:(await body(req)).locale}),source:item});}
     if(pathname==='/api/dashboard'&&req.method==='GET')return send(res,200,{...service.brief(),projects:store.list('projects')});
     if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
     if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
