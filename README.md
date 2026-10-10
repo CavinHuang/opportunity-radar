@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.4 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.5 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,25 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.5 · 受控编码执行与本地审计
+
+- `agent:pilot run` 增加 **1–240 分钟可配置运行上限**（默认 90 分钟），超时先请求 `SIGTERM`，短暂等待后尝试强制结束主编码进程；`Ctrl+C` / `SIGTERM` 可以发起取消。
+- 编码进程无法续租或主动取消时，停止继续执行，记录失败，并尝试释放自己的任务租约。**不能把终止主进程等同于所有后台子进程或外部副作用已停止**。
+- 每次运行在用户本机的 `~/.opportunity-radar/runs` 保存权限限制为仅当前用户可读写的 **脱敏 JSON 执行回执**：项目与任务、基线、开始/结束时间、退出状态、Git HEAD 前后变化和修改文件数量。**不保存原始访谈、Prompt、模型输出、Bearer Token 或源码 Diff**。
+- `agent:pilot status --project ...` 增加最近十条**本地**运行回执；即使编码命令退出 0，也不代表代码成功通过 CI 或用户验收。未能终结的回执只保留最后观察状态，不能据此断言进程仍在线。
+- 运行页面新增可复制的受控命令，中英文提示超时、取消和人工检查义务。
+- CI 新增挂起进程超时、人工取消、子进程错误退出、本地审计文件权限及敏感信息脱敏测试。
+
+```bash
+npm run agent:pilot -- run --project <PROJECT_ID> \
+  --workspace /path/to/product --provider codex \
+  --timeout-minutes 90 --confirm
+
+npm run agent:pilot -- status --project <PROJECT_ID>
+```
+
+[查看使用与故障恢复说明](docs/CODING_AGENT_PILOT.md)
 
 ## v1.4 · 可恢复的 Coding Agent 交付与人工接管
 
