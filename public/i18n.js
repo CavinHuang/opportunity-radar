@@ -4,6 +4,22 @@ export const LANGUAGES = Object.freeze({ 'zh-CN': '简体中文', 'en-US': 'Engl
 export const LANGUAGE_STORAGE_KEY = 'radar-locale';
 
 const en = {
+ '重复问题候选':'Repeated-problem candidates','仅标题相似 · 需要人工核查':'Title similarity only · Human review required',
+ '仅看待核查':'Show pending only','查看已忽略':'Show dismissed','跨站点候选':'Cross-site lead','同站点候选':'Same-site lead',
+ '独立消费者数量未知':'Independent consumer count unknown','已人工忽略':'Dismissed by owner','待人工核查':'Needs manual review',
+ '从首条建立待验证机会':'Create opportunity from first lead','批量关联已有机会':'Link all to an existing opportunity',
+ '恢复候选':'Restore candidate','忽略这组':'Dismiss group','忽略原因：':'Dismissal reason: ',
+ '仅进行保守的词汇匹配，不使用 AI 补写经历。多个帖子可能是转载、同作者或者不同问题；绝不代表独立消费者或已经证明的需求。':'Conservative lexical grouping only; no AI-invented experiences. Posts may be syndications, the same author, or different problems. This does not establish unique consumers or verified demand.',
+ '暂无重复问题候选':'No repeated-problem leads yet',
+ '继续扫描来源并研判真实原文；只发现一篇帖子时不会生成“重复需求”结论。':'Keep scanning and reading original sources. A single post never proves repeated demand.',
+ '候选组已变化，请刷新':'This group changed; refresh to review it.',
+ '请先创建一个机会，再关联公开信号':'Create an opportunity before linking public signals.',
+ '批量关联原始证据':'Link original source evidence','选择要关联的机会':'Choose an existing opportunity',
+ '我理解这些原文仍需逐条核查':'I understand each original still needs review',
+ '忽略重复问题候选':'Dismiss repeated-problem lead','忽略原因（至少10字）':'Reason for dismissal (at least 10 characters)',
+ '例如同一作者多次转载、帖子与消费者问题无关':'For example: syndicated posts from one author, not a relevant consumer need',
+ '标题相似不等于独立真实需求，可能是转载或同一作者发帖。':'Similar titles do not establish independent demand; stories may be copies or by one author.',
+ '逐条阅读原文并确认是否为不同真实消费者经历':'Read the originals and check whether different real consumers report this problem.',
  '研判该来源':'Review this source','信息源质量反馈':'Source quality feedback','优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。':'Prioritize traceable consumer experiences over raw article volume. Metrics update with human research.',
  '观察数据 · 非商机评分':'Observed data · Not an opportunity score',
  '去重公开信号':'Unique observed signals','已关联机会':'Linked opportunities','含人工核查经历的来源':'Sources with Owner-reviewed experiences','当前采集异常':'Current source failures',
@@ -251,6 +267,11 @@ const en = {
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
+ [/^(\d+) 条不同 URL · (\d+) 个站点 · 独立消费者数量未知 · (.+)$/,(_m,n,d,st)=>n+' distinct URLs · '+d+' sites · Unique consumer count unknown · '+(en[st]||st)],
+ [/^已检查最近 (\d+) 条信号，找到 (\d+) 组候选；其中 (\d+) 组来自多个站点，(\d+) 组已人工忽略。$/,(_m,a,b,c,d)=>'Examined '+a+' recent signals, found '+b+' candidate groups; '+c+' cross-site, '+d+' dismissed.'],
+ [/^较早的 (\d+) 条线索尚未参与本次聚合。$/,(_m,n)=>n+' older signals are outside this scan window.'],
+ [/^将这组 (\d+) 条原始 URL 添加为“待人工核查”的证据。词汇相近不证明是独立用户或真实付费需求。$/,(_m,n)=>'Add '+n+' original URLs as pending evidence. Similar wording does not establish independent customers or willingness to pay.'],
+
  [/^实际验证记录\s*(\d+)\s*条\s*·\s*匿名参与者\s*(\d+)\s*位$/,(_m,n,p)=>n+' observations · '+p+' anonymous participants'],
  [/^支持\s*(\d+)\s*·\s*反驳\s*(\d+)\s*·\s*不确定\s*(\d+)$/,(_m,a,b,c)=>a+' supporting · '+b+' contradicting · '+c+' unclear'],
  [/^投入：(\d+(?:\.\d+)?)\s*小时\s*\/\s*¥([\d.]+)\s*·\s*状态：(.*)$/,(_m,h,c,st)=>h+' hours / ¥'+c+' · status: '+(en[st]||st)],
