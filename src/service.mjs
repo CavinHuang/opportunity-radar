@@ -36,7 +36,7 @@ export function createService(store, options={}){
     const signal=get('sources',signalId),item=get('opportunities',opportunityId);
     if(signal.status==='converted')throw err('SIGNAL_CONVERTED','信号已经关联其他机会',409);
     const known=new Set(item.sources.map(x=>x.url));
-    const sources=known.has(signal.url)?item.sources:[...item.sources,{url:signal.url,quote:signal.description||'',independent:false,origin:'public_signal'}];
+    const sources=known.has(signal.url)?item.sources:[...item.sources,{url:signal.url,quote:signal.description||'',independent:false,firsthand:false,origin:'public_signal'}];
     const updated=store.put('opportunities',{...item,sources,evidenceStatus:'needs_verification'},item.revision);
     store.put('sources',{...signal,status:'converted',linkedOpportunityId:item.id,triagedAt:now()},signal.revision);
     event('signal.linked',signalId,owner,{opportunityId:item.id});return updated;
