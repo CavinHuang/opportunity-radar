@@ -16,3 +16,15 @@
 .source-row{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:20px 0;border-bottom:1px solid #edf0ed}.source-row:last-child{border-bottom:0}.source-row .grow{min-width:0}.source-row strong{font-size:13px;color:#28392f}.source-row .external{display:inline-flex;gap:4px;align-items:center;word-break:break-all;margin:7px 0}.source-buttons{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:260px}.source-error{font-size:11px;line-height:1.7;color:#a14b40;margin:7px 0 0}.signal-row h3{font-size:13px;line-height:1.5;margin:12px 0 7px}.signal-row p{max-width:720px}.source-controls{display:flex;align-items:center;gap:15px;flex-wrap:wrap;justify-content:space-between}.source-controls .subnav{margin:0}.source-controls .signal-search{display:flex;gap:8px;align-items:center}.source-controls input{padding:8px 11px;border:1px solid #dfe8e0;border-radius:8px;outline:none;background:#fff;font-size:12px;min-width:165px}.source-controls input:focus{outline:2px solid #8fb9a0}
 @media(max-width:700px){.source-row{flex-direction:column;gap:9px}.source-buttons{max-width:100%;justify-content:flex-start}.source-controls .signal-search{width:100%}.source-controls input{flex:1;min-width:0}}
 .source-presets{margin:13px 0 30px;padding:0 2px}.source-presets .flex{margin-top:10px}
+
+/* Evidence-based source feedback — counters describe observations, never demand scores. */
+.source-quality-panel{margin:20px 0 24px}
+.source-quality-panel .subtext{line-height:1.75;margin-top:7px}
+.source-quality-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 12px}
+.source-quality-stats>div{padding:15px;border:1px solid #e3eae5;border-radius:10px;background:#f8faf8;display:flex;flex-direction:column;gap:5px}
+.source-quality-stats strong{font-size:24px;font-weight:650;color:#2f4939;font-variant-numeric:tabular-nums}
+.source-quality-stats small{font-size:11px;color:#7b877e}
+.source-feedback{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.source-feedback span{display:inline-flex;padding:3px 7px;border-radius:6px;font-size:10px;line-height:1.6;background:#f2f6f2;color:#4b6856}
+.source-feedback .source-review-pending{background:#fff4e7;color:#936d38}
+@media(max-width:760px){.source-quality-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

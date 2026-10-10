@@ -12,6 +12,7 @@ import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
 import {catalogList,installCatalogFeed} from './source-catalog.mjs';
 import {researchReport,reviewOpportunityEvidence} from './research.mjs';
+import {sourceQualityReport} from './source-quality.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
@@ -48,6 +49,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
+    if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
