@@ -164,7 +164,7 @@ async function decideValidation(id){
  '<div class="field wide"><label><input type="checkbox" name="acknowledgeUncertainty"> 我理解现有观察未经独立事实核验，不代表付费和留存已成立</label></div>',
  async d=>await api('/opportunities/'+encodeURIComponent(id)+'/validation/'+encodeURIComponent(p.id)+'/close',{method:'POST',body:{expected_revision:p.revision,outcome:d.outcome,reason:d.reason,acknowledgeUncertainty:d.acknowledgeUncertainty==='on'}}));
 }
-function showOpportunity(o){startExperiment(o);}
+function showOpportunity(o){return startExperiment(o);}
 async function startExperiment(o){
   const research=(await api('/opportunities/'+encodeURIComponent(o.id)+'/validation')).result;
   const latest=research.latestPlan;
