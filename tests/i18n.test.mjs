@@ -93,3 +93,11 @@ test('research handoff and real usage UI labels are translated',()=>{
  assert.equal(translate('记录真实产品使用反馈','en-US'),'Record actual product usage');
  assert.equal(translate('匿名用户代号','en-US'),'Anonymous participant reference');
 });
+
+test('repeated-problem research inbox has bilingual labels and observable counters',()=>{
+ assert.equal(translate('重复问题候选','en-US'),'Repeated-problem candidates');
+ assert.equal(translate('批量关联已有机会','en-US'),'Link all to an existing opportunity');
+ assert.equal(translate('查看已忽略','en-US'),'Show dismissed');
+ assert.equal(translate('2 条不同 URL · 2 个站点 · 独立消费者数量未知 · 待人工核查','en-US'),
+   '2 distinct URLs · 2 sites · Unique consumer count unknown · Needs manual review');
+});

@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import {approvedResearchBasis} from './delivery-trace.mjs';
+import {currentDiscoveryGroup} from './discovery.mjs';
 
 const now=()=>new Date().toISOString();
 const err=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
@@ -42,6 +43,31 @@ export function createService(store, options={}){
     store.put('sources',{...signal,status:'converted',linkedOpportunityId:item.id,triagedAt:now()},signal.revision);
     event('signal.linked',signalId,owner,{opportunityId:item.id});return updated;
   });}
+  function linkDiscoveryCluster(clusterId,data){
+    return store.transaction(()=>{
+      const group=currentDiscoveryGroup(store,clusterId,data.fingerprint);
+      if(data.acknowledgeUnverified!==true)throw err('DISCOVERY_REVIEW_REQUIRED','确认仅将原始链接作为未核查线索，不能证明独立需求',409);
+      const opportunity=get('opportunities',required(data.opportunity_id,'opportunity_id'));
+      if(!['candidate','watching','experiment'].includes(opportunity.status))throw err('BAD_STATE','此机会当前不能关联新线索',409);
+      const existing=new Set((opportunity.sources||[]).map(x=>x.url));
+      const added=[];
+      for(const article of group.signals){
+        const signal=get('sources',article.id);
+        if(!['new','saved'].includes(signal.status))throw err('CLUSTER_CHANGED','信号状态已更新，请刷新',409);
+        if(signal.url!==article.url)throw err('CLUSTER_CHANGED','原始 URL 已变化',409);
+        if(!existing.has(signal.url)){
+          opportunity.sources=[...(opportunity.sources||[]),{url:signal.url,quote:signal.description||'',
+            firsthand:false,independent:false,origin:'public_signal_cluster',reviewedAt:null}];
+          existing.add(signal.url);added.push(signal.id);
+        }
+        store.put('sources',{...signal,status:'converted',linkedOpportunityId:opportunity.id,triagedAt:now()},signal.revision);
+      }
+      const updated=store.put('opportunities',{...opportunity,evidenceStatus:'needs_verification'},opportunity.revision);
+      event('discovery.cluster.linked',clusterId,owner,{opportunityId:updated.id,signalCount:group.signalCount,addedEvidence:added.length});
+      return {opportunity:updated,signalCount:group.signalCount,addedEvidence:added.length,
+        evidenceVerified:false};
+    });
+  }
   function brief(){const cutoff=Date.now()-7*86400000;const active=store.list('projects').find(x=>!['paused','stopped','archived'].includes(x.status));
     const candidates=store.list('opportunities').filter(x=>x.status==='candidate').sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
   function startExperiment(data){return store.transaction(()=>{
@@ -220,5 +246,5 @@ export function createService(store, options={}){
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);
   }
   const tools=['project.get_context','project.get_next_work','project.watch_changes','task.claim','task.upsert','task.transition','task.release','progress.report','evidence.attach','issue.raise_blocker','decision.request','handoff.submit'];
-  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
+  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,linkDiscoveryCluster,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
 }

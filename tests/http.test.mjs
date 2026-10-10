@@ -210,3 +210,43 @@ test('research handoff and post-delivery feedback APIs enforce Owner auth and G4
   assert.equal(reject.status,409);assert.equal(reject.data.error,'PRODUCT_NOT_ACCEPTED');
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('discovery API is Owner-only and bulk association preserves unverified provenance',async()=>{
+ const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ const base='http://127.0.0.1:'+server.address().port;
+ const owner={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const agent={'Content-Type':'application/json',Authorization:'Bearer test-agent-token'};
+ const req=async(path,method='GET',data,headers=owner)=>{
+  const response=await fetch(base+path,{method,headers,body:data===undefined?undefined:JSON.stringify(data)});
+  return {status:response.status,data:await response.json()};
+ };
+ try{
+  assert.equal((await req('/api/discovery/clusters','GET',undefined,{})).status,401);
+  assert.equal((await req('/api/discovery/clusters','GET',undefined,agent)).status,401);
+  const o=await req('/api/opportunities','POST',{title:'Digital purchase receipts',problem:'Customers may struggle to retrieve receipts',market:'International'});
+  assert.equal(o.status,201);const oid=o.data.item.id;
+  for(const [id,domain] of [['alpha','issues.example'],['beta','forum.example']]){
+   const x=await req('/api/signals/manual','POST',{title:'Online shopping receipt storage is difficult',
+    description:'[DEMO] Repeated test-only phrase; this is NOT real consumer research',
+    url:'https://'+domain+'/test/'+id,market:'International'});
+   assert.equal(x.status,201);
+  }
+  const first=await req('/api/discovery/clusters');assert.equal(first.status,200);
+  const cluster=first.data.items.find(x=>x.representativeTitle==='Online shopping receipt storage is difficult');
+  assert.ok(cluster);assert.equal(cluster.signalCount,2);
+  assert.equal((await req('/api/discovery/clusters/'+cluster.id+'/link','POST',{
+   fingerprint:cluster.fingerprint,opportunity_id:oid,acknowledgeUnverified:true},agent)).status,401);
+  const denial=await req('/api/discovery/clusters/'+cluster.id+'/link','POST',{
+    fingerprint:cluster.fingerprint,opportunity_id:oid,acknowledgeUnverified:false});
+  assert.equal(denial.status,409);
+  const linked=await req('/api/discovery/clusters/'+cluster.id+'/link','POST',{
+    fingerprint:cluster.fingerprint,opportunity_id:oid,acknowledgeUnverified:true});
+  assert.equal(linked.status,200);assert.equal(linked.data.addedEvidence,2);
+  assert.ok(linked.data.opportunity.sources.every(x=>x.independent===false&&x.firsthand===false));
+  assert.equal((await req('/api/discovery/clusters')).data.total,0);
+  const repeat=await req('/api/discovery/clusters/'+cluster.id+'/link','POST',{
+    fingerprint:cluster.fingerprint,opportunity_id:oid,acknowledgeUnverified:true});
+  assert.equal(repeat.status,404);
+ }finally{await new Promise(done=>server.close(done));}
+});
