@@ -73,6 +73,23 @@ export function validateSubmission({pr,sha,workspaceInfo}){
  if(workspaceInfo.head.toLowerCase()!==sha.toLowerCase())throw fail('SHA_MISMATCH','Local Git HEAD does not match requested delivery SHA');
  return {repo,pr,sha:sha.toLowerCase()};
 }
+export async function verifyPullHead({pr,sha,repo,githubToken=process.env.GITHUB_TOKEN,fetchImpl=fetch}){
+ const match=/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/([1-9]\d*)\/?$/.exec(pr||'');
+ if(!match||!shaRegex.test(sha||''))throw fail('BAD_PR','A canonical GitHub PR and complete SHA are required');
+ let response;
+ try{
+  response=await fetchImpl('https://api.github.com/repos/'+repo+'/pulls/'+match[1],{
+   headers:{Accept:'application/vnd.github+json','User-Agent':'opportunity-radar-pilot/1.3',
+    ...(githubToken?{Authorization:'Bearer '+githubToken}:{})},
+   signal:AbortSignal.timeout(10000)
+  });
+ }catch(e){throw fail('GITHUB_UNAVAILABLE','Could not query GitHub PR. Retry after verifying connectivity: '+e.message);}
+ if(!response.ok)throw fail('PR_NOT_ACCESSIBLE','GitHub PR cannot be verified (HTTP '+response.status+'). Do not submit evidence yet.');
+ const data=await response.json();
+ if(data.base?.repo?.full_name?.toLowerCase()!==repo.toLowerCase())throw fail('PR_REPO_MISMATCH','PR base repository differs from the selected workspace');
+ if(data.head?.sha?.toLowerCase()!==sha.toLowerCase())throw fail('PR_HEAD_MISMATCH','GitHub PR latest head is different from the local commit. Fetch/update the feature branch.');
+ return {number:Number(match[1]),url:pr,headSha:sha.toLowerCase(),verifiedAt:new Date().toISOString()};
+}
 export function sanitizedEnv(source=process.env){
  const env={...source};
  for(const name of Object.keys(env))if(/^(RADAR_|GITHUB_TOKEN$|GH_TOKEN$|GIT_ASKPASS$|GIT_ASKPASS_USERNAME$|GIT_ASKPASS_PASSWORD$)/i.test(name))delete env[name];
@@ -166,10 +183,11 @@ export async function executePilot({call,projectId,taskId,workspace,provider,con
   }catch(e){releaseError=e;process.stderr.write('Lease release requires manual reconciliation: '+e.message+'\n');}
  }
 }
-export async function submitPilot({call,projectId,taskId,workspace,pr,sha,confirmed=false,gitImpl=git}){
+export async function submitPilot({call,projectId,taskId,workspace,pr,sha,confirmed=false,gitImpl=git,fetchImpl=fetch,githubToken=process.env.GITHUB_TOKEN}){
  if(!confirmed)throw fail('CONFIRM_REQUIRED','Submission requires --confirm');
  const info=inspectWorkspace(workspace,{gitImpl,requireClean:true});
  const submission=validateSubmission({pr,sha,workspaceInfo:info});
+ const remote=await verifyPullHead({...submission,githubToken,fetchImpl});
  const {context,task}=await getReadyWork(call,projectId,taskId);
  const milestone=context.project.milestones.find(m=>m.id===task.milestoneId);
  if(!milestone)throw fail('MILESTONE_MISSING','Task milestone not found');
@@ -186,7 +204,7 @@ export async function submitPilot({call,projectId,taskId,workspace,pr,sha,confir
    baseline_revision:context.baseline.revision,commit_sha:submission.sha,evidence_ids:[evidence.id],
    known_gaps:[],idempotency_key:uuid()});
  return {taskId:task.id,taskRevision:done.revision,submissionId:handoff.id,evidenceId:evidence.id,
-   commitSha:submission.sha,pr:submission.pr,verificationState:evidence.verificationState,
+   commitSha:submission.sha,pr:submission.pr,verifiedRemotePrHead:remote.headSha,verificationState:evidence.verificationState,
    acceptanceState:handoff.acceptanceState,ownerMustVerify:true};
 }
 export async function main(argv=process.argv.slice(2),env=process.env){
