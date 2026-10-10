@@ -1,6 +1,6 @@
 {
   "name": "opportunity-radar",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {"node": ">=22.16.0"},
@@ -9,6 +9,6 @@
     "dev": "node --env-file-if-exists=.env --watch src/server.mjs",
     "mcp:stdio": "node --env-file-if-exists=.env src/mcp-stdio.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check src/service.mjs && node --check public/app.js && npm test"
+    "check": "node --check src/server.mjs && node --check src/service.mjs && node --check public/app.js && node --check public/i18n.js && npm test"
   }
 }
