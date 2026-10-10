@@ -1,0 +1,28 @@
+name: Live GitHub evidence verification
+on:
+  pull_request:
+    paths:
+      - 'src/github.mjs'
+      - 'src/service.mjs'
+      - 'scripts/probe-real-github-ci.mjs'
+      - '.github/workflows/agent-github-evidence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  checks: read
+jobs:
+  github-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify historical completed GitHub CI via real REST API
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RADAR_LIVE_GITHUB_SHA: ace6e15c508cb6bf90083b8782357cd3de488080
+          RADAR_LIVE_GITHUB_REPO: CavinHuang/opportunity-radar
+          RADAR_REQUIRED_CHECKS: test
+        run: node scripts/probe-real-github-ci.mjs
