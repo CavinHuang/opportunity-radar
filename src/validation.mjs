@@ -18,7 +18,7 @@ function link(value){
 function opportunity(store,id){
  const o=store.get('opportunities',id);if(!o)throw fail('NOT_FOUND','机会不存在',404);return o;
 }
-const plans=(store,id)=>store.list('validation_plans').filter(x=>x.opportunityId===id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+const plans=(store,id)=>store.list('validation_plans').filter(x=>x.opportunityId===id).reverse().sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
 const rows=(store,id)=>store.list('validation_observations').filter(x=>x.planId===id).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
 
 export function validationSummary(store,id){
