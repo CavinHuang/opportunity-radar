@@ -22,3 +22,11 @@
 ## P1/P2 deferred
 
 - Multi-agent handoff, reviewer groups, automatic cross-market comparisons, growth cohort analysis, full-text personalized knowledge network, advanced AI production, promotion automation and process scheduler.
+
+
+## v0.9 · Source research feedback
+
+- Observational quality dashboard on real stored feed records and Owner reviews.
+- Exact URL attribution, duplicate-source warnings, and triage entry from each feed.
+- Never auto-promote collected activity to proof of willingness to pay.
+- Still needed: sustained production monitoring and real consumer interviews.
