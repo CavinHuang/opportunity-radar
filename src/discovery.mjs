@@ -48,7 +48,7 @@ function groupsFrom(store,{maxSignals=600}={}){
  return {groups:groups.filter(x=>x.members.length>=2),examined:queue.length,unexamined:Math.max(0,eligible.length-queue.length)};
 }
 export function discoveryClusters(store,{includeDismissed=false,limit=12,maxSignals=600}={}){
- if(!Number.isInteger(limit)||limit<1||limit>40)throw fail('BAD_LIMIT','每页候选组必须是 1–40');
+ if(!Number.isInteger(limit)||limit<1||limit>300)throw fail('BAD_LIMIT','每页候选组必须是 1–300');
  const {groups,examined,unexamined}=groupsFrom(store,{maxSignals});
  const candidates=groups.map(g=>{
   const members=[...g.members].sort(idSort);
@@ -75,11 +75,20 @@ export function discoveryClusters(store,{includeDismissed=false,limit=12,maxSign
    withMultipleDomains:candidates.filter(x=>x.domainCount>1).length},
   generatedAt:new Date().toISOString(),policy:'Candidate title similarity only; human inspection of originals and independent consumer validation are required.'};
 }
+/** Resolve a current membership signature before any Owner-approved bulk association.
+ * All members are stored as UNREVIEWED evidence; lexical similarity is not validation. */
+export function currentDiscoveryGroup(store,id,fingerprint){
+ const current=discoveryClusters(store,{includeDismissed:true,limit:300}).items.find(g=>g.id===id);
+ if(!current)throw fail('NOT_FOUND','候选组已不存在或不满足聚合条件',404);
+ if(current.fingerprint!==fingerprint)throw fail('CLUSTER_CHANGED','候选组内容已更新，请刷新再确认',409);
+ if(current.state==='dismissed')throw fail('CLUSTER_DISMISSED','请先恢复已忽略的候选组',409);
+ return current;
+}
 export function reviewDiscoveryCluster(store,id,{action,fingerprint,reason='',expected_revision}={}){
  if(!['dismiss','restore'].includes(action))throw fail('BAD_REVIEW','请选择忽略或恢复候选组');
  if(typeof fingerprint!=='string'||!/^[a-f0-9]{24}$/.test(fingerprint))
   throw fail('BAD_REVIEW','必须提交当前候选组版本');
- const groups=discoveryClusters(store,{includeDismissed:true,limit:40});
+ const groups=discoveryClusters(store,{includeDismissed:true,limit:300});
  const group=groups.items.find(x=>x.id===id);
  if(!group)throw fail('NOT_FOUND','候选组不存在或已不满足聚合条件',404);
  if(group.fingerprint!==fingerprint)throw fail('CLUSTER_CHANGED','候选组新增或减少了信号，请刷新',409);
