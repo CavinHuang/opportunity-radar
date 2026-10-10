@@ -7,7 +7,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import {openDatabase} from '../src/db.mjs';
 import {createService} from '../src/service.mjs';
 import {parseArgs,checkEndpoint,agentApi,inspectWorkspace,validateSubmission,sanitizedEnv,
- formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor} from '../src/agent-pilot.mjs';
+ formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor,verifyPullHead} from '../src/agent-pilot.mjs';
 const cmd=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
 function fixture(){
  const path=mkdtempSync(join(tmpdir(),'radar-cli-v13-'));
@@ -97,7 +97,8 @@ test('explicit submit records unverified PR and G4 pending, never fake success',
   await assert.rejects(()=>submitPilot({call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
    workspace:x.path,pr:'https://github.com/sample/repo/pull/7',sha}),{code:'CONFIRM_REQUIRED'});
   const result=await submitPilot({call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
-   workspace:x.path,pr:'https://github.com/sample/repo/pull/7',sha,confirmed:true});
+   workspace:x.path,pr:'https://github.com/sample/repo/pull/7',sha,confirmed:true,
+   fetchImpl:async()=>({ok:true,status:200,json:async()=>({base:{repo:{full_name:'sample/repo'}},head:{sha}})})});
   assert.equal(result.commitSha,sha);
   assert.equal(result.verificationState,'pending');
   assert.equal(result.acceptanceState,'pending');
@@ -119,4 +120,21 @@ test('agent API sends exact bearer without leaking and refuses invalid replies',
  assert.equal(observed.url,'http://localhost:4177/api/agent/tools/project.get_context');
  assert.equal(observed.headers.Authorization,'Bearer test-token');
  assert.deepEqual(observed.body,{project_id:'p'});
+});
+
+test('remote GitHub PR validation refuses changed head and inaccessible / mismatched repositories',async()=>{
+ const sha='a'.repeat(40),input={pr:'https://github.com/sample/repo/pull/7',sha,repo:'sample/repo'};
+ const good=await verifyPullHead({...input,fetchImpl:async()=>({
+   ok:true,status:200,json:async()=>({base:{repo:{full_name:'sample/repo'}},head:{sha}})
+ })});
+ assert.equal(good.headSha,sha);
+ await assert.rejects(()=>verifyPullHead({...input,fetchImpl:async()=>({
+   ok:true,status:200,json:async()=>({base:{repo:{full_name:'sample/repo'}},head:{sha:'b'.repeat(40)}})
+ })}),{code:'PR_HEAD_MISMATCH'});
+ await assert.rejects(()=>verifyPullHead({...input,fetchImpl:async()=>({
+   ok:true,status:200,json:async()=>({base:{repo:{full_name:'wrong/repo'}},head:{sha}})
+ })}),{code:'PR_REPO_MISMATCH'});
+ await assert.rejects(()=>verifyPullHead({...input,fetchImpl:async()=>({
+   ok:false,status:403,json:async()=>({})
+ })}),{code:'PR_NOT_ACCESSIBLE'});
 });
