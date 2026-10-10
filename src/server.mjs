@@ -16,6 +16,7 @@ import {validationOverview,validationSummary,createValidationPlan,recordValidati
 import {feedbackOverview,recordProductFeedback} from './delivery-trace.mjs';
 import {sourceQualityReport} from './source-quality.mjs';
 import {discoveryClusters,reviewDiscoveryCluster,discoveryQualityReport} from './discovery.mjs';
+import {readinessSummary} from './data-safety.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
@@ -52,6 +53,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
+    if(pathname==='/api/operations/readiness'&&req.method==='GET')return send(res,200,readinessSummary(store,{ownerProtected:Boolean(process.env.RADAR_OWNER_TOKEN)}));
     if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
     if(pathname==='/api/discovery/clusters'&&req.method==='GET'){
