@@ -81,6 +81,16 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[data-action="toggle-cluster-history"]').first.click()
             page.locator('[data-action="cluster-restore"]').first.click()
             assert call('/api/discovery/clusters')['total']==1
+            assert call('/api/discovery/clusters')['items'][0]['diagnostics']['possibleRepost'] is True
+            page.locator('[data-action="cluster-confirm"]').first.click()
+            page.locator('textarea[name="reason"]').fill('These titles describe a comparable problem, but these test records do not establish independent consumers.')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            assert call('/api/discovery/clusters')['items'][0]['state']=='reviewed_related'
+            quality=call('/api/discovery/quality')
+            assert quality['ownerMarkedRelated']==1
+            assert quality['ownerLabelAgreementRatio'] is None
+            assert page.get_by_text('可能转载 / 重复发帖',exact=False).count()>=1
             page.locator('[data-action="cluster-link"]').first.click()
             page.locator('[name="opportunity_id"]').select_option(oid)
             page.locator('[name="acknowledgeUnverified"]').check()
