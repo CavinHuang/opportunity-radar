@@ -10,6 +10,8 @@ import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs'
 import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
+import {catalogList,installCatalogFeed} from './source-catalog.mjs';
+import {researchReport,reviewOpportunityEvidence} from './research.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
@@ -46,6 +48,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
+    if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
+    if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
     if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
     const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
@@ -83,6 +87,10 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,agentSetupSummary(projectId,project,{enabled:Boolean(process.env.RADAR_AGENT_TOKEN),tools:service.tools}));
     }
     if(pathname==='/api/dashboard'&&req.method==='GET')return send(res,200,{...service.brief(),projects:store.list('projects')});
+    const research=/^\/api\/opportunities\/([^/]+)\/research$/.exec(pathname);
+    if(research&&req.method==='GET')return send(res,200,{report:researchReport(store,research[1])});
+    const reviewEvidence=/^\/api\/opportunities\/([^/]+)\/evidence\/review$/.exec(pathname);
+    if(reviewEvidence&&req.method==='POST')return send(res,200,{item:reviewOpportunityEvidence(store,reviewEvidence[1],await body(req))});
     if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
     if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
     const oppStatus=/^\/api\/opportunities\/([^/]+)\/status$/.exec(pathname);
