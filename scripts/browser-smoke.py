@@ -39,7 +39,17 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.goto(BASE,wait_until='networkidle',timeout=20000)
             page.locator('.hero-title').wait_for(timeout=10000)
             page.locator('[data-action="manage-sources"]').first.click()
-            page.get_by_text('精选公开信息源').wait_for(timeout=10000)
+            try:
+                page.get_by_text('精选公开信息源').wait_for(timeout=10000)
+            except Exception:
+                out=ROOT/'artifacts'/'browser-smoke'
+                out.mkdir(parents=True,exist_ok=True)
+                page.screenshot(path=str(out/'source-failure.png'),full_page=True)
+                print('BROWSER ERRORS:',errors,flush=True)
+                print('BROWSER URL:',page.url,flush=True)
+                print('BROWSER TEXT:',page.locator('body').inner_text()[:3500],flush=True)
+                print('CATALOG API:',call('/api/source-catalog'),flush=True)
+                raise
             first=page.locator('[data-action="install-catalog"][data-id="v2ex-qna"]')
             assert first.count()==1
             first.click()
