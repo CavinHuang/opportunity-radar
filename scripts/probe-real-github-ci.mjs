@@ -2,6 +2,7 @@
 // In a PR runner, never verify its own still-running SHA: that causes deadlock.
 import assert from 'node:assert/strict';
 import {verifyGitHubEvidence} from '../src/github.mjs';
+import {verifyPullHead} from '../src/agent-pilot.mjs';
 const sha=process.env.RADAR_LIVE_GITHUB_SHA||'ace6e15c508cb6bf90083b8782357cd3de488080';
 const repo=process.env.RADAR_LIVE_GITHUB_REPO||'CavinHuang/opportunity-radar';
 const requiredChecks=process.env.RADAR_REQUIRED_CHECKS||'test';
@@ -15,4 +16,8 @@ const wrong={...evidence,commitSha:'0'.repeat(40)};
 const mismatch=await verifyGitHubEvidence(wrong,process.env.GITHUB_TOKEN,{requiredChecks});
 assert.equal(mismatch.state,'unverified','Mismatched SHA must not inherit previous success');
 console.log(JSON.stringify({passed:true,repository:repo,verifiedSha:sha,requiredChecks:result.checks.map(c=>({name:c.name,runId:c.runId,htmlUrl:c.htmlUrl})),negativeMismatchRejected:true},null,2));
+const previousPrSha='2c809838d8c26aa040bd4e2689efc702b3eefb21';
+const pr=await verifyPullHead({repo,pr:'https://github.com/'+repo+'/pull/14',sha:previousPrSha,githubToken:process.env.GITHUB_TOKEN});
+assert.equal(pr.headSha,previousPrSha);
+console.log(JSON.stringify({realPrVerified:true,prNumber:pr.number,exactHeadSha:pr.headSha}));
 console.log('This validates GitHub evidence API integration ONLY, not real Agent code changes, G4 Owner acceptance or customer demand.');
