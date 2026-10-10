@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.3 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.4 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,17 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.4 · 可恢复的 Coding Agent 交付与人工接管
+
+- `agent:pilot status` 是**只读**任务诊断：展示当前批准基线、任务、租约到期时间和交付申请，不打印租约 Token。
+- `agent:pilot recover --task ... --recovery-note ... --confirm` 提供人工恢复动作：只有租约确实过期、明确确认后才可接管并释放。系统不声称原编码进程已经停止；没有到期租约不能强行抢占。
+- `agent:pilot submit` 现在具有**持久幂等性**：证据已创建、任务已提交、交付已创建三个节点的网络/进程故障都可以重试；相同 PR + SHA 重放不会产生重复证据或交付，Owner 已退回的旧 SHA 不可重新冒充新版本。
+- 新提交证据标注到具体任务和已批准基线；当多个候选任务存在时，必须指定 `--task`，防止将 PR 归给错误任务。
+- `submit` 仍需实际查询 GitHub PR HEAD；产物仍是**待独立核验的证据**，不能代替 G1 CI、Owner G4 验收或真实消费者验证。
+- 新增真实 **HTTP Agent 认证 + SQLite** 集成测试，不只是服务层函数模拟；新增六组断线重试、同 SHA 拒绝、人工恢复回归测试。
+
+[操作手册与故障恢复](docs/CODING_AGENT_PILOT.md)
 
 ## v1.3 · 实际 Coding Agent CLI 桥接
 
