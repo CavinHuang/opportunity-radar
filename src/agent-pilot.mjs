@@ -128,6 +128,11 @@ export async function getReadyWork(call,projectId,taskId){
  if(task.baselineRevision&&task.baselineRevision!==context.baseline.revision)throw fail('BASELINE_STALE','Task belongs to an older approved baseline');
  return {context,task,prompt:formatAgentPrompt({context,task})};
 }
+export function installedCoderVersion(provider){
+ const bin=commandFor(provider,'.').command;
+ try{return execFileSync(bin,['--version'],{encoding:'utf8',timeout:8000,stdio:['ignore','pipe','pipe']}).trim().slice(0,160);}
+ catch{throw fail('CODING_TOOL_MISSING',bin+' CLI is not installed or is not available on PATH; install/login before using run');}
+}
 export function commandFor(provider,workspace){
  if(provider==='codex')return {command:'codex',args:['exec','--sandbox','workspace-write','--cd',workspace,'-'],viaStdin:true};
  if(provider==='claude')return {command:'claude',args:['-p','--permission-mode','acceptEdits'],viaStdin:true};
@@ -218,7 +223,7 @@ export async function main(argv=process.argv.slice(2),env=process.env){
   const data=await getReadyWork(call,projectId,opts.task);
   output={status:'ready',projectId,taskId:data.task.id,baselineRevision:data.context.baseline.revision,
    workspace:info.workspace,branch:info.branch,provider:opts.provider||'codex',
-   command:commandFor(opts.provider||'codex',info.workspace).command,willStartProcess:false};
+   command:commandFor(opts.provider||'codex',info.workspace).command,installedVersion:installedCoderVersion(opts.provider||'codex'),willStartProcess:false};
  }else if(opts.action==='plan'){
   if(opts.workspace)inspectWorkspace(opts.workspace);
   const data=await getReadyWork(call,projectId,opts.task);
