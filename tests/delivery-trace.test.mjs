@@ -97,3 +97,26 @@ test('usage is scoped to a project and records repeat participants without overs
  assert.throws(()=>feedbackOverview(store,'unknown'),{code:'NOT_FOUND'});
  }finally{store.close();}
 });
+
+test('Owner can prepare exactly one claimable kickoff task per approved baseline',()=>{
+ const {store,service,opportunity:o}=fixture();try{
+ const plan=approved(store,o.id);
+ const project=service.startExperiment({...experimentInput(o),validationPlanId:plan.id});
+ const a=service.prepareKickoff(project.id);
+ assert.equal(a.alreadyPrepared,false);
+ assert.equal(a.task.status,'open');
+ assert.equal(a.task.baselineRevision,1);
+ assert.ok(a.task.description.includes('Acceptance criteria:'));
+ assert.ok(a.task.description.includes('linked_owner_decision'));
+ const again=service.prepareKickoff(project.id);
+ assert.equal(again.alreadyPrepared,true);assert.equal(again.task.id,a.task.id);
+ const next=service.tool('project.get_next_work',{project_id:project.id});
+ assert.ok(next.tasks.some(t=>t.id===a.task.id));
+ service.ownerDecision(project.id,{action:'revise_baseline',reason:'Clarified acceptance of the actual MVP',
+  criteria:['The user can complete the core receipt recovery flow safely']});
+ const revised=service.prepareKickoff(project.id);
+ assert.equal(revised.task.baselineRevision,2);assert.notEqual(revised.task.id,a.task.id);
+ assert.equal(store.get('tasks',a.task.id).status,'blocked');
+ assert.equal(service.tool('project.get_next_work',{project_id:project.id}).tasks.some(t=>t.id===a.task.id),false);
+ }finally{store.close();}
+});
