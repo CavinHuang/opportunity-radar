@@ -50,7 +50,7 @@ export function backupDatabase({database=defaultDatabasePath(),output}){
  if(fileExists(target)||fileExists(manifest))throw fail('BACKUP_EXISTS','Refusing to overwrite an existing backup or manifest');
  if(!existsSync(dirname(target)))mkdirSync(dirname(target),{recursive:true,mode:0o700});
  const tmp=join(dirname(target),'.radar-backup-'+randomUUID()+'.sqlite');
- let db,linked=false;
+ let db,linked=false,manifestLinked=false,manifestTemp=null;
  try{
   inspectRadarDatabase(source);
   db=readonly(source);
@@ -66,15 +66,19 @@ export function backupDatabase({database=defaultDatabasePath(),output}){
     note:'Unencrypted local copy including private research. Protect and transfer securely. Manifest checksum detects accidental corruption, not malicious modification.'};
   // hard-link is an atomic no-clobber create on the same filesystem.
   linkSync(tmp,target);linked=true;
-  const fd=openSync(manifest,'wx',0o600);
+  manifestTemp=join(dirname(target),'.radar-manifest-'+randomUUID()+'.json');
+  const fd=openSync(manifestTemp,'wx',0o600);
   try{writeFileSync(fd,JSON.stringify(snapshot,null,2)+'\n');}finally{closeSync(fd);}
+  linkSync(manifestTemp,manifest);manifestLinked=true;
   return {path:target,manifest,sha256,bytes:snapshot.bytes,verifiedRecordCount:verified.totalRecords,warning:snapshot.note};
  }catch(e){
+  if(manifestLinked)rmSync(manifest,{force:true});
   if(linked)rmSync(target,{force:true});
   throw e;
  }finally{
   db?.close();
   rmSync(tmp,{force:true});
+  if(manifestTemp)rmSync(manifestTemp,{force:true});
  }
 }
 export function verifyBackup({input}){
