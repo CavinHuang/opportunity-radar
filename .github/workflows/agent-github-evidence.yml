@@ -4,6 +4,9 @@ on:
     paths:
       - 'src/github.mjs'
       - 'src/service.mjs'
+      - 'src/agent-pilot.mjs'
+      - 'src/pilot-supervisor.mjs'
+      - 'src/pilot-journal.mjs'
       - 'scripts/probe-real-github-ci.mjs'
       - '.github/workflows/agent-github-evidence.yml'
   workflow_dispatch:
