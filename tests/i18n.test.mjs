@@ -109,3 +109,12 @@ test('candidate review classifications and repost warnings are translated',()=>{
  assert.equal(translate('疑似重复转发 2 组','en-US'),'2 possible repost groups');
  assert.equal(translate('组内最低标题相似度：0.72','en-US'),'Minimum within-group title similarity: 0.72');
 });
+
+test('onboarding and offline backup copy is available in both languages',()=>{
+ assert.equal(translate('首次使用与数据安全','en-US'),'Getting started and data safety');
+ assert.equal(translate('先配置信息源','en-US'),'Configure sources first');
+ assert.equal(translate('备份你的研究资料','en-US'),'Back up your research');
+ assert.equal(translate('复制今日备份命令','en-US'),'Copy backup command');
+ assert.equal(translate('已启用 2 个来源 · 成功扫描过 1 个 · 当前异常 0 个 · 已保存 7 条公开信号。','en-US'),
+  '2 enabled sources · 1 previously fetched · 0 errors · 7 public signals saved.');
+});
