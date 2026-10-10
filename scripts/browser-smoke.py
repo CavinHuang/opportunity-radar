@@ -67,7 +67,8 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
                     'url':'https://'+host+'/demo/source-'+str(index),
                     'market':'International'
                 })
-            page.locator('[data-action="manage-sources"]').first.click() if page.locator('[data-action="manage-sources"]').count() else page.reload(wait_until='networkidle')
+            page.locator('[data-action="show-opportunities"]').first.click()
+            page.locator('[data-action="manage-sources"]').first.click()
             page.get_by_text('重复问题候选').first.wait_for(timeout=10000)
             before=call('/api/discovery/clusters')
             assert before['total']==1
