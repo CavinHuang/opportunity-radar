@@ -75,7 +75,7 @@ export function discoveryClusters(store,{includeDismissed=false,limit=12,maxSign
  const candidates=groups.map(g=>{
   const members=[...g.members].sort(idSort);
   const seedId=members[0].id;
-  const fingerprint=digest(members.map(s=>s.id).sort().join('|'));
+  const fingerprint=digest(members.map(s=>[s.id,normalize(s.title),normalizeBody(s.description),String(s.author||'').trim().toLowerCase()].join('\t')).sort().join('|'));
   const decision=store.get('discovery_reviews',seedId);
   const dismissed=decision?.status==='dismissed'&&decision.fingerprint===fingerprint;
   const domains=[...new Set(members.map(x=>host(x.url)))];
