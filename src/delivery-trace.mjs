@@ -20,6 +20,8 @@ export function approvedResearchBasis(store,opportunityId,planId){
  if(!plan||plan.opportunityId!==opportunityId)throw fail('RESEARCH_PLAN_MISMATCH','Research decision is not for this opportunity',409);
  if(plan.status!=='closed'||plan.outcome!=='continue'||plan.decisionBy!=='owner')
   throw fail('RESEARCH_NOT_APPROVED','Only an Owner-closed continue decision may support a build',409);
+ const newest=store.list('validation_plans').find(x=>x.opportunityId===opportunityId);
+ if(newest?.id!==planId)throw fail('RESEARCH_PLAN_SUPERSEDED','A more recent research round exists; reassess before launching development',409);
  const rows=store.list('validation_observations').filter(x=>x.planId===planId);
  const count={supports:0,contradicts:0,unclear:0};
  for(const row of rows)count[row.stance]++;
