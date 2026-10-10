@@ -4,7 +4,7 @@ export const LANGUAGES = Object.freeze({ 'zh-CN': '简体中文', 'en-US': 'Engl
 export const LANGUAGE_STORAGE_KEY = 'radar-locale';
 
 const en = {
- '信息源质量反馈':'Source quality feedback','优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。':'Prioritize traceable consumer experiences over raw article volume. Metrics update with human research.',
+ '研判该来源':'Review this source','信息源质量反馈':'Source quality feedback','优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。':'Prioritize traceable consumer experiences over raw article volume. Metrics update with human research.',
  '观察数据 · 非商机评分':'Observed data · Not an opportunity score',
  '去重公开信号':'Unique observed signals','已关联机会':'Linked opportunities','含人工核查经历的来源':'Sources with Owner-reviewed experiences','当前采集异常':'Current source failures',
  '同一帖子可被多个来源收录，来源统计不可相加为独立用户；“第一手经历”仅代表人工阅读分类，未验证发帖人身份，也不能证明付费意愿。':'A single story may appear in several feeds. Source counts are not unique consumers; firsthand classifications reflect manual review, not identity or purchasing intent.',
