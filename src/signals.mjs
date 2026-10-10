@@ -9,13 +9,14 @@ function tag(block,name){return block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([
 export function parseFeed(xml,source){
   const blocks=[...xml.matchAll(/<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
   return blocks.slice(0,25).map(([,kind,block])=>{
-    const rawLink=kind==='item'?tag(block,'link'):(block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1]||tag(block,'link'));
+    const rawLink=kind==='item'?tag(block,'link'):(block.match(/<link\b(?=[^>]*rel=["']alternate["'])[^>]*href=["']([^"']+)["']/i)?.[1]||block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1]||tag(block,'link'));
     const title=decode(tag(block,'title')).slice(0,220);
     const description=decode(tag(block,'description')||tag(block,'summary')||tag(block,'content')).slice(0,500);
     let url;try{url=new URL(decode(rawLink),source).href;if(!url.startsWith('https://'))return null;}catch{return null;}
     if(!title)return null;
     const id=createHash('sha256').update(url).digest('hex').slice(0,32);
-    return {id,title,description,url,feed:source,createdAt:new Date().toISOString(),status:'signal_only'};
+    const dateRaw=decode(tag(block,'pubDate')||tag(block,'published')||tag(block,'updated'));const ms=Date.parse(dateRaw);const publishedAt=Number.isFinite(ms)&&ms<=Date.now()+86400000&&ms>=0?new Date(ms).toISOString():null;
+    return {id,title,description,url,feed:source,publishedAt,createdAt:new Date().toISOString(),status:'signal_only'};
   }).filter(Boolean);
 }
 export async function scanFeeds(store,feedUrls=configuredFeeds()){

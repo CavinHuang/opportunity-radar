@@ -6,13 +6,14 @@ import { openDatabase } from './db.mjs';
 import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
-import {scanFeeds, configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
+import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
+import {seedConfiguredSources,addFeed,editFeed,scanSources,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
 if(!['127.0.0.1','localhost','::1'].includes(host)&&!process.env.RADAR_OWNER_TOKEN)throw new Error('RADAR_OWNER_TOKEN is required when binding to a non-loopback host');
-const store=openDatabase(dbPath);const service=createService(store);
+const store=openDatabase(dbPath);seedConfiguredSources(store);const service=createService(store);
 const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/i18n.js':'i18n.js'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8'};
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
@@ -29,7 +30,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
   try{
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(files[pathname]&&req.method==='GET'){const filename=path.join(root,'public',files[pathname]);const content=await readFile(filename);res.writeHead(200,{'Content-Type':mime[path.extname(filename)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(content);}
-    if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:configuredFeeds().length,llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
+    if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
     protectOrigin(req);
     if(pathname==='/mcp'&&req.method==='POST'){
       authorize(req,'agent');const input=await body(req);
@@ -44,12 +45,37 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
-    if(pathname==='/api/signals'&&req.method==='GET')return send(res,200,{items:store.list('sources').slice(0,20),configuredFeedCount:configuredFeeds().length});
-    if(pathname==='/api/signals/scan'&&req.method==='POST')return send(res,200,{result:await scanFeeds(store)});
+    if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title))});
+    if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
+    const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
+    if(source&&req.method==='PATCH')return send(res,200,{item:editFeed(store,source[1],await body(req))});
+    if(pathname==='/api/signals'&&req.method==='GET'){
+      const result=querySignals(store,{status:u.searchParams.get('status')||'all',sourceId:u.searchParams.get('source_id')||'',keyword:u.searchParams.get('q')||'',offset:Number(u.searchParams.get('offset')||0),limit:Number(u.searchParams.get('limit')||30)});
+      return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
+    }
+    if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/signals/scan'&&req.method==='POST'){
+      const data=await body(req);return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
+    }
+    const triage=/^\/api\/signals\/([^/]+)\/triage$/.exec(pathname);
+    if(triage&&req.method==='POST')return send(res,200,{item:triageSignal(store,triage[1],await body(req))});
+    const importing=/^\/api\/signals\/([^/]+)\/import$/.exec(pathname);
+    if(importing&&req.method==='POST'){
+      const signal=store.get('sources',importing[1]);if(!signal)return send(res,404,{error:'NOT_FOUND'});
+      if(signal.status==='converted')return send(res,409,{error:'SIGNAL_CONVERTED',message:'该来源已关联过机会，不会重复导入'});
+      const data=await body(req);
+      const result=store.transaction(()=>{
+        const item=service.createOpportunity({...data,title:data.title||signal.title,problem:data.problem||signal.description,market:data.market||signal.market||'待判断',sources:[{url:signal.url,quote:signal.description,independent:false,origin:'public_signal'}]});
+        store.put('sources',{...signal,status:'converted',linkedOpportunityId:item.id,triagedAt:new Date().toISOString()},signal.revision);
+        store.event('signal.converted',signal.id,'owner',{opportunityId:item.id});return item;
+      });
+      return send(res,201,{item:result});
+    }
     const signal=/^\/api\/signals\/([^/]+)\/analyze$/.exec(pathname);
     if(signal&&req.method==='POST'){
       const item=store.get('sources',signal[1]);if(!item)return send(res,404,{error:'NOT_FOUND'});
-      return send(res,200,{suggestion:await analyzeSignal(item,{locale:(await body(req)).locale}),source:item});}
+      return send(res,200,{suggestion:await analyzeSignal(item,{locale:(await body(req)).locale}),source:item});
+    }
     if(pathname==='/api/agent/setup'&&req.method==='GET'){
       const projectId=u.searchParams.get('project_id');
       const project=projectId?service.getFullProject(projectId):null;
@@ -58,6 +84,12 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/dashboard'&&req.method==='GET')return send(res,200,{...service.brief(),projects:store.list('projects')});
     if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
     if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
+    const oppStatus=/^\/api\/opportunities\/([^/]+)\/status$/.exec(pathname);
+    if(oppStatus&&req.method==='POST')return send(res,200,{item:service.changeOpportunityStatus(oppStatus[1],await body(req))});
+    const linkSignal=/^\/api\/signals\/([^/]+)\/link$/.exec(pathname);
+    if(linkSignal&&req.method==='POST'){
+      const data=await body(req);return send(res,200,{item:service.attachSignalToOpportunity(linkSignal[1],data.opportunity_id)});
+    }
     if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:service.startExperiment(await body(req))});
     if(pathname==='/api/history'&&req.method==='GET')return send(res,200,{projects:store.list('projects'),ledger:store.list('ledger')});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
@@ -92,8 +124,6 @@ export function createServer(){return http.createServer(async(req,res)=>{
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const server=createServer();
   server.listen(port,host,()=>console.log(`Opportunity Radar running at http://${host}:${port}\nAgent API ${process.env.RADAR_AGENT_TOKEN?'enabled':'disabled'}`));
-  if(configuredFeeds().length){
-    const scan=()=>scanFeeds(store).then(r=>console.log(`[Feed Scan] +${r.added} signals / ${r.feeds} sources`)).catch(e=>console.error('[Feed Scan]',e.message));
-    setTimeout(scan,3000).unref();setInterval(scan,6*60*60*1000).unref();
-  }
+  const scan=()=>store.list('feeds').some(f=>f.enabled)?scanSources(store).then(r=>console.log(`[Feed Scan] +${r.added} signals / ${r.feeds} sources, ${r.errors.length} errors`)).catch(e=>console.error('[Feed Scan]',e.message)):null;
+  setTimeout(scan,3000).unref();setInterval(scan,6*60*60*1000).unref();
 }

@@ -1,9 +1,10 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const directory=mkdtempSync(join(tmpdir(),'radar-http-test-'));
+after(()=>rmSync(directory,{recursive:true,force:true}));
 process.env.RADAR_DB=join(directory,'test.sqlite');
 process.env.RADAR_AGENT_TOKEN='test-agent-token';
 process.env.RADAR_OWNER_TOKEN='test-owner-token';
@@ -37,5 +38,38 @@ test('HTTP contract enforces role separation and end-to-end workflow',async()=>{
   const home=await fetch(base+'/');assert.equal(home.status,200);assert.ok((await home.text()).includes('northstar')===false); // title is Northstar; UI mount root is static
   const staticJs=await fetch(base+'/app.js');assert.equal(staticJs.status,200);assert.ok((await staticJs.text()).includes('机会简报'));
   const i18nJs=await fetch(base+'/i18n.js');assert.equal(i18nJs.status,200);assert.ok((await i18nJs.text()).includes('LANGUAGES'));
- }finally{await new Promise(r=>server.close(r));rmSync(directory,{recursive:true,force:true});}
+ }finally{await new Promise(r=>server.close(r));}
+});
+
+test('source management and evidence-linked opportunity discovery through HTTP',async()=>{
+ const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const base=`http://127.0.0.1:${server.address().port}`;
+ const headers={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const req=async(path,method='GET',payload,auth=headers)=>{
+  const r=await fetch(base+path,{method,headers:auth,body:payload?JSON.stringify(payload):undefined});
+  return {status:r.status,data:await r.json()};
+ };
+ try{
+  assert.equal((await req('/api/sources')).status,200);
+  assert.equal((await req('/api/sources','POST',{url:'https://feed.example.org/rss'},{})).status,401);
+  const created=await req('/api/sources','POST',{url:'https://feed.example.org/rss',title:'Customer feed',market:'Global',keywords:'family,photos'});
+  assert.equal(created.status,201);const feed=created.data.item;assert.equal(feed.keywords.length,2);
+  assert.equal((await req('/api/sources','POST',{url:'https://feed.example.org/rss'})).status,409);
+  assert.equal((await req('/api/sources/'+feed.id,'PATCH',{enabled:false,expected_revision:0})).status,409);
+  const updated=await req('/api/sources/'+feed.id,'PATCH',{enabled:false,expected_revision:feed.revision});assert.equal(updated.status,200);
+  const {openDatabase}=await import('../src/db.mjs');const store=openDatabase(join(directory,'test.sqlite'));
+  const id='example-article-1';store.put('sources',{id,title:'Families keep losing their warranty details',description:'Warranty papers are easy to misplace',url:'https://consumer.example.org/thread/1',feed:feed.url,feedIds:[feed.id],market:'Global',createdAt:'2026-10-10T08:00:00Z',status:'new',linkedOpportunityId:null});store.close();
+  const signals=await req('/api/signals?status=new');assert.equal(signals.status,200);assert.equal(signals.data.items.some(i=>i.id===id),true);
+  const signal=signals.data.items.find(i=>i.id===id);
+  const saved=await req('/api/signals/'+id+'/triage','POST',{status:'saved',expected_revision:signal.revision});assert.equal(saved.status,200);
+  const imported=await req('/api/signals/'+id+'/import','POST',{title:'Warranty document reminders',problem:'Cannot locate warranty proof on time',market:'Global'});
+  assert.equal(imported.status,201);assert.equal(imported.data.item.sources[0].url,'https://consumer.example.org/thread/1');assert.equal(imported.data.item.sources[0].independent,false);
+  assert.equal((await req('/api/signals/'+id+'/import','POST',{})).status,409);
+  const status=await req('/api/opportunities/'+imported.data.item.id+'/status','POST',{status:'watching',expected_revision:imported.data.item.revision});assert.equal(status.status,200);
+  const converted=await req('/api/signals?status=converted');assert.equal(converted.data.items.some(i=>i.id===id),true);
+  const second='example-article-2';const sourceDb=openDatabase(join(directory,'test.sqlite'));sourceDb.put('sources',{id:second,title:'Another user reports warranty frustration',description:'Lost purchase receipt',url:'https://consumer.example.org/thread/2',feed:feed.url,feedIds:[feed.id],market:'Global',status:'new',createdAt:new Date().toISOString()});sourceDb.close();
+  const linked=await req('/api/signals/'+second+'/link','POST',{opportunity_id:imported.data.item.id});assert.equal(linked.status,200);assert.equal(linked.data.item.sources.length,2);
+  assert.equal((await req('/api/signals/'+second+'/link','POST',{opportunity_id:imported.data.item.id})).status,409);
+  assert.equal((await req('/api/signals?status=converted&q=warranty')).status,200);
+ }finally{await new Promise(r=>server.close(r));}
 });

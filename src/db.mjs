@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources'];
+const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds'];
 export function openDatabase(path=':memory:') {
   if(path!==':memory:') mkdirSync(dirname(path), {recursive:true});
   const db = new DatabaseSync(path);

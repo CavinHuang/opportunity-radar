@@ -25,8 +25,24 @@ export function createService(store, options={}){
     const item=store.put('opportunities',{id:randomUUID(),title,problem,market,language:data.language||'zh-CN',audience:data.audience||'',channel:data.channel||'',advantage:data.advantage||'',risk:data.risk||'尚未识别足够的反对性证据',nextAction:data.nextAction||'进一步获取独立消费者证据',sources:distinct,evidenceStatus:distinct.length?'needs_verification':'unknown',status:'candidate',createdAt:now(),demo:false});
     event('opportunity.created',item.id,owner,{title:item.title}); return item;
   }
+  function changeOpportunityStatus(id,data){
+    const item=get('opportunities',id);
+    if(item.status==='experiment')throw err('PROJECT_IN_PROGRESS','正在实验的机会不能直接隐藏',409);
+    if(!['candidate','watching','dismissed'].includes(data.status))throw err('BAD_REQUEST','无效机会状态');
+    const next=store.put('opportunities',{...item,status:data.status},data.expected_revision);
+    event('opportunity.triaged',id,owner,{status:next.status});return next;
+  }
+  function attachSignalToOpportunity(signalId,opportunityId){return store.transaction(()=>{
+    const signal=get('sources',signalId),item=get('opportunities',opportunityId);
+    if(signal.status==='converted')throw err('SIGNAL_CONVERTED','信号已经关联其他机会',409);
+    const known=new Set(item.sources.map(x=>x.url));
+    const sources=known.has(signal.url)?item.sources:[...item.sources,{url:signal.url,quote:signal.description||'',independent:false,origin:'public_signal'}];
+    const updated=store.put('opportunities',{...item,sources,evidenceStatus:'needs_verification'},item.revision);
+    store.put('sources',{...signal,status:'converted',linkedOpportunityId:item.id,triagedAt:now()},signal.revision);
+    event('signal.linked',signalId,owner,{opportunityId:item.id});return updated;
+  });}
   function brief(){const cutoff=Date.now()-7*86400000;const active=store.list('projects').find(x=>!['paused','stopped','archived'].includes(x.status));
-    const candidates=store.list('opportunities').filter(x=>x.status==='candidate').slice(0,3);return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
+    const candidates=store.list('opportunities').filter(x=>x.status==='candidate').sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
   function startExperiment(data){return store.transaction(()=>{
     const o=get('opportunities',data.opportunityId);
     if(store.list('projects').some(x=>!['paused','stopped','archived'].includes(x.status)))throw err('ACTIVE_EXPERIMENT_EXISTS','同时只能有一个主实验',409);
@@ -162,5 +178,5 @@ export function createService(store, options={}){
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);
   }
   const tools=['project.get_context','project.get_next_work','project.watch_changes','task.claim','task.upsert','task.transition','task.release','progress.report','evidence.attach','issue.raise_blocker','decision.request','handoff.submit'];
-  return {createOpportunity,brief,startExperiment,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
+  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,brief,startExperiment,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
 }
