@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.2 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.3 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,19 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.3 · 实际 Coding Agent CLI 桥接
+
+新增可运行的 **Codex CLI / Claude Code CLI** 试点接入器，减少外部 Agent 工程交付时的手动复制与虚假结果：
+
+- 在「当前主实验 → Agent 接入」直接复制试点命令，也可以从 Radar 仓库执行 `npm run agent:pilot -- doctor|plan|run|submit`。
+- `doctor` 检查 Agent API 权限、当前可领取任务、干净的 Git 功能分支、编码 CLI 是否安装；`plan` 从已批准基线生成不含原始消费者访谈的任务提示。
+- `run --confirm` 才会调用本地 Codex/Claude Code，并为任务领取、续租和释放执行责任；**编码进程退出成功不等于 GitHub 已交付**。
+- 用户人工审核源码、执行测试、commit、push、创建 PR 后，用 `submit --confirm --pr ... --sha ...` 提交；必须同时满足本地 Git HEAD、仓库 origin 和 **真实 GitHub PR HEAD** 的精确 SHA 对齐。
+- 系统仍将交付证据标为待核验；Owner 另行进行原生 GitHub 必需 CI 检查并实际操作原型后才能通过 G4。它不会自动 push、发布、验收或提升预算。
+- 编码子进程不会继承 `RADAR_AGENT_TOKEN`、`RADAR_OWNER_TOKEN` 或 `GITHUB_TOKEN`；工作区文件仍可被外部编码工具读取，应使用隔离代码工作区、不把密钥写入其中。
+
+**运行示例与安全说明**：[Coding Agent 试点使用手册](docs/CODING_AGENT_PILOT.md)
 
 ## v1.2 · Agent 交付、返工与断线恢复可靠性
 
