@@ -115,11 +115,11 @@ export function createService(store, options={}){
       required(data.newEvidence,'newEvidence');const b=baseline(id);const next={...cloneJson(b),revision:b.revision+1,approvedAt:now(),approvedBy:owner,evidenceIds:[data.newEvidence],budget:{...b.budget,weeklyUserHours:hours}};
       const p2=store.put('projects',{...p,baselines:[...p.baselines,next],lastDecision:'已批准基线预算修订'},p.revision);event('baseline.approved',id,owner,{revision:next.revision,reason:data.newEvidence},id);return p2;
     }
-    if(action==='accept'||action==='reject'){
+    if(action==='accept'||action==='reject')return store.transaction(()=>{
       const sub=get('submissions',required(data.submissionId,'submissionId'));if(sub.projectId!==id)throw err('NOT_FOUND','提交不属于该项目',404);
       if(sub.baselineRevision!==baseline(id).revision)throw err('BASELINE_STALE','交付基线过期',409);
       if(sub.acceptanceState!=='pending')throw err('BAD_STATE','本次交付已经处理',409);
-      const newest=store.list('submissions').filter(x=>x.projectId===id&&x.milestoneId===sub.milestoneId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
+      const newest=store.list('submissions').find(x=>x.projectId===id&&x.milestoneId===sub.milestoneId);
       if(newest?.id!==sub.id)throw err('SUBMISSION_SUPERSEDED','只能验收当前里程碑的最新交付',409);
       const reason=required(data.reason,'reason'); const e=store.list('evidence').filter(x=>sub.evidenceIds.includes(x.id));
       if(action==='accept' && (!e.length || e.some(x=>!['verified','owner_attested'].includes(x.verificationState)) || sub.g2State!=='covered'))throw err('EVIDENCE_NOT_VERIFIED','证据尚未全部核验且验收条件未覆盖，不能批准',409);
@@ -132,10 +132,14 @@ export function createService(store, options={}){
         throw err('GITHUB_G1_REQUIRED','产品代码交付必须有与提交 SHA 一致、已核实必需 CI 的 GitHub 证据',409);
       }
       const nextSub=store.put('submissions',{...sub,acceptanceState:action==='accept'?'accepted':'rejected',decisionReason:reason,decidedAt:now(),decidedBy:owner},sub.revision);
+      if(action==='reject')for(const t of store.list('tasks').filter(x=>x.projectId===id&&x.milestoneId===sub.milestoneId&&x.status==='submitted')){
+        store.put('tasks',{...t,status:'rework',lease:null,reworkReason:reason,reworkSubmissionId:sub.id,reworkAt:now()},t.revision);
+        event('task.rework_requested',t.id,owner,{reason,submissionId:sub.id,oldCommitSha:sub.commitSha},id);
+      }
       store.put('milestones',{...m,acceptanceState:action==='accept'?'accepted':'rejected',executionState:action==='accept'?'submitted':'rework',evidenceState:action==='accept'?'verified':m.evidenceState},m.revision);
       store.put('projects',{...p,status:action==='accept'?(m.order===1?'execution':m.order===2?'promotion':'review'):'execution',stage:action==='accept'?(m.order===1?'execution':m.order===2?'promotion':'review'):'execution'},p.revision);
       event('acceptance.decided',sub.id,owner,{decision:action,reason,sha:sub.commitSha},id);return nextSub;
-    }
+    });
     if(action==='resolve_request'){
       const req=get('decisions',required(data.requestId,'requestId'));if(req.projectId!==id||req.status!=='pending')throw err('BAD_STATE','申请不存在或已处理',409);
       if(!['approved','rejected'].includes(data.resolution))throw err('BAD_REQUEST','resolution should be approved or rejected');
@@ -166,7 +170,7 @@ export function createService(store, options={}){
 
   function tool(name,p={}){
     if(name==='project.get_context'){const x=getFullProject(p.project_id);return {project:{id:x.id,name:x.name,status:x.status,stage:x.stage,agentLastSync:x.agentLastSync,milestones:x.milestones,tasks:x.tasks,evidence:x.evidence,submissions:x.submissions,decisions:x.decisions.filter(d=>['pending','approved','rejected'].includes(d.status)).map(d=>({id:d.id,kind:d.kind,summary:d.summary,status:d.status}))},baseline:baseline(p.project_id),researchBasis:x.researchBasis||{status:'unlinked'},serverTime:now()};}
-    if(name==='project.get_next_work'){assertActive(p.project_id);return {tasks:store.list('tasks').filter(x=>x.projectId===p.project_id&&['open','rework'].includes(x.status)).filter(x=>x.dependencies.every(id=>store.get('tasks',id)?.status==='submitted')).slice(0,20)};}
+    if(name==='project.get_next_work'){const pr=assertActive(p.project_id),current=pr.baselines.at(-1).revision;return {tasks:store.list('tasks').filter(x=>x.projectId===p.project_id&&['open','rework'].includes(x.status)).filter(x=>!x.baselineRevision||x.baselineRevision===current).filter(x=>x.dependencies.every(id=>store.get('tasks',id)?.status==='submitted')).slice(0,20),baselineRevision:current};}
     if(name==='project.watch_changes'){
       getProject(p.project_id);const original=store.events(Number(p.cursor)||0,p.project_id);
       const allowed=['experiment.','baseline.','project.','task.','agent.','evidence.','submission.','acceptance.','decision.'];
@@ -174,6 +178,9 @@ export function createService(store, options={}){
       return {events,next_cursor:original.length?original.at(-1).seq:Number(p.cursor)||0,serverTime:now()};}
     if(name==='task.claim')return withIdem(name,p.idempotency_key,p,()=>{assertActive(p.project_id);const t=get('tasks',required(p.task_id,'task_id'));
       if(t.projectId!==p.project_id)throw err('FORBIDDEN','wrong project',403);
+      const latest=baseline(p.project_id).revision;
+      if((t.baselineRevision&&t.baselineRevision!==latest)||(t.ownerKickoff&&p.baseline_revision!==latest))throw err('BASELINE_STALE','必须使用当前已批准的任务基线重新领取',409);
+      if(!t.dependencies.every(id=>store.get('tasks',id)?.status==='submitted'))throw err('DEPENDENCY_UNMET','存在尚未完成的前置任务',409);
       if(t.lease&&Date.parse(t.lease.expiresAt)>Date.now()){
         if(p.lease_token!==t.lease.token)throw err('TASK_CLAIMED','任务已经被领取',409);
         const lease={...t.lease,expiresAt:new Date(Date.now()+15*60000).toISOString()};
@@ -186,12 +193,12 @@ export function createService(store, options={}){
       const token=randomUUID();const lease={token,holder:agent,generation:(t.lease?.generation||0)+1,expiresAt:new Date(Date.now()+15*60000).toISOString()};
       const next=store.put('tasks',{...t,lease,status:'in_progress'},p.expected_revision??t.revision);event('task.claimed',t.id,agent,{generation:lease.generation,reconciliationNote:t.lease?p.recovery_note:null},t.projectId);return {task:next,lease_token:token};});
     if(name==='task.upsert')return withIdem(name,p.idempotency_key,p,()=>{
-      assertActive(p.project_id);if(p.task_id){const t=get('tasks',p.task_id);if(t.projectId!==p.project_id)throw err('FORBIDDEN','wrong project',403);leaseCheck(t,p.lease_token);
+      assertActive(p.project_id);if(p.task_id){const t=get('tasks',p.task_id);if(t.projectId!==p.project_id)throw err('FORBIDDEN','wrong project',403);if(t.baselineRevision&&t.baselineRevision!==baseline(t.projectId).revision)throw err('BASELINE_STALE','不能更新已过期基线的任务',409);leaseCheck(t,p.lease_token);
         const next=store.put('tasks',{...t,title:required(p.title??t.title,'title'),description:p.description??t.description,dependencies:p.dependencies??t.dependencies},ensureRevision(p.expected_revision));event('task.updated',t.id,agent,{},t.projectId);return next;}
       const m=get('milestones',required(p.milestone_id,'milestone_id'));if(m.projectId!==p.project_id)throw err('FORBIDDEN','milestone outside project',403);
       for(const dep of p.dependencies||[]){const dt=get('tasks',dep);if(dt.projectId!==p.project_id)throw err('FORBIDDEN','dependency outside project',403);}
-      const t=store.put('tasks',{id:randomUUID(),projectId:p.project_id,milestoneId:m.id,title:required(p.title,'title'),description:p.description||'',status:'open',dependencies:p.dependencies||[],lease:null,createdAt:now()});event('task.created',t.id,agent,{milestoneId:m.id},p.project_id);return t;});
-    if(name==='task.transition')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));assertActive(t.projectId);leaseCheck(t,p.lease_token);if(!['in_progress','blocked','submitted','rework'].includes(p.status))throw err('BAD_REQUEST','invalid task status');
+      const t=store.put('tasks',{id:randomUUID(),projectId:p.project_id,milestoneId:m.id,baselineRevision:baseline(p.project_id).revision,title:required(p.title,'title'),description:p.description||'',status:'open',dependencies:p.dependencies||[],lease:null,createdAt:now()});event('task.created',t.id,agent,{milestoneId:m.id},p.project_id);return t;});
+    if(name==='task.transition')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));assertActive(t.projectId);if(t.baselineRevision&&t.baselineRevision!==baseline(t.projectId).revision)throw err('BASELINE_STALE','不能在已过期基线下改变任务',409);leaseCheck(t,p.lease_token);if(!['in_progress','blocked','submitted','rework'].includes(p.status))throw err('BAD_REQUEST','invalid task status');
       const x=store.put('tasks',{...t,status:p.status},ensureRevision(p.expected_revision));event('task.transitioned',t.id,agent,{status:p.status},t.projectId);return x;});
     if(name==='task.release')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));leaseCheck(t,p.lease_token);const next=store.put('tasks',{...t,lease:null,status:t.status==='in_progress'?'open':t.status},ensureRevision(p.expected_revision));event('task.released',t.id,agent,{externalProcessStopped:false},t.projectId);return next;});
     if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{const pr=assertActive(p.project_id);const updated=store.put('projects',{...pr,latestAgentReport:required(p.summary,'summary'),agentLastSync:now()},pr.revision);event('agent.reported',pr.id,agent,{summary:p.summary,limitations:p.limitations||[]},pr.id);return {lastSync:updated.agentLastSync,projectRevision:updated.revision};});

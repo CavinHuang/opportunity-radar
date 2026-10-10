@@ -132,6 +132,11 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[data-action="prepare-kickoff"]').click()
             page.get_by_text('已准备首个可领取任务').wait_for(timeout=10000)
             assert any(t.get('ownerKickoff') for t in call('/api/projects/'+linked['id'])['tasks'])
+            page.locator('[data-tab="agent"]').click()
+            page.get_by_text('外部 Agent 同步可信度').first.wait_for(timeout=10000)
+            assert page.get_by_text('尚无 Agent 进度报告').count()>=1
+            assert page.get_by_text('过期租约').count()>=1
+            assert page.get_by_text('待返工').count()>=1
             # G4 guard prevents logging hypothetical post-acceptance usage.
             page.locator('[data-tab="ledger"]').click()
             assert page.locator('[data-action="add-product-feedback"]').is_disabled()

@@ -29,3 +29,17 @@ test('agent setup headings are localized without translating stored customer con
   assert.equal(translate('有效任务租约','en-US'),'Active leases');
   assert.equal(translate('Agent 接入中心','zh-CN'),'Agent 接入中心');
 });
+
+test('stale Agent reports, expired leases, rejection and work queues are distinguished without online claims',()=>{
+ const status=agentSetupSummary('p-2',{status:'execution',agentLastSync:'2026-10-10T06:00:00Z',
+   tasks:[{status:'rework',lease:{expiresAt:'2026-10-10T06:10:00Z'}},{status:'blocked'},
+     {status:'open',lease:{expiresAt:'2026-10-10T07:00:00Z'}}],
+   submissions:[{acceptanceState:'pending'},{acceptanceState:'rejected'}],decisions:[]},
+   {enabled:true,serverTime:'2026-10-10T06:40:00Z',tools:[]});
+ assert.equal(status.freshness,'stale');assert.equal(status.minutesSinceReport,40);
+ assert.equal(status.expiredLeases,1);assert.equal(status.activeLeases,1);
+ assert.equal(status.reworkTasks,1);assert.equal(status.blockedTasks,1);
+ assert.equal(status.pendingSubmissions,1);assert.equal(status.externalProcessState,'unknown');
+ const never=agentSetupSummary('x',{tasks:[],status:'execution'}, {serverTime:'2026-10-10T06:40:00Z'});
+ assert.equal(never.freshness,'never_reported');
+});

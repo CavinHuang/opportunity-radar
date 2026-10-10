@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.1 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.2 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,17 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.2 · Agent 交付、返工与断线恢复可靠性
+
+- 将交付、返工和恢复流程变成**外部独立 MCP stdio 进程运行的自动化集成测试**。真实启动另一个 Node 进程，经 JSON-RPC 调用 12 项 Agent 工具、对 SQLite 进行读写，而不是在应用服务内直接模拟 Agent。
+- 在交付版本 A 被 Owner 退回时，对应里程碑已提交任务回到 `rework`，记录原因与旧 SHA，并废止旧租约；Agent 可以领取修复任务并以版本 B 新证据重新提交。原先待核验的 GitHub 证据不会被自动变绿。
+- `task.claim` 拒绝过期基线和未完成依赖，Agent 自建任务绑定当前已批准基线；修改基线后旧任务无法再次领取或修改。
+- 模拟独立 MCP 进程崩溃、租约过期、核对外部副作用后重新领取，并确保过期 fencing token 不能再写入状态。
+- Agent 接入中心显示**最近进度报告是否过期、过期租约、返工任务、待验收交付**，不会将有效租约说成外部进程“在线”。
+- 新增真实 GitHub API 的独立探测工作流：对**以前已经通过 CI 的提交**核验 exact SHA 与必需 `test` check，并验证错误 SHA 无法继承成功结果。这是外部证据集成测试，**不等于外部 Coding Agent 真实写代码或用户验收通过**。
+
+[查看真实进程与证据验收说明](docs/AGENT_E2E_RUNBOOK.md)
 
 ## v1.1 · 用户研究到产品交付的可追溯闭环
 
