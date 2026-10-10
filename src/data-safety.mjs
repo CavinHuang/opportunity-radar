@@ -47,16 +47,12 @@ export function backupDatabase({database=defaultDatabasePath(),output}){
  const tmp=join(dirname(target),'.radar-backup-'+randomUUID()+'.sqlite');
  let db,linked=false;
  try{
-  const meta=inspectRadarDatabase(source);
+  inspectRadarDatabase(source);
   db=readonly(source);
   // SQLite itself creates a transactionally consistent snapshot, including WAL contents.
   db.prepare('VACUUM INTO ?').run(tmp);db.close();db=null;
   chmodSync(tmp,0o600);
   const verified=inspectRadarDatabase(tmp);
-  if(verified.totalRecords!==meta.totalRecords&&meta.totalRecords!==0){
-    // Live writers may update between the precheck and snapshot. This is normal.
-    // The snapshot is still consistent; never treat the precheck as a stable counter.
-  }
   const sha256=digestFile(tmp);
   const snapshot={format:'opportunity-radar-sqlite-backup',version:1,
     createdAt:new Date().toISOString(),file:basename(target),bytes:statSync(tmp).size,
@@ -124,7 +120,7 @@ export function readinessSummary(store,{ownerProtected=false}={}){
   {id:'source_connectivity',ok:enabled.some(x=>x.lastSuccessAt),description:enabled.some(x=>x.lastSuccessAt)?'至少一个来源曾成功采集':'手动扫描来源并确认实际成功；测试信号不算连接成功'},
   {id:'signal_review',ok:signals.some(x=>['saved','converted'].includes(x.status)),description:'阅读真实信号并收藏、归档或关联，不能把公开报道当成已经验证的消费者'},
   {id:'research',ok:opportunities.length>0,description:'从有原始 URL 的问题线索建立待验证机会'},
-  {id:'backup',ok:false,description:'通过 npm run data:backup 创建并校验离线备份；系统不能自动证明您已保存备份'}
+  {id:'backup',ok:null,description:'备份由你自行保存：运行 npm run data -- backup，然后 verify；此页面不能证明离线备份已保存'}
  ];
  return {mode:'local-first',ownerProtected,counts:{configuredFeeds:feeds.length,enabledFeeds:enabled.length,
    previouslySuccessfulFeeds:enabled.filter(x=>x.lastSuccessAt).length,
