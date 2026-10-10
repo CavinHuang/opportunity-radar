@@ -7,8 +7,9 @@ import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
 import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
-import {seedConfiguredSources,addFeed,editFeed,scanSources,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
+import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
+import {createSourceScheduler} from './source-scheduler.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
@@ -30,7 +31,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
   try{
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(files[pathname]&&req.method==='GET'){const filename=path.join(root,'public',files[pathname]);const content=await readFile(filename);res.writeHead(200,{'Content-Type':mime[path.extname(filename)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(content);}
-    if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
+    if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,sourceHealth:sourceHealth(store),llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
     protectOrigin(req);
     if(pathname==='/mcp'&&req.method==='POST'){
       authorize(req,'agent');const input=await body(req);
@@ -45,7 +46,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
-    if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title))});
+    if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
     if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
     const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
     if(source&&req.method==='PATCH')return send(res,200,{item:editFeed(store,source[1],await body(req))});
@@ -124,6 +125,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const server=createServer();
   server.listen(port,host,()=>console.log(`Opportunity Radar running at http://${host}:${port}\nAgent API ${process.env.RADAR_AGENT_TOKEN?'enabled':'disabled'}`));
-  const scan=()=>store.list('feeds').some(f=>f.enabled)?scanSources(store).then(r=>console.log(`[Feed Scan] +${r.added} signals / ${r.feeds} sources, ${r.errors.length} errors`)).catch(e=>console.error('[Feed Scan]',e.message)):null;
-  setTimeout(scan,3000).unref();setInterval(scan,6*60*60*1000).unref();
+  const scheduler=createSourceScheduler(store);scheduler.start();
+  process.once('SIGINT',()=>{scheduler.stop();server.close();});
+  process.once('SIGTERM',()=>{scheduler.stop();server.close();});
 }

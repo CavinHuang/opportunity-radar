@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.6 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v0.7 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,17 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v0.7 长期采集与来源健康状态
+
+- **按来源计划采集**：每个已启用来源可以设置 15–1440 分钟的采集间隔（默认 360 分钟）。服务启动会扫描已经到期的来源，之后每分钟检查一次是否有到期任务；不会每分钟重复下载全部来源。
+- **条件请求**：服务保存 RSS `ETag` / `Last-Modified`，下次发送 `If-None-Match` / `If-Modified-Since`；遇到 HTTP 304 会更新健康状态，不会重复导入信号。
+- **失败恢复**：连续网络或源错误会将后续采集逐级延后（上限 24 小时），尊重 `Retry-After` 限制；扫描成功后恢复设定的正常间隔。错误次数、最近成功、下次计划均持久化，重启后保留。
+- **避免竞争**：手动扫描与后台扫描不会并发写同一份信号；若已有扫描进行中，返回明确的 `SCAN_IN_PROGRESS`（HTTP 409），需要等待再试。
+- **来源可观察**：在来源页面查看「已启用 / 到期 / 异常」聚合状态，逐来源显示间隔、下次运行和连续失败次数；`GET /api/sources` 包含 `health`，`/api/health` 包含 `sourceHealth`。
+- **已有数据兼容**：旧订阅缺少计划字段时使用默认间隔；更改关键词将重置条件缓存并尽快重新采集，避免此前过滤掉的文章无法被重新发现。
+
+采集基于公开 RSS/Atom，**不保证所有来源全天候可用，也不将 RSS 文章直接视为已证实的消费需求**。RSS 的公网 DNS 预检有防护但不构成独立的完整网络沙箱；不要将该服务暴露到不可信网络。源码与测试详见 `src/source-hub.mjs`、`src/source-scheduler.mjs` 及 `tests/source-reliability.test.mjs`。
 
 ## v0.6 信息源与机会发现
 
@@ -79,7 +90,7 @@ RADAR_LLM_API_KEY=your-private-api-key
 
 - `RADAR_AGENT_TOKEN` 独立于用户令牌，用于授权外部 Coding Agent 的 HTTP 工具调用；未设置时 Agent API 禁用。
 - `GITHUB_TOKEN` 用于读权限范围内的 GitHub commit、PR、check runs 核验。公开仓库可尝试免 Token，但频率和权限有限。无法读取时将保留 **pending**，不会自动判成功。
-- `RADAR_FEED_URLS` 最多五个用户指定的 HTTPS RSS/Atom 来源；配置后，运行中的应用每 6 小时扫描一次，也可以手动扫描。原始文章只是「公开信号」，需你确认后才进入机会池。
+- `RADAR_FEED_URLS` 最多五个用户指定的 HTTPS RSS/Atom 来源；配置后由来源独立的采集计划调度（默认每 6 小时），也可以手动扫描。原始文章只是「公开信号」，需你确认后才进入机会池。
 - `RADAR_LLM_*` 可选 OpenAI-compatible Chat Completions 接口：帮助从真实信号起草机会分析、根据已验收功能准备宣发草稿。**LLM 输出从不直接成为已验证事实**。上传的信号和项目概要会发送给你选择的提供商。
 
 ## v0.3 交付可靠性更新
