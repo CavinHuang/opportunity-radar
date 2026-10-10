@@ -99,3 +99,20 @@ test('offline exploratory pair tests distinguish rewordings, unrelated posts and
  const correct=predictions.filter((x,i)=>x===pairs[i][2]).length;
  assert.equal(correct,pairs.length,'Keep this tiny fixture honest; it is not a production precision estimate');
 });
+
+test('editing attributed text invalidates older human classification even when member IDs are unchanged',()=>{
+ const {store,close}=setup();try{
+  put(store,'ref-a','Saving receipts from online grocery purchases',{author:'alice',site:'a.example'});
+  put(store,'ref-b','Saving receipts from online grocery purchases',{author:'bob',site:'b.example'});
+  const first=discoveryClusters(store).items[0];
+  reviewDiscoveryCluster(store,first.id,{action:'dismiss',fingerprint:first.fingerprint,
+   classification:'possible_repost',reason:'These two posts appear to quote one copied news announcement.'});
+  const b=store.get('sources','ref-b');
+  store.put('sources',{...b,author:'a revised attributed author',description:'New original observations have been added and still need review.'},b.revision);
+  const updated=discoveryClusters(store).items[0];
+  assert.equal(updated.id,first.id);
+  assert.notEqual(updated.fingerprint,first.fingerprint);
+  assert.equal(updated.state,'needs_review');
+  assert.throws(()=>reviewDiscoveryCluster(store,updated.id,{action:'restore',fingerprint:first.fingerprint}),{code:'CLUSTER_CHANGED'});
+ }finally{close();}
+});
