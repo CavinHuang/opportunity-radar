@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.5 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.6 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,21 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.6 · 跨来源重复问题候选工作台
+
+把已经订阅、实际采集或手动保存的公开信号进一步整理成**人工可核查的问题候选**，减少每日逐条搜索的负担：
+
+- 在「机会简报 → 信息源与信号」增加 **重复问题候选** 工作台。只对最近最多 600 条、尚未关联机会或忽略的信号进行保守标题相似度检测；**至少 2 个不同原始 URL** 才能形成一组。
+- 每组显示各条**真实原文 URL、来源站点、作者署名（若有）**；跨来源出现不等于独立消费者，相关数量不能被当成市场规模、付费意愿或有效用户数。
+- **人工创建**：从组内第一条建立待验证机会，后续要通过真实原文继续确认。没有人工操作时，不自动创建或升级商业机会。
+- **原子批量关联**：Owner 可在确认“未经验证”的前提下，把同组原始链接全部加入已有机会，保存为 `firsthand=false, independent=false` 的待核查证据；若发生错误，SQLite 会回滚整个操作，避免部分导入。
+- **忽略与恢复**：忽略候选组必须写理由。忽略仅针对当时的成员指纹；新增相似原文后，候选会重新进入待核查队列。
+- 新增 `GET /api/discovery/clusters`、`POST /api/discovery/clusters/:id/review` 和 `POST /api/discovery/clusters/:id/link`，全部 Owner-only；现有采集、来源管理及 Coding Agent 能力不受影响。
+
+**局限**：这不是语义理解模型，只能保守聚合标题高度相近的公开信息；可能漏掉同义不同说法，也可能把转载误认为不同来源。仍需人工阅读全文、联系实际消费者和验证付费行为。
+
+[查看使用与测试说明](docs/REPEATED_PROBLEM_DISCOVERY.md)
 
 ## v1.5 · 受控编码执行与本地审计
 
