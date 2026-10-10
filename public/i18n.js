@@ -4,6 +4,23 @@ export const LANGUAGES = Object.freeze({ 'zh-CN': '简体中文', 'en-US': 'Engl
 export const LANGUAGE_STORAGE_KEY = 'radar-locale';
 
 const en = {
+ '首次使用与数据安全':'Getting started and data safety',
+ '本地操作检查':'Local readiness',
+ '备份你的研究资料':'Back up your research',
+ '复制今日备份命令':'Copy backup command',
+ '先配置信息源':'Configure sources first',
+ '先订阅真实信息源，确认至少一次扫描成功，再判断消费者问题。SQLite 数据仍由本机负责保管。':'Subscribe to real sources, confirm a successful fetch, then assess consumer problems. Your SQLite data remains on this computer.',
+ '备份是含私人研究内容的未加密 SQLite 文件。请在可信的本地终端运行，保存数据库文件与同名 manifest.json，定期校验。':'Backups are unencrypted SQLite files that may include private research. Run the command on a trusted local terminal, keep the database and matching manifest.json, and verify regularly.',
+ '还原需要应用停机，并使用全新的目标路径；本页面不提供远程数据库下载，也不宣称已有可用备份。':'Stop the application and use a new path when restoring. This page does not expose database downloads or claim that a usable backup exists.',
+ '此页面不能证明离线备份已保存':'This screen cannot prove your backup is stored safely',
+ '有已启用的来源':'At least one source is enabled',
+ '添加并启用至少一个真实 RSS/Atom 来源':'Add and enable at least one real RSS/Atom source',
+ '至少一个来源曾成功采集':'At least one source has fetched successfully',
+ '手动扫描来源并确认实际成功；测试信号不算连接成功':'Scan a source and confirm a real fetch; test records do not count as connectivity.',
+ '阅读真实信号并收藏、归档或关联，不能把公开报道当成已经验证的消费者':'Read and triage real signals; public posts do not prove independent consumer demand.',
+ '从有原始 URL 的问题线索建立待验证机会':'Create a research candidate from a problem with an original URL.',
+ '备份由你自行保存：运行 npm run data -- backup，然后 verify；此页面不能证明离线备份已保存':'Save your own offline backup with npm run data -- backup, then verify. This screen cannot prove you stored it safely.',
+
  '标记为同一问题线索':'Mark as related problem leads',
  '人工标记待进一步验证':'Owner-marked as related, not validated',
  '人工研判：':'Owner review: ',
@@ -286,6 +303,8 @@ const en = {
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
+ [/^已启用 (\d+) 个来源 · 成功扫描过 (\d+) 个 · 当前异常 (\d+) 个 · 已保存 (\d+) 条公开信号。$/,(_m,a,b,c,d)=>a+' enabled sources · '+b+' previously fetched · '+c+' errors · '+d+' public signals saved.'],
+
  [/^共同标题词：(.+)$/,(_m,x)=>'Shared title terms: '+x],
  [/^组内最低标题相似度：(.+)$/,(_m,x)=>'Minimum within-group title similarity: '+x],
  [/^疑似重复转发 (\d+) 组$/,(_m,x)=>x+' possible repost groups'],
