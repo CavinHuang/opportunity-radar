@@ -86,3 +86,10 @@ test('source feedback has genuine English labels and numeric counters',()=>{
  assert.equal(translate('人工核查原文 1','en-US'),'1 originals reviewed');
  assert.equal(translate('7 条关联证据待核查','en-US'),'7 associated stories need review');
 });
+
+test('research handoff and real usage UI labels are translated',()=>{
+ assert.equal(translate('批准的研究依据','en-US'),'Approved research basis');
+ assert.equal(translate('产品真实使用反馈','en-US'),'Real product usage feedback');
+ assert.equal(translate('记录真实产品使用反馈','en-US'),'Record actual product usage');
+ assert.equal(translate('匿名用户代号','en-US'),'Anonymous participant reference');
+});

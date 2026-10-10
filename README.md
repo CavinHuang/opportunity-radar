@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.0 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 开始实现的 **v1.1 本地运行版本**，不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,17 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## v1.1 · 用户研究到产品交付的可追溯闭环
+
+- 完成 Owner 主动批准并最终关闭为 **continue** 的用户研究计划后，可将该研究决策关联到新产品实验；仍进行中、其他机会或以调整/停止/证据不足结束的计划不能被伪装为获批准研究。
+- 在项目概览由 Owner 点击 **准备首个研发任务**，根据当前批准的目标、范围和验收标准创建唯一可领取任务；变更基线后旧待领任务失效，需重新准备。
+- 在产品基线中固定该研究决策的摘要、反证数量和局限，外部 Coding Agent 可通过 `project.get_context` 读取不含参与者代号和逐字访谈的研究概览。
+- 兼容既有未关联研究的项目，明确标注 **unlinked**，不伪称真实消费者需求成立；正式产品目标、范围、预算与启动执行仍由 Owner 独立审批。
+- 产品研发里程碑正式由 Owner 验收后，项目「结果与复盘」可记录匿名、取得同意的真实使用反馈（核心任务、再次使用、障碍、需求），无产品验收则拒绝记录交付后的使用行为。
+- Owner-only `GET/POST /api/projects/:id/feedback`。反馈始终是 **Owner-reported / 未独立核验**，与收入、获客和用户使用的自动分析系统相区分。
+
+[研究到交付使用说明](docs/RESEARCH_TO_DELIVERY.md)
 
 ## v1.0 · 真正的开发前消费者验证
 

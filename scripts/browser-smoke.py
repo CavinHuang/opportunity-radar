@@ -106,6 +106,36 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('#dialog-form button[type="submit"]').click()
             page.wait_for_timeout(500)
             assert call('/api/opportunities/'+oid+'/research')['report']['stage']=='unverified'
+            # An approved second research round becomes a linked, Owner-approved experiment.
+            approved_plan=call('/api/opportunities/'+oid+'/validation',plan_inputs)['item']
+            call('/api/opportunities/'+oid+'/validation/'+approved_plan['id']+'/observations',{
+                'participantRef':'demo-consent-01','kind':'interview','stance':'supports',
+                'note':'Only a browser fixture; this is NOT a genuine consumer observation.',
+                'consentConfirmed':True
+            })
+            call('/api/opportunities/'+oid+'/validation/'+approved_plan['id']+'/close',{
+                'outcome':'continue','reason':'The Owner approves the next prototype stage while consumer demand is unproven.',
+                'acknowledgeUncertainty':True,'expected_revision':approved_plan['revision']
+            })
+            page.locator('[data-action="open-opportunity"]').first.click()
+            page.locator('[name="goal"]').fill('Validate the minimal product journey')
+            page.locator('[name="hypothesis"]').fill('Users can complete a single important task')
+            page.locator('[name="criteria"]').fill('One usable end-to-end core task')
+            page.locator('[name="stopCondition"]').fill('Stop after 10 hours or unresolved critical blockers')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            projects=call('/api/history')['projects']
+            linked=next(p for p in projects if p['opportunityId']==oid)
+            assert linked['researchBasis']['planId']==approved_plan['id']
+            page.get_by_text('批准的研究依据').first.wait_for(timeout=8000)
+            page.on('dialog',lambda dialog:dialog.accept())
+            page.locator('[data-action="prepare-kickoff"]').click()
+            page.get_by_text('已准备首个可领取任务').wait_for(timeout=10000)
+            assert any(t.get('ownerKickoff') for t in call('/api/projects/'+linked['id'])['tasks'])
+            # G4 guard prevents logging hypothetical post-acceptance usage.
+            page.locator('[data-tab="ledger"]').click()
+            assert page.locator('[data-action="add-product-feedback"]').is_disabled()
+            page.locator('[data-nav="brief"]').click()
             page.locator('#locale-switch').select_option('en-US')
             assert page.locator('html').get_attribute('lang')=='en-US'
             assert not errors,errors

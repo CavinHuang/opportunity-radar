@@ -174,3 +174,39 @@ test('Owner API links a real opportunity to a pre-build validation plan and evid
   assert.equal((await req('/api/opportunities/'+id+'/validation/'+pid+'/observations','POST',entry)).status,409);
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('research handoff and post-delivery feedback APIs enforce Owner auth and G4 acceptance',async()=>{
+ const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const base='http://127.0.0.1:'+server.address().port;
+ const owner={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const unauth={'Content-Type':'application/json'};
+ const request=async(path,method='GET',body,headers=owner)=>{
+  const r=await fetch(base+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+  return {status:r.status,data:await r.json()};
+ };
+ try{
+  const o=await request('/api/opportunities','POST',{title:'Post-launch tracking',problem:'A specific recurring consumer frustration',market:'International'});
+  assert.equal(o.status,201);const oid=o.data.item.id;
+  assert.equal((await request('/api/experiments','POST',{
+    opportunityId:oid,validationPlanId:'not-ours',goal:'Investigate one MVP',hypothesis:'Consumer may need this',
+    criteria:['User can finish the main use case'],stopCondition:'Stop after 10 hours'
+  })).status,409);
+  const p=await request('/api/experiments','POST',{opportunityId:oid,goal:'Investigate one MVP',
+    hypothesis:'Consumer may need this',criteria:['User can finish the main use case'],stopCondition:'Stop after 10 hours'});
+  assert.equal(p.status,201);const id=p.data.project.id;
+  assert.equal(p.data.project.researchBasis.status,'unlinked');
+  assert.equal((await request('/api/projects/'+id+'/kickoff','POST',{},unauth)).status,401);
+  const kickoff=await request('/api/projects/'+id+'/kickoff','POST',{});
+  assert.equal(kickoff.status,200);
+  assert.equal(kickoff.data.task.status,'open');
+  assert.equal((await request('/api/projects/'+id+'/kickoff','POST',{})).data.alreadyPrepared,true);
+  assert.equal((await request('/api/projects/'+id+'/feedback','GET',undefined,unauth)).status,401);
+  assert.equal((await request('/api/projects/'+id+'/feedback','POST',{},unauth)).status,401);
+  const pending=await request('/api/projects/'+id+'/feedback');
+  assert.equal(pending.data.result.productMilestoneAccepted,false);
+  const reject=await request('/api/projects/'+id+'/feedback','POST',{participantRef:'person-1',
+    kind:'activation',summary:'A hypothetical event which is not yet accepted.',consentConfirmed:true});
+  assert.equal(reject.status,409);assert.equal(reject.data.error,'PRODUCT_NOT_ACCEPTED');
+ }finally{await new Promise(done=>server.close(done));}
+});
