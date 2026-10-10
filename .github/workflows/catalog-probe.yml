@@ -21,4 +21,4 @@ jobs:
           node-version: '22'
       - run: npm run catalog:probe
         env:
-          PROBE_CATALOG_IDS: v2ex-qna,ask-hn,superuser
+          PROBE_CATALOG_IDS: v2ex-qna,v2ex-life,v2ex-apple,ask-hn,superuser,webapps
