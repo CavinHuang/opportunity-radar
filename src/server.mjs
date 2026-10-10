@@ -13,6 +13,7 @@ import {createSourceScheduler} from './source-scheduler.mjs';
 import {catalogList,installCatalogFeed} from './source-catalog.mjs';
 import {researchReport,reviewOpportunityEvidence} from './research.mjs';
 import {validationOverview,validationSummary,createValidationPlan,recordValidationObservation,closeValidationPlan} from './validation.mjs';
+import {feedbackOverview,recordProductFeedback} from './delivery-trace.mjs';
 import {sourceQualityReport} from './source-quality.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
@@ -112,6 +113,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:service.startExperiment(await body(req))});
     if(pathname==='/api/history'&&req.method==='GET')return send(res,200,{projects:store.list('projects'),ledger:store.list('ledger')});
+    const projectFeedback=/^\/api\/projects\/([^/]+)\/feedback$/.exec(pathname);
+    if(projectFeedback&&req.method==='GET')return send(res,200,{result:feedbackOverview(store,projectFeedback[1])});
+    if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
     if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),events:store.events(0,proj[1]).slice(-50)});}
     const decision=/^\/api\/projects\/([^/]+)\/decide$/.exec(pathname);
