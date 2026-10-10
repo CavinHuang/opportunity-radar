@@ -7,7 +7,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import {openDatabase} from '../src/db.mjs';
 import {createService} from '../src/service.mjs';
 import {parseArgs,checkEndpoint,agentApi,inspectWorkspace,validateSubmission,sanitizedEnv,
- formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor,verifyPullHead} from '../src/agent-pilot.mjs';
+ formatAgentPrompt,getReadyWork,executePilot,submitPilot,commandFor,verifyPullHead,getDeliveryWork,statusPilot,recoverPilot,deliveryKey} from '../src/agent-pilot.mjs';
 const cmd=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
 function fixture(){
  const path=mkdtempSync(join(tmpdir(),'radar-cli-v13-'));
@@ -137,4 +137,127 @@ test('remote GitHub PR validation refuses changed head and inaccessible / mismat
  await assert.rejects(()=>verifyPullHead({...input,fetchImpl:async()=>({
    ok:false,status:403,json:async()=>({})
  })}),{code:'PR_NOT_ACCESSIBLE'});
+});
+
+const fakePr=(sha)=>async()=>({ok:true,status:200,json:async()=>({
+  base:{repo:{full_name:'sample/repo'}},head:{sha}
+})});
+async function committedFixture(){
+ const x=fixture();
+ writeFileSync(join(x.path,'README.md'),'actual test-only commit (not customer evidence)\n');
+ cmd(x.path,'add','README.md');cmd(x.path,'commit','-m','test: delivery recovery fixture');
+ return {...x,sha:cmd(x.path,'rev-parse','HEAD'),pr:'https://github.com/sample/repo/pull/7'};
+}
+test('resuming after a network failure following evidence creation does not duplicate evidence',async()=>{
+ const x=await committedFixture();
+ try{
+  let once=true;
+  const broken=async(name,args)=>{
+   if(name==='task.transition'&&once){once=false;throw new Error('simulated disconnect after evidence')}
+   return x.call(name,args);
+  };
+  const params={projectId:x.project.id,taskId:x.kickoff.id,workspace:x.path,pr:x.pr,sha:x.sha,
+    confirmed:true,fetchImpl:fakePr(x.sha)};
+  await assert.rejects(()=>submitPilot({...params,call:broken}),/simulated disconnect/);
+  assert.equal(x.service.getFullProject(x.project.id).evidence.length,1);
+  assert.equal(x.service.getFullProject(x.project.id).submissions.length,0);
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+  const finished=await submitPilot({...params,call:x.call});
+  assert.equal(finished.alreadySubmitted,false);
+  assert.equal(x.service.getFullProject(x.project.id).evidence.length,1);
+  assert.equal(x.service.getFullProject(x.project.id).submissions.length,1);
+  assert.equal(x.service.getFullProject(x.project.id).evidence[0].taskId,x.kickoff.id);
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+ }finally{x.cleanup();}
+});
+test('a lost handoff after task transitioned can be safely resumed with the exact task ID',async()=>{
+ const x=await committedFixture();
+ try{
+  const params={call:x.call,projectId:x.project.id,taskId:x.kickoff.id,workspace:x.path,pr:x.pr,sha:x.sha,
+    confirmed:true,fetchImpl:fakePr(x.sha)};
+  const faulty=async(name,args)=>{
+   if(name==='handoff.submit')throw new Error('simulated handoff connection loss');
+   return x.call(name,args);
+  };
+  await assert.rejects(()=>submitPilot({...params,call:faulty}),/handoff connection loss/);
+  assert.equal(x.db.get('tasks',x.kickoff.id).status,'submitted');
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+  assert.equal(x.db.list('evidence').length,1);
+  const done=await submitPilot(params);
+  assert.equal(done.acceptanceState,'pending');
+  assert.equal(done.alreadySubmitted,false);
+  const replay=await submitPilot(params);
+  assert.equal(replay.alreadySubmitted,true);
+  assert.equal(replay.submissionId,done.submissionId);
+  assert.equal(x.db.list('submissions').length,1);
+  assert.equal(x.db.list('evidence').length,1);
+ }finally{x.cleanup();}
+});
+test('lost response after handoff commit resumes without creating a second submission',async()=>{
+ const x=await committedFixture();
+ try{
+  const params={projectId:x.project.id,taskId:x.kickoff.id,workspace:x.path,pr:x.pr,sha:x.sha,
+    confirmed:true,fetchImpl:fakePr(x.sha)};
+  let lost=true;
+  const broken=async(name,args)=>{
+    const out=await x.call(name,args);
+    if(name==='handoff.submit'&&lost){lost=false;throw new Error('simulated dropped successful response')}
+    return out;
+  };
+  await assert.rejects(()=>submitPilot({...params,call:broken}),/dropped successful response/);
+  assert.equal(x.db.list('submissions').length,1);
+  const replay=await submitPilot({...params,call:x.call});
+  assert.equal(replay.alreadySubmitted,true);
+  assert.equal(x.db.list('submissions').length,1);
+  assert.equal(x.db.list('evidence').length,1);
+ }finally{x.cleanup();}
+});
+test('a rejected SHA is not silently resubmitted as a new G4 decision',async()=>{
+ const x=await committedFixture();
+ try{
+  const params={call:x.call,projectId:x.project.id,taskId:x.kickoff.id,workspace:x.path,pr:x.pr,sha:x.sha,
+    confirmed:true,fetchImpl:fakePr(x.sha)};
+  const delivered=await submitPilot(params);
+  x.service.ownerDecision(x.project.id,{action:'reject',submissionId:delivered.submissionId,reason:'Fix the rejected core flow'});
+  await assert.rejects(()=>submitPilot(params),{code:'REJECTED_SHA'});
+  assert.equal(x.db.list('submissions').length,1);
+  assert.equal(x.db.get('tasks',x.kickoff.id).status,'rework');
+ }finally{x.cleanup();}
+});
+test('recovery is explicit, requires an expired lease and captures operator reconciliation',async()=>{
+ const x=fixture();
+ try{
+  const claim=x.call('task.claim',{project_id:x.project.id,task_id:x.kickoff.id,
+    expected_revision:x.kickoff.revision,baseline_revision:1,idempotency_key:'initial-claim'});
+  const leased=await claim;
+  const status=await statusPilot({call:x.call,projectId:x.project.id});
+  assert.equal(status.tasks.length,1);
+  assert.ok(!JSON.stringify(status).includes(leased.lease_token));
+  const args={call:x.call,projectId:x.project.id,taskId:x.kickoff.id,
+    recoveryNote:'Inspected original process, workspace and side effects',confirmed:true};
+  await assert.rejects(()=>recoverPilot({...args,confirmed:false}),{code:'CONFIRM_REQUIRED'});
+  await assert.rejects(()=>recoverPilot({...args,recoveryNote:'short'}),{code:'RECONCILIATION_NOTE_REQUIRED'});
+  await assert.rejects(()=>recoverPilot(args),{code:'TASK_LEASE_ACTIVE'});
+  const stale=x.db.get('tasks',x.kickoff.id);
+  x.db.put('tasks',{...stale,lease:{...stale.lease,expiresAt:new Date(Date.now()-2000).toISOString()}},stale.revision);
+  const result=await recoverPilot(args);
+  assert.equal(result.recovered,true);
+  assert.equal(result.externalProcessStopped,false);
+  assert.equal(x.db.get('tasks',x.kickoff.id).lease,null);
+  assert.equal(x.db.get('tasks',x.kickoff.id).status,'open');
+  assert.equal((await recoverPilot(args)).recovered,false);
+ }finally{x.cleanup();}
+});
+test('multiple candidate tasks require a specific task id for handoff',async()=>{
+ const x=fixture();
+ try{
+  const milestone=x.service.getFullProject(x.project.id).milestones[1];
+  x.call('task.upsert',{project_id:x.project.id,milestone_id:milestone.id,title:'Second task',
+    idempotency_key:'second-task'});
+  await assert.rejects(()=>getDeliveryWork(x.call,x.project.id),{code:'TASK_SELECTION_REQUIRED'});
+  const chosen=await getDeliveryWork(x.call,x.project.id,x.kickoff.id);
+  assert.equal(chosen.task.id,x.kickoff.id);
+  assert.equal(deliveryKey('handoff',{projectId:'a',taskId:'b',sha:'c',pr:'d'}),
+    deliveryKey('handoff',{projectId:'a',taskId:'b',sha:'c',pr:'d'}));
+ }finally{x.cleanup();}
 });
