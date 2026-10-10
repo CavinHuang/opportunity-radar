@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
         oid=created['item']['id']
         with sync_playwright() as engine:
             browser=engine.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
-            context=browser.new_context(viewport={'width':1365,'height':900})
+            context=browser.new_context(viewport={'width':1365,'height':900},locale='zh-CN')
             context.add_init_script("sessionStorage.setItem('radar-owner-token','ui-smoke-owner-key')")
             page=context.new_page()
             errors=[]
