@@ -127,3 +127,50 @@ test('owner source catalog and opportunity research HTTP endpoints respect permi
   assert.equal((await request('/api/opportunities/'+id+'/research')).data.report.stage,'single_observation');
  }finally{await new Promise(done=>server.close(done));}
 });
+
+
+test('Owner API links a real opportunity to a pre-build validation plan and evidence-backed decision',async()=>{
+ const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ const base='http://127.0.0.1:'+server.address().port;
+ const owner={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const req=async(path,method='GET',data,headers=owner)=>{
+  const response=await fetch(base+path,{method,headers,body:data===undefined?undefined:JSON.stringify(data)});
+  return {status:response.status,data:await response.json()};
+ };
+ try{
+  const o=await req('/api/opportunities','POST',{title:'Receipt field test',problem:'Families lose purchase receipts',market:'International'});
+  assert.equal(o.status,201);const id=o.data.item.id;
+  assert.equal((await req('/api/validations/overview','GET',undefined,{})).status,401);
+  assert.equal((await req('/api/opportunities/'+id+'/validation','GET',undefined,{})).status,401);
+  assert.equal((await req('/api/opportunities/'+id+'/validation','POST',{},{})).status,401);
+  const input={
+   audience:'Adults who retain paper receipts',
+   hypothesis:'Receipt retrieval fails repeatedly for some family purchases.',
+   researchQuestion:'Describe the last occasion when retrieving a receipt failed?',
+   channel:'Opt-in volunteers from user community',
+   successCriterion:'Two distinct users describe recent failures with concrete detail',
+   stopCondition:'Stop after six hours if no participant reports a failure',
+   nextAction:'Invite three anonymous participants for a brief conversation',
+   timeBudgetHours:6,cashBudget:0
+  };
+  const start=await req('/api/opportunities/'+id+'/validation','POST',input);
+  assert.equal(start.status,201);const pid=start.data.item.id;
+  const overview=await req('/api/validations/overview');
+  assert.ok(overview.data.items.some(x=>x.opportunityId===id&&x.status==='active'));
+  assert.equal((await req('/api/opportunities/'+id+'/validation','POST',input)).status,409);
+  const entry={participantRef:'guest-01',kind:'interview',stance:'contradicts',
+   note:'A testing-only record with a clear counterexample, not a genuine participant.',consentConfirmed:true};
+  assert.equal((await req('/api/opportunities/'+id+'/validation/'+pid+'/observations','POST',{...entry,consentConfirmed:false})).status,409);
+  const observation=await req('/api/opportunities/'+id+'/validation/'+pid+'/observations','POST',entry);
+  assert.equal(observation.status,201);
+  const summary=await req('/api/opportunities/'+id+'/validation');
+  assert.equal(summary.data.result.counts.contradicts,1);
+  assert.equal(summary.data.result.independentlyVerifiedCount,0);
+  const close=await req('/api/opportunities/'+id+'/validation/'+pid+'/close','POST',{
+   outcome:'inconclusive',reason:'The only observed result does not demonstrate repeated frustration.',
+   expected_revision:start.data.item.revision
+  });
+  assert.equal(close.status,200);assert.equal(close.data.item.status,'closed');
+  assert.equal((await req('/api/opportunities/'+id+'/validation/'+pid+'/observations','POST',entry)).status,409);
+ }finally{await new Promise(done=>server.close(done));}
+});

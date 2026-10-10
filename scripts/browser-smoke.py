@@ -62,6 +62,41 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[data-action="focus-source"]').first.click()
             page.wait_for_function("(feedId) => document.querySelector('#feed-filter')?.value === feedId",arg=feed_id,timeout=8000)
             page.locator('[data-action="show-opportunities"]').first.click()
+            page.locator('[data-action="view-validation"]').first.click()
+            page.locator('[data-action="validation-new"]').first.click()
+            plan_inputs={
+                'audience':'Adults keeping household receipts',
+                'hypothesis':'Families sometimes fail to retrieve receipts from recent purchases.',
+                'researchQuestion':'When did you most recently need a missing purchase receipt?',
+                'channel':'Opt-in follow-ups with community members',
+                'successCriterion':'Two people independently report concrete failure details',
+                'stopCondition':'Pause after four hours with no meaningful interviews',
+                'nextAction':'Invite three consenting volunteers for short interviews'
+            }
+            for key,value in plan_inputs.items():
+                page.locator('[name="'+key+'"]').fill(value)
+            page.locator('[name="timeBudgetHours"]').fill('4')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            validation=call('/api/opportunities/'+oid+'/validation')['result']
+            assert validation['latestPlan']['status']=='active'
+            page.locator('[data-action="view-validation"]').first.click()
+            page.locator('[data-action="validation-observe"]').first.click()
+            page.locator('[name="participantRef"]').fill('demo-only-01')
+            page.locator('[name="kind"]').select_option('interview')
+            page.locator('[name="stance"]').select_option('contradicts')
+            page.locator('[name="note"]').fill('Synthetic end-to-end browser test note, never an actual consumer interview.')
+            page.locator('[name="consentConfirmed"]').check()
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            assert call('/api/opportunities/'+oid+'/validation')['result']['counts']['contradicts']==1
+            page.locator('[data-action="view-validation"]').first.click()
+            page.locator('[data-action="validation-close"]').first.click()
+            page.locator('[name="outcome"]').select_option('inconclusive')
+            page.locator('[name="reason"]').fill('Only synthetic test records exist, so actual consumer need remains completely unknown.')
+            page.locator('#dialog-form button[type="submit"]').click()
+            page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
+            assert call('/api/opportunities/'+oid+'/validation')['result']['latestPlan']['outcome']=='inconclusive'
             page.locator('[data-action="show-research"]').first.click()
             page.get_by_text('反证与未知项').wait_for(timeout=10000)
             assert page.get_by_text('核查来源').count()>=1
