@@ -120,3 +120,12 @@ test('Owner can prepare exactly one claimable kickoff task per approved baseline
  assert.equal(service.tool('project.get_next_work',{project_id:project.id}).tasks.some(t=>t.id===a.task.id),false);
  }finally{store.close();}
 });
+
+test('newer research rounds supersede older continue decisions',()=>{
+ const {store,service,opportunity:o}=fixture();try{
+ const old=approved(store,o.id);
+ const newer=createValidationPlan(store,o.id,planInput);
+ assert.equal(newer.status,'active');
+ assert.throws(()=>service.startExperiment({...experimentInput(o),validationPlanId:old.id}),{code:'RESEARCH_PLAN_SUPERSEDED'});
+ }finally{store.close();}
+});
