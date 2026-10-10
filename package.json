@@ -1,6 +1,6 @@
 {
   "name": "opportunity-radar",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "engines": {"node": ">=22.16.0"},
@@ -11,6 +11,6 @@
     "agent:pilot": "node --env-file-if-exists=.env src/agent-pilot.mjs",
     "catalog:probe": "node scripts/probe-source-catalog.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check src/service.mjs && node --check public/app.js && node --check public/i18n.js && node --check src/agent-pilot.mjs && npm test"
+    "check": "node --check src/server.mjs && node --check src/service.mjs && node --check public/app.js && node --check public/i18n.js && node --check src/agent-pilot.mjs && node --check src/pilot-journal.mjs && node --check src/pilot-supervisor.mjs && npm test"
   }
 }
