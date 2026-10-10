@@ -1,0 +1,39 @@
+name: Capture v0.6 source discovery screenshot
+on:
+  push:
+    branches:
+      - feat/source-discovery-v0.6
+permissions:
+  contents: write
+jobs:
+  capture:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check application
+        run: npm run check
+      - name: Install screenshot dependencies
+        run: |
+          python -m pip install --disable-pip-version-check pillow playwright
+          if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
+            python -m playwright install --with-deps chromium
+          fi
+      - name: Capture Chinese inbox and English setup via real application API
+        run: python scripts/capture_screenshots.py
+      - name: Commit screenshots and clean up transient capture workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/capture-source-v06.yml
+          git add docs/screenshots/*.webp
+          git commit -m 'docs: add source discovery screenshot captured from real frontend'
+          git push origin HEAD:refs/heads/feat/source-discovery-v0.6
