@@ -25,6 +25,14 @@ See V2EX official feed pattern: https://blog.v2ex.com/rss/ and Stack Exchange RS
 
 **Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
 
+## Verified public availability — GitHub runner, 2026-10-10
+
+The first live public probe returned **25 V2EX Q&A, 20 Ask HN, and 25 Super User** posts with successful HTTP fetch and feed parsing. Total **70 source entries**, stored in an ephemeral test database (not automatically classified as validated opportunities).
+
+[Inspect the complete initial GitHub Actions source-probe log](https://github.com/CavinHuang/opportunity-radar/actions/runs/38043278997).
+
+This is a single-run availability result from a GitHub Runner, not a guarantee of availability from the user's location. Other catalog feeds are queued for independent checks, and no claim is made about uniqueness, consumer identity, or willingness to pay.
+
 ## Testing real external availability
 
 - `npm run catalog:probe` runs an ephemeral, read-only-public-web probe without writing user records. Default subset: v2ex-qna, ask-hn, superuser.
