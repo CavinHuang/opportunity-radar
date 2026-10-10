@@ -38,9 +38,9 @@ export function dispatchMcp(service, request,{legacy=false}={}){
   const rpcError=(code,message,data)=>({jsonrpc:'2.0',id:id??null,error:{code,message,...(data?{data}:{})}});
   if(!request||request.jsonrpc!=='2.0'||typeof request.method!=='string'||Array.isArray(request))return rpcError(-32600,'Invalid Request');
   const p=request.params||{};
-  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:'0.2.0'},capabilities:{tools:{listChanged:false}}}};
+  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:'0.3.0'},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='notifications/initialized'&&legacy)return null;
-  if(request.method==='server/discover')return {jsonrpc:'2.0',id,result:{serverInfo:{name:'opportunity-radar',version:'0.2.0'},capabilities:{tools:{listChanged:false}}}};
+  if(request.method==='server/discover')return {jsonrpc:'2.0',id,result:{serverInfo:{name:'opportunity-radar',version:'0.3.0'},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='ping')return {jsonrpc:'2.0',id,result:{}};
   if(request.method==='tools/list')return {jsonrpc:'2.0',id,result:{tools:listMcpTools(service)}};
   if(request.method==='tools/call'){
