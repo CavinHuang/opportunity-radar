@@ -12,11 +12,12 @@ export function parseFeed(xml,source){
     const rawLink=kind==='item'?tag(block,'link'):(block.match(/<link\b(?=[^>]*rel=["']alternate["'])[^>]*href=["']([^"']+)["']/i)?.[1]||block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1]||tag(block,'link'));
     const title=decode(tag(block,'title')).slice(0,220);
     const description=decode(tag(block,'description')||tag(block,'summary')||tag(block,'content')).slice(0,500);
+    const author=decode(tag(block,'dc:creator')||tag(block,'author')||tag(tag(block,'author'),'name')).slice(0,100)||null;
     let url;try{url=new URL(decode(rawLink),source).href;if(!url.startsWith('https://'))return null;}catch{return null;}
     if(!title)return null;
     const id=createHash('sha256').update(url).digest('hex').slice(0,32);
     const dateRaw=decode(tag(block,'pubDate')||tag(block,'published')||tag(block,'updated'));const ms=Date.parse(dateRaw);const publishedAt=Number.isFinite(ms)&&ms<=Date.now()+86400000&&ms>=0?new Date(ms).toISOString():null;
-    return {id,title,description,url,feed:source,publishedAt,createdAt:new Date().toISOString(),status:'signal_only'};
+    return {id,title,description,author,url,feed:source,publishedAt,createdAt:new Date().toISOString(),status:'signal_only'};
   }).filter(Boolean);
 }
 export async function scanFeeds(store,feedUrls=configuredFeeds()){
