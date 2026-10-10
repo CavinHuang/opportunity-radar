@@ -1,9 +1,6 @@
 name: Capture README screenshots
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/agent-onboarding-screenshots-v0.5
 permissions:
   contents: write
 jobs:
