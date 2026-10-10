@@ -28,3 +28,19 @@
 .source-feedback span{display:inline-flex;padding:3px 7px;border-radius:6px;font-size:10px;line-height:1.6;background:#f2f6f2;color:#4b6856}
 .source-feedback .source-review-pending{background:#fff4e7;color:#936d38}
 @media(max-width:760px){.source-quality-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* v1.6 human-reviewed repeated-problem leads: never commercial-demand ratings. */
+.discovery-desk{margin:27px 0}
+.discovery-desk .card-pad>.subtext{line-height:1.85;margin:0 0 9px}
+.discovery-group{padding:18px 0;border-top:1px solid #e8eee9}
+.discovery-group:first-of-type{margin-top:16px}
+.discovery-group.is-dismissed{opacity:.74}
+.discovery-group .grow{min-width:0}
+.discovery-group strong{font-size:13px;line-height:1.5;color:#243e30}
+.discovery-group .subtext{font-size:11px;margin:7px 0}
+.discovery-evidence{display:grid;gap:6px;margin:10px 0;padding:11px 13px;background:#f7faf7;border-radius:9px;border:1px solid #edf1eb}
+.discovery-evidence-row{display:flex;align-items:flex-start;gap:12px;font-size:11px}
+.discovery-evidence-row>span{flex:0 0 135px;min-width:0;overflow-wrap:anywhere;margin:2px 0}
+.discovery-evidence-row>a{display:inline-flex;gap:5px;flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.6}
+.discovery-actions{flex-wrap:wrap;gap:8px;margin-top:12px}
+@media(max-width:680px){.discovery-evidence-row{flex-direction:column;gap:2px}.discovery-evidence-row>span{flex:auto}.discovery-group .flex.between{align-items:flex-start}}
