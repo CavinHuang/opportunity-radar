@@ -19,6 +19,7 @@ const en = {
  '已启用':'Enabled',
  '暂停':'Pause',
  '启用':'Enable',
+ '采集间隔（分钟，15–1440）':'Polling interval (minutes, 15–1440)', '下次扫描：':'Next scan: ', '间隔：':'Interval: ', '分钟':'minutes', '连续失败':'Consecutive failures', '次':'times', '到期':'Due', '异常':'Failing',
  '未指定市场':'No target market',
  '全部主题':'All topics',
  '最近成功：':'Last successful scan: ',

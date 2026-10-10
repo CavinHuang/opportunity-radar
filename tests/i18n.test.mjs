@@ -69,3 +69,10 @@ test('AI promotion draft uses selected language while keeping acceptance and sou
     assert.deepEqual(result.actualCapabilities,[]);
   }finally{globalThis.fetch=oldFetch;}
 });
+
+
+test('new source scheduling labels are translated',()=>{
+  assert.equal(translate('采集间隔（分钟，15–1440）','en-US'),'Polling interval (minutes, 15–1440)');
+  assert.equal(translate('下次扫描：','en-US'),'Next scan: ');
+  assert.equal(translate('连续失败','en-US'),'Consecutive failures');
+});

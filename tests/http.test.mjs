@@ -73,3 +73,22 @@ test('source management and evidence-linked opportunity discovery through HTTP',
   assert.equal((await req('/api/signals?status=converted&q=warranty')).status,200);
  }finally{await new Promise(r=>server.close(r));}
 });
+
+
+test('source scheduling preferences and health are served by real HTTP routes',async()=>{
+ const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ const base=`http://127.0.0.1:${server.address().port}`;
+ const headers={'Content-Type':'application/json','X-Radar-Owner-Key':'test-owner-token'};
+ const request=async(path,method='GET',data)=>{const response=await fetch(base+path,{method,headers,body:data?JSON.stringify(data):undefined});return {status:response.status,data:await response.json()};};
+ try{
+   const created=await request('/api/sources','POST',{url:'https://public.example.org/rss',intervalMinutes:45,title:'Customer reports'});
+   assert.equal(created.status,201);assert.equal(created.data.item.intervalMinutes,45);
+   const sources=await request('/api/sources');assert.ok(sources.data.health);assert.ok(sources.data.health.due>=1);
+   const item=created.data.item;
+   const edited=await request('/api/sources/'+item.id,'PATCH',{expected_revision:item.revision,intervalMinutes:15,enabled:false});
+   assert.equal(edited.status,200);assert.equal(edited.data.item.enabled,false);
+   assert.equal(edited.data.item.intervalMinutes,15);
+   const health=await request('/api/health');assert.ok(health.data.sourceHealth);
+   assert.equal((await request('/api/sources','GET',null)).data.items.some(f=>f.id===item.id),true);
+ }finally{await new Promise(done=>server.close(done));}
+});
