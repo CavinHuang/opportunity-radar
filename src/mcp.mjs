@@ -8,7 +8,7 @@ const definitions={
   'project.get_context':object({project_id:str},['project_id']),
   'project.get_next_work':object({project_id:str},['project_id']),
   'project.watch_changes':object({project_id:str,cursor:{type:'integer',minimum:0}},['project_id']),
-  'task.claim':object({project_id:str,task_id:str,expected_revision:integer,lease_token:str,recovery_checked:{type:'boolean'},recovery_note:str,idempotency_key:str},['project_id','task_id','idempotency_key']),
+  'task.claim':object({project_id:str,task_id:str,baseline_revision:integer,expected_revision:integer,lease_token:str,recovery_checked:{type:'boolean'},recovery_note:str,idempotency_key:str},['project_id','task_id','idempotency_key']),
   'task.upsert':object({project_id:str,milestone_id:str,task_id:str,title:str,description:str,dependencies:{type:'array',items:str},expected_revision:integer,lease_token:str,idempotency_key:str},['project_id','title','idempotency_key']),
   'task.transition':object({task_id:str,status:{type:'string',enum:['in_progress','blocked','submitted','rework']},expected_revision:integer,lease_token:str,idempotency_key:str},['task_id','status','expected_revision','lease_token','idempotency_key']),
   'task.release':object({task_id:str,expected_revision:integer,lease_token:str,idempotency_key:str},['task_id','expected_revision','lease_token','idempotency_key']),
@@ -38,7 +38,7 @@ export function dispatchMcp(service, request,{legacy=false}={}){
   const rpcError=(code,message,data)=>({jsonrpc:'2.0',id:id??null,error:{code,message,...(data?{data}:{})}});
   if(!request||request.jsonrpc!=='2.0'||typeof request.method!=='string'||Array.isArray(request))return rpcError(-32600,'Invalid Request');
   const p=request.params||{};
-  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:'0.3.0'},capabilities:{tools:{listChanged:false}}}};
+  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:'1.2.0'},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='notifications/initialized'&&legacy)return null;
   if(request.method==='server/discover')return {jsonrpc:'2.0',id,result:{serverInfo:{name:'opportunity-radar',version:'0.3.0'},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='ping')return {jsonrpc:'2.0',id,result:{}};
