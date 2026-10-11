@@ -33,18 +33,20 @@ export async function pinnedHttpsFetch(url,{addresses,headers={},signal,requestI
  const lookup=pinnedLookup(parsed.hostname,addresses||[]);
  return new Promise((resolve,reject)=>{
   let settled=false;
-  const req=requestImpl(parsed,{
+  let req;
+  const onAbort=()=>req?.destroy(Object.assign(new Error('RSS connection aborted'),{name:'AbortError'}));
+  req=requestImpl(parsed,{
    method:'GET',redirect:'manual',lookup,headers,
    // TLS SNI and hostname checks use parsed.hostname, never the pinned numeric address.
    servername:parsed.hostname,timeout:10000,agent:false
   },res=>{
    if(settled)return;
    settled=true;
-   if(signal)signal.removeEventListener('abort',onAbort);
+   // Abort must remain live through body streaming, not only until headers.
+   res.once('close',()=>signal?.removeEventListener('abort',onAbort));
    resolve({status:res.statusCode,ok:res.statusCode>=200&&res.statusCode<300,
     headers:new Headers(res.headers),body:Readable.toWeb(res)});
   });
-  const onAbort=()=>req.destroy(Object.assign(new Error('RSS connection aborted'),{name:'AbortError'}));
   req.once('error',e=>{if(!settled){settled=true;signal?.removeEventListener('abort',onAbort);reject(e);}});
   req.once('timeout',()=>req.destroy(Object.assign(new Error('RSS request timed out'),{code:'SOURCE_TIMEOUT'})));
   if(signal){signal.addEventListener('abort',onAbort,{once:true});if(signal.aborted)onAbort();}
