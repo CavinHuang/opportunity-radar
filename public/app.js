@@ -83,6 +83,14 @@ npm run agent:pilot -- recover --project ${esc(p.id)} --task &lt;TASK_ID&gt; --r
   }
   else detail=`<div class="flex between"><div class="small-title">${icon('chart',16)}&nbsp; 真实结果账本</div><button class="btn btn-sm" data-action="add-ledger">${icon('plus',13)} 记录结果</button></div><div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="card stat"><div class="stat-head">${icon('dollar',14)} 贡献金额</div><strong>¥${Number(p.ledgerSummary.contribution).toFixed(0)}</strong><div class="stat-foot">不含人工与固定成本</div></div><div class="card stat"><div class="stat-head">${icon('clock',14)} 你的时间</div><strong>${p.ledgerSummary.userHours}h</strong><div class="stat-foot">与 Agent 运行分开</div></div><div class="card stat"><div class="stat-head">${icon('bot',14)} Agent 运行</div><strong>${p.ledgerSummary.agentHours}h</strong><div class="stat-foot">单独统计</div></div></div><div class="section-heading"><h2>实际记录</h2><span>预测数据不会计入实际收益</span></div>${p.ledger.length?p.ledger.slice(0,12).map(x=>`<div class="milestone"><div class="info-icon">${icon('file',15)}</div><div class="grow"><strong style="font-size:12px">${esc(x.type)} · ${esc(x.value)} ${esc(x.unit)}</strong><p class="subtext">${esc(x.source)} · ${x.actual?'实际记录':'未核实/估计'} · ${fmtTime(x.at)}</p></div></div>`).join(''):'<p class="subtext">暂无真实消费者反馈或收支记录。</p>'}`;
   if(S.tab==='ledger'){
+    const campaigns=p.contents.filter(c=>c.reviewState==='published');
+    const campaignReport=`<div class="section-heading"><h2>宣发效果按内容归因</h2><span>仅依据手动登记的实际数据，不代表平台自动统计</span></div>
+      ${campaigns.length?campaigns.map(c=>{
+        const rows=p.ledger.filter(x=>x.contentId===c.id&&x.actual);
+        const total=type=>rows.filter(x=>x.type===type).reduce((a,x)=>a+Number(x.value||0),0);
+        return `<div class="source-row"><div class="grow"><strong>${esc(c.title)}</strong><p class="subtext">${esc(c.channel)} · 曝光 ${total('impressions')} · 访问 ${total('visits')} · 试用 ${total('trials')} · 实收 ${total('income')}</p><a class="external" href="${esc(c.publication?.url||'#')}" target="_blank" rel="noopener noreferrer">打开发布记录</a></div></div>`;
+      }).join(''):'<p class="subtext">暂无已登记的宣发内容；发布完成后，可将实际效果关联到对应内容。</p>'}`;
+    detail+=campaignReport;
     const feedback=S.productFeedback||{feedback:[],counts:{},productMilestoneAccepted:false};
     detail+=`<div class="section-heading"><h2>产品真实使用反馈</h2><span>与收入、访问数据分开记录</span></div>
       <div class="flex between"><p class="subtext">已记录 ${feedback.totalRecords||0} 条 · ${feedback.distinctAnonymousRefs||0} 个匿名代号 · 未经独立核验</p>
