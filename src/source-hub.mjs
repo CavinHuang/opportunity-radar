@@ -259,6 +259,8 @@ export function sourceDiagnostics(store,{limit=8}={}){
   return {items:feeds.map(f=>({
     feedId:f.id,title:f.title,enabled:f.enabled,
     state:!f.enabled?'paused':f.consecutiveFailures>0?'degraded':!f.lastSuccessAt?'pending':'healthy',
+    alert:!f.enabled?null:(f.consecutiveFailures||0)>=3?{level:'warning',code:'REPEATED_FAILURE',message:'连续采集失败至少 3 次，需要检查信息源或稍后重试',since:f.lastCheckedAt||null}:null,
+    recoveredAt:(recent.get(f.id)||[]).find(x=>x.kind==='source.scan_succeeded' && (recent.get(f.id)||[]).some(y=>y.kind==='source.scan_failed'&&y.seq<x.seq))?.at||null,
     consecutiveFailures:f.consecutiveFailures||0,
     lastCheckedAt:f.lastCheckedAt||null,lastSuccessAt:f.lastSuccessAt||null,
     nextScanAt:f.nextScanAt||null,lastError:f.lastError||null,

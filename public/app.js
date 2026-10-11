@@ -93,10 +93,12 @@ function renderSourceHub(){
     ${feeds.length?feeds.map(f=>{
       const d=diagnostics.get(f.id),history=d?.recent||[];
       const state=d?.state==='healthy'?'正常':d?.state==='degraded'?'采集异常':d?.state==='paused'?'已暂停':'等待首次成功';
+      const alertText=d?.alert?`<p class="subtext" role="status">⚠ ${esc(d.alert.message)}</p>`:d?.recoveredAt?`<p class="subtext">最近恢复：${fmtTime(d.recoveredAt)}</p>`:'';
       const retryButton=d?.state==='degraded'? `<button class="btn btn-sm" data-action="retry-source" data-id="${esc(f.id)}">立即重试</button>`:'';
       return `<details class="source-row"><summary><strong>${esc(f.title)}</strong> · ${esc(state)} · 连续失败 ${Number(d?.consecutiveFailures||0)} 次</summary>
         <p class="subtext">最近检查：${fmtTime(d?.lastCheckedAt)} · 下次尝试：${fmtTime(d?.nextScanAt)} ${retryButton}</p>
         ${d?.lastError?`<p class="subtext">最近错误：${esc(d.lastError)}</p>`:''}
+        ${alertText}
         ${history.length?history.map(h=>`<p class="subtext">#${Number(h.seq)} · ${fmtTime(h.at)} · ${h.kind==='source.scan_succeeded'?'成功（新增 '+Number(h.added||0)+' 条）':h.kind==='source.scan_failed'?'失败（'+esc(h.code||'SOURCE_ERROR')+'）':'跳过（'+esc(h.reason||'source_changed')+'）'}</p>`).join(''):'<p class="subtext">暂无采集审计事件</p>'}
       </details>`;
     }).join(''):'<p class="subtext">暂无订阅的信息源</p>'}

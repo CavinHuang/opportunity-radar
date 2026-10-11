@@ -42,3 +42,18 @@ test('retry requires failing enabled feed and current revision, and resets healt
   assert.equal(db.get('feeds',f.id).consecutiveFailures,0);
  }finally{db.close();}
 });
+
+test('three consecutive failures create warning and recovery clears it',async()=>{
+ const db=openDatabase();try{
+  const f=addFeed(db,{url:'https://example.org/rss'});
+  for(let i=0;i<3;i++)await scanSources(db,{dnsLookup,fetchImpl:async()=>response(503)});
+  const warning=sourceDiagnostics(db).items.find(x=>x.feedId===f.id);
+  assert.equal(warning.alert?.code,'REPEATED_FAILURE');
+  assert.equal(warning.consecutiveFailures,3);
+  await scanSources(db,{dnsLookup,fetchImpl:async()=>response(200,xml)});
+  const healthy=sourceDiagnostics(db).items.find(x=>x.feedId===f.id);
+  assert.equal(healthy.alert,null);
+  assert.ok(healthy.recoveredAt);
+  assert.equal(healthy.state,'healthy');
+ }finally{db.close();}
+});
