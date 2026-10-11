@@ -1,6 +1,6 @@
-# Curated sources · v0.8
+# Curated sources · v0.9
 
-Updated: 2026-10-10. **A documented feed address is not proof it is reachable in your network. Feed posts are not proof of consumer demand.**
+Updated: 2026-10-11. **A documented feed address is not proof it is reachable in your network. Feed posts are not proof of consumer demand.**
 
 ## Selection criteria
 
@@ -20,16 +20,23 @@ Updated: 2026-10-10. **A documented feed address is not proof it is reachable in
 | ask-hn | Ask HN | https://hnrss.org/ask | International | Tool searching and questions; builder demographic skew |
 | superuser | Super User | https://superuser.com/feeds | International | Digital workflow questions; troubleshooting may not support a new product |
 | webapps | Web Applications | https://webapps.stackexchange.com/feeds | International | Web-app problems; some depend on platform ownership |
+| se-lifehacks | Lifehacks | https://lifehacks.stackexchange.com/feeds | International | Every existing workaround points at a real daily friction; posters are self-selected and the workaround being free lowers the bar |
+| se-money | Personal Finance & Money | https://money.stackexchange.com/feeds | International | Concrete personal-finance and payment confusions; one-off questions, regulation-sensitive advice |
+| se-parenting | Parenting | https://parenting.stackexchange.com/feeds | International | High-friction everyday family scenarios; child-privacy topics need stricter de-identification |
+| se-diy | Home Improvement | https://diy.stackexchange.com/feeds | International | Concrete home and repair pain points; hardware problems rarely become software |
+| lobsters | Lobsters | https://lobste.rs/rss | International | High signal-to-noise tech discussion and tool friction; link aggregation with a technical-crowd skew |
 
 See V2EX official feed pattern: https://blog.v2ex.com/rss/ and Stack Exchange RSS endpoints above.
 
-**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
+**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Indie Hackers discontinued its public RSS (`/feed.rss` and alternatives return 404 as of 2026-10-11). Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
 
 ## Verified public availability — GitHub runner, 2026-10-10
 
 The first live public probe returned **25 V2EX Q&A, 20 Ask HN, and 25 Super User** posts with successful HTTP fetch and feed parsing. Total **70 source entries**, stored in an ephemeral test database (not automatically classified as validated opportunities).
 
 [Inspect the complete initial GitHub Actions source-probe log](https://github.com/CavinHuang/opportunity-radar/actions/runs/38043278997).
+
+**2026-10-11 follow-up probe (GitHub runner):** all 11 catalog feeds returned reachable with parsed items — the five global additions fetched 25 (Lifehacks), 25 (Money), 25 (Parenting), 25 (Home Improvement) and 24 (Lobsters) posts ([run log](https://github.com/CavinHuang/opportunity-radar/actions/runs/38137394918)). As always: reachability is not consumer demand.
 
 This is a single-run availability result from a GitHub Runner, not a guarantee of availability from the user's location. Other catalog feeds are queued for independent checks, and no claim is made about uniqueness, consumer identity, or willingness to pay.
 
