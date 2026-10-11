@@ -230,19 +230,23 @@ export function createService(store, options={}){
   }
   function reviewContent(id,contentId,data){const c=get('contents',contentId);if(c.projectId!==id)throw err('NOT_FOUND','content outside project',404);const action=required(data.action,'action');
     if(action==='approve'){
+      assertActive(id);// approving promotion material for a paused/stopped/archived project makes no sense
       if(data.privacyChecked!==true||data.factsChecked!==true)throw err('REVIEW_REQUIRED','需要人工确认真实性和隐私审查',409);
       if(c.claims.some(x=>!x.sourceRef||!x.productRevision))throw err('UNSUPPORTED_CLAIM','功能主张缺少产品版本及证据',409);
       const next=store.put('contents',{...c,reviewState:'approved',approvedRevision:c.revision+1,reviewedAt:now()},c.revision);
       event('content.approved',c.id,owner,{revision:next.revision},id);return next;
     }
     if(action==='publish_record'){
+      assertActive(id);// registering a publication is only meaningful while the promotion window is live; late actuals belong in the ledger
       if(c.reviewState!=='approved'||c.approvedRevision!==c.revision)throw err('CONTENT_NOT_APPROVED','未批准内容不能登记为已发布',409);
       const u=parseHttps(required(data.url,'url'));
       const next=store.put('contents',{...c,reviewState:'published',publication:{url:u,at:now(),platform:data.platform||c.channel,recordedBy:'owner'},approvedRevision:c.revision+1},c.revision);
       event('content.published_recorded',c.id,owner,{url:u,manual:true},id);return next;
     }
     throw err('BAD_REQUEST','unknown content action');}
-  function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
+  function addLedger(id,data){getProject(id);// Deliberately NOT fenced by assertActive: recording late actuals after a project
+   // ends keeps the ledger honest (实际值补录不受项目状态限制，属有意设计)。
+   const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
    return store.transaction(()=>{
     const contentId=data.contentId||null;let campaignId=null;
     // Review fix: the campaign attribution is snapshotted at recording time, so moving
@@ -286,7 +290,8 @@ export function createService(store, options={}){
       for(const dep of p.dependencies||[]){const dt=get('tasks',dep);if(dt.projectId!==p.project_id)throw err('FORBIDDEN','dependency outside project',403);}
       const t=store.put('tasks',{id:randomUUID(),projectId:p.project_id,milestoneId:m.id,baselineRevision:baseline(p.project_id).revision,title:required(p.title,'title'),description:p.description||'',status:'open',dependencies:p.dependencies||[],lease:null,createdAt:now()});event('task.created',t.id,agent,{milestoneId:m.id},p.project_id);return t;});
     if(name==='task.transition')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));assertActive(t.projectId);if(t.baselineRevision&&t.baselineRevision!==baseline(t.projectId).revision)throw err('BASELINE_STALE','不能在已过期基线下改变任务',409);leaseCheck(t,p.lease_token);if(!['in_progress','blocked','submitted','rework'].includes(p.status))throw err('BAD_REQUEST','invalid task status');
-      const x=store.put('tasks',{...t,status:p.status},ensureRevision(p.expected_revision));event('task.transitioned',t.id,agent,{status:p.status},t.projectId);return x;});
+      if(p.status==='blocked'&&!String(p.blocked_reason??'').trim())throw err('BAD_REQUEST','Agent 置为阻塞必须给出 blocked_reason，便于 owner 追溯');
+      const x=store.put('tasks',{...t,status:p.status,blockedReason:p.status==='blocked'?String(p.blocked_reason).trim():null},ensureRevision(p.expected_revision));event('task.transitioned',t.id,agent,{status:p.status,blockedReason:x.blockedReason||null},t.projectId);return x;});
     if(name==='task.release')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));leaseCheck(t,p.lease_token);const next=store.put('tasks',{...t,lease:null,status:t.status==='in_progress'?'open':t.status},ensureRevision(p.expected_revision));event('task.released',t.id,agent,{externalProcessStopped:false},t.projectId);return next;});
     if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{
       const pr=assertActive(p.project_id);

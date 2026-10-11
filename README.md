@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 持续演进的 **v2.9 本地运行版本**（当前阶段：Phase E 生产可靠性与用户体验），不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 持续演进的 **v2.16 本地运行版本**（当前阶段：安全加固、真实浏览器验证与全球信息源扩充之后），不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,13 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## 最新更新（v2.10 → v2.16）
+
+- **v2.10–v2.11（Phase D/E）**：证据驱动的机会复盘与决策（继续/调整/暂停/停止必须显式确认，永不自动宣布「已验证」）；SQLite 版本化迁移、备份/恢复校验、加载/错误/离线状态与端到端回归。
+- **v2.12 安全加固**：DNS rebinding 防护（无 token 时仅接受回环 Host）、owner 幂等键（`Idempotency-Key`）、移除无防护的抓取死代码、前端渲染防崩。
+- **v2.13 走查修复**：账本实际值自动镜像进增长模型（打开旧库幂等回填，增长页与账本永不打架）；已发布内容状态文案与任务时间线修正。
+- **v2.14–v2.16 信息源目录扩至 27 个**（中/英/俄/西，CI 真实联网探测全部可达，排除源均附实测证据）；URL 哈希路由（刷新与深链接恢复确切视图）、项目页签换行、`npm run data -- prune-events` 审计事件手动清理（默认 dry-run）；Agent 置阻塞必须给出原因；非活跃项目冻结内容审批与发布登记。
 
 ## v2.9 · Phase E · 生产可靠性与用户体验
 

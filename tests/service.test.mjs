@@ -156,3 +156,17 @@ test('resume restores a consistent read model when a promotion-stage project is 
  }finally{db.close();}
 });
 
+
+test('agent blocking requires a reason and stores it on the task',()=>{const {db,s,o}=setup();const p=experiment(s,o);const m=s.getFullProject(p.id).milestones[1];const task=s.tool('task.upsert',{project_id:p.id,milestone_id:m.id,title:'Prototype',idempotency_key:'t1'});
+ const claim=s.tool('task.claim',{project_id:p.id,task_id:task.id,idempotency_key:'c1'});
+ assert.throws(()=>s.tool('task.transition',{task_id:task.id,status:'blocked',lease_token:claim.lease_token,expected_revision:claim.task.revision,idempotency_key:'b0'}),e=>e.code==='BAD_REQUEST');
+ assert.throws(()=>s.tool('task.transition',{task_id:task.id,status:'blocked',blocked_reason:'   ',lease_token:claim.lease_token,expected_revision:claim.task.revision,idempotency_key:'b0b'}),e=>e.code==='BAD_REQUEST');
+ const blocked=s.tool('task.transition',{task_id:task.id,status:'blocked',blocked_reason:'waiting for external review feedback',lease_token:claim.lease_token,expected_revision:claim.task.revision,idempotency_key:'b1'});
+ assert.equal(blocked.status,'blocked');assert.equal(blocked.blockedReason,'waiting for external review feedback');db.close();});
+test('content approval and publication registration freeze on inactive projects; late ledger stays possible',()=>{const {db,s,o}=setup();const p=experiment(s,o);const c=s.saveContent(p.id,{title:'A story',body:'I built a prototype and need feedback',objective:'interviews',channel:'site'});
+ const approved=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});
+ s.ownerDecision(p.id,{action:'pause',reason:'reassess'});
+ assert.throws(()=>s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true}),e=>e.code==='PROJECT_NOT_ACTIVE');
+ assert.throws(()=>s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/late-post'}),e=>e.code==='PROJECT_NOT_ACTIVE');
+ s.addLedger(p.id,{type:'visits',value:3,actual:true});
+ assert.equal(s.getFullProject(p.id).ledger.length,1,'late actual recording stays possible by design');db.close();});
