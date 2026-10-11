@@ -93,8 +93,9 @@ function renderSourceHub(){
     ${feeds.length?feeds.map(f=>{
       const d=diagnostics.get(f.id),history=d?.recent||[];
       const state=d?.state==='healthy'?'正常':d?.state==='degraded'?'采集异常':d?.state==='paused'?'已暂停':'等待首次成功';
+      const retryButton=d?.state==='degraded'? `<button class="btn btn-sm" data-action="retry-source" data-id="${esc(f.id)}">立即重试</button>`:'';
       return `<details class="source-row"><summary><strong>${esc(f.title)}</strong> · ${esc(state)} · 连续失败 ${Number(d?.consecutiveFailures||0)} 次</summary>
-        <p class="subtext">最近检查：${fmtTime(d?.lastCheckedAt)} · 下次尝试：${fmtTime(d?.nextScanAt)}</p>
+        <p class="subtext">最近检查：${fmtTime(d?.lastCheckedAt)} · 下次尝试：${fmtTime(d?.nextScanAt)} ${retryButton}</p>
         ${d?.lastError?`<p class="subtext">最近错误：${esc(d.lastError)}</p>`:''}
         ${history.length?history.map(h=>`<p class="subtext">#${Number(h.seq)} · ${fmtTime(h.at)} · ${h.kind==='source.scan_succeeded'?'成功（新增 '+Number(h.added||0)+' 条）':h.kind==='source.scan_failed'?'失败（'+esc(h.code||'SOURCE_ERROR')+'）':'跳过（'+esc(h.reason||'source_changed')+'）'}</p>`).join(''):'<p class="subtext">暂无采集审计事件</p>'}
       </details>`;
@@ -348,6 +349,14 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
   case 'add-source':editSource();break;
   case 'edit-source':editSource(S.sources.items.find(x=>x.id===id));break;
   case 'toggle-source':{const x=S.sources.items.find(x=>x.id===id);await api('/sources/'+id,{method:'PATCH',body:{enabled:!x.enabled,expected_revision:x.revision}});await refresh();break;}
+  case 'retry-source':{
+    const feed=S.sources?.items?.find(f=>f.id===id);
+    if(!feed)throw new Error('来源已不存在，请刷新');
+    const r=await api('/sources/'+encodeURIComponent(id)+'/retry',{method:'POST',body:{expected_revision:feed.revision}});
+    await refresh();
+    toast(r.result.errors.length?'重试已完成，但来源仍存在采集异常':'重试成功，新增 '+r.result.added+' 条信号');
+    break;
+  }
   case 'scan-source':case 'scan-signals':{const r=await api('/signals/scan',{method:'POST',body:action==='scan-source'?{source_id:id}:{}});await refresh();toast(`已扫描 ${r.result.feeds} 个来源，新增 ${r.result.added} 条未核实信号${r.result.errors.length?'；'+r.result.errors.length+' 个来源失败':''}`);break;}
   case 'filter-signals':S.signalStatus=statusParam||id||S.signalStatus;S.signalOffset=0;await refresh();break;
   case 'previous-signals':S.signalOffset=Math.max(0,S.signalOffset-30);await refresh();break;
