@@ -1,5 +1,6 @@
 import {experimentDecisionReview} from './experiment-decision.mjs';
 import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
+import {createCampaign,adjustCampaign,cancelCampaign,completeCampaign,recordRetrospective,campaignOverview} from './campaign.mjs';
 import {projectPipeline} from './project-pipeline.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -151,7 +152,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
-    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),events:store.events(0,proj[1]).slice(-50)});}
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.events(0,proj[1]).slice(-50)});}
     const decision=/^\/api\/projects\/([^/]+)\/decide$/.exec(pathname);
     if(decision&&req.method==='POST')return send(res,200,{result:service.ownerDecision(decision[1],await body(req))});
     const generate=/^\/api\/projects\/([^/]+)\/contents\/generate$/.exec(pathname);
@@ -162,6 +163,16 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(schedule&&req.method==='POST')return send(res,200,{item:service.scheduleContent(schedule[1],schedule[2],await body(req))});
     const review=/^\/api\/projects\/([^/]+)\/contents\/([^/]+)\/review$/.exec(pathname);
     if(review&&req.method==='POST')return send(res,200,{item:service.reviewContent(review[1],review[2],await body(req))});
+    // v2.9 Phase B: promotion campaigns (owner-only, manual publication only).
+    const campaignsList=/^\/api\/projects\/([^/]+)\/campaigns$/.exec(pathname);
+    if(campaignsList&&req.method==='GET')return send(res,200,campaignOverview(store,service.getFullProject(campaignsList[1])));
+    if(campaignsList&&req.method==='POST')return send(res,201,{item:createCampaign(store,campaignsList[1],await body(req))});
+    const campaignAction=/^\/api\/projects\/([^/]+)\/campaigns\/([^/]+)\/(adjust|cancel|complete|retrospective)$/.exec(pathname);
+    if(campaignAction&&req.method==='POST'){
+      const data=await body(req);
+      const fn={adjust:adjustCampaign,cancel:cancelCampaign,complete:completeCampaign,retrospective:recordRetrospective}[campaignAction[3]];
+      return send(res,200,{item:fn(store,campaignAction[1],campaignAction[2],data)});
+    }
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
     if(ledger&&req.method==='POST')return send(res,201,{item:service.addLedger(ledger[1],await body(req))});
     const attest=/^\/api\/projects\/([^/]+)\/evidence\/([^/]+)\/attest$/.exec(pathname);

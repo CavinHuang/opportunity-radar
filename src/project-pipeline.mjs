@@ -1,6 +1,7 @@
 // Owner-facing read model. No invented completion or inferred publishing.
+import {publicationCalendar} from './campaign.mjs';
 const count=(items,predicate)=>items.filter(predicate).length;
-export function projectPipeline(project){
+export function projectPipeline(project,{now:nowOverride}={}){
  const baseline=project.baselines?.at(-1);
  const tasks=(project.tasks||[]).filter(t=>!t.baselineRevision||t.baselineRevision===baseline?.revision);
  // Archived owner tasks are closed bookkeeping; they no longer count as open work.
@@ -8,11 +9,19 @@ export function projectPipeline(project){
  // Overdue compares the machine-local calendar day with the date-only dueDate,
  // matching the owner's local intent rather than the UTC day.
  const n=x=>String(x).padStart(2,'0');
- const nowDate=new Date();
+ const nowDate=nowOverride?new Date(nowOverride):new Date();
  const today=`${nowDate.getFullYear()}-${n(nowDate.getMonth()+1)}-${n(nowDate.getDate())}`;
  const ownerOverdue=count(ownerTasks,t=>t.dueDate&&t.state!=='done'&&t.dueDate<today);
  const ownerTaskCounts=Object.fromEntries(['todo','doing','blocked','done'].map(s=>[s,count(ownerTasks,t=>t.state===s)]));
  const milestones=project.milestones||[],submissions=project.submissions||[],contents=project.contents||[];
+ // G08: consume content schedules the owner already recorded. Overdue/due-today
+ // counts come from the shared publication calendar; cancelled/completed
+ // campaigns stop reminding but their entries remain visible on the calendar.
+ const calendar=publicationCalendar(contents,project.campaigns||[],nowDate);
+ const duePublications=count(calendar,x=>x.reminder&&x.state==='due_today');
+ const overduePublications=count(calendar,x=>x.reminder&&x.state==='overdue');
+ const campaigns=project.campaigns||[];
+ const campaignOverEnd=count(campaigns,c=>c.status==='active'&&c.endAt&&c.endAt<today);
  const taskCounts=Object.fromEntries(['open','in_progress','submitted','rework','blocked'].map(s=>[s,count(tasks,t=>t.status===s)]));
  const pendingAcceptance=count(submissions,s=>s.acceptanceState==='pending'&&s.baselineRevision===baseline?.revision);
  const pendingDecisions=count(project.decisions||[],d=>d.status==='pending');
@@ -32,6 +41,9 @@ export function projectPipeline(project){
   if(taskCounts.blocked)nextActions.push({kind:'blocked',label:'排查被阻塞任务及依赖',tab:'overview'});
   if(!tasks.length&&accepted<milestones.length)nextActions.push({kind:'kickoff',label:'准备首个研发任务',tab:'overview'});
   else if(taskCounts.open)nextActions.push({kind:'agent',label:'将待领取任务交给外部 Coding Agent',tab:'agent'});
+  if(overduePublications)nextActions.push({kind:'publish_overdue',label:`${overduePublications} 项内容已过计划发布时间仍未登记发布`,tab:'launch'});
+  if(duePublications)nextActions.push({kind:'publish_due',label:`今日有 ${duePublications} 项内容到达计划发布时间`,tab:'launch'});
+  if(campaignOverEnd)nextActions.push({kind:'campaign_over_end',label:'有宣发活动已过计划结束时间，请复盘或调整',tab:'launch'});
   if(accepted===milestones.length&&milestones.length>0){
    if(approvals)nextActions.push({kind:'publish',label:'人工发布已批准内容并登记真实链接',tab:'launch'});
    else if(drafts)nextActions.push({kind:'review',label:'核对宣发事实与隐私后审批内容',tab:'launch'});
@@ -42,6 +54,7 @@ export function projectPipeline(project){
  return {baselineRevision:baseline?.revision||null,taskCounts,totalTasks:tasks.length,
   ownerTaskCounts,ownerTaskTotal:ownerTasks.length,ownerOverdue,milestoneCounts:{total:milestones.length,accepted,pending:count(milestones,m=>m.acceptanceState==='pending'),rejected:count(milestones,m=>m.acceptanceState==='rejected')},
   pendingAcceptance,pendingDecisions,contentCounts:{drafts,approved:approvals,published:publications},
+  publicationReminders:{dueToday:duePublications,overdue:overduePublications,campaignOverEnd},
   // A work-in-progress count is not a credible percent-complete measure.
   progressLabel:`${accepted}/${milestones.length} 里程碑已人工验收`,
   launchReady:accepted===milestones.length&&milestones.length>0,
