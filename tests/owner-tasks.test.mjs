@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
-import {upsertOwnerTask,projectOwnerTasks} from '../src/owner-tasks.mjs';
+import {upsertOwnerTask,projectOwnerTasks,ownerTaskHistory} from '../src/owner-tasks.mjs';
 const setup=()=>{
  const db=openDatabase();
  db.put('projects',{id:'p',status:'research',baselines:[{revision:1}]});
@@ -31,5 +31,25 @@ test('paused projects prohibit owner task writes',()=>{
  const db=setup();try{
   const p=db.get('projects','p');db.put('projects',{...p,status:'paused'},p.revision);
   assert.throws(()=>upsertOwnerTask(db,'p',{title:'Nope'}),{code:'PROJECT_NOT_ACTIVE'});
+ }finally{db.close();}
+});
+
+test('owner task history records state changes and precondition metadata',()=>{
+ const db=setup();try{
+  const a=upsertOwnerTask(db,'p',{title:'Planning'});
+  const b=upsertOwnerTask(db,'p',{title:'Release',dependencies:[a.id]});
+  const hist=ownerTaskHistory(db,'p',b.id);
+  assert.equal(hist.length,1);
+  assert.equal(hist[0].kind,'owner_task.created');
+  assert.deepEqual(hist[0].detail.dependencies,[a.id]);
+ }finally{db.close();}
+});
+
+test('dependency cycles are rejected without changing task revision',()=>{
+ const db=setup();try{
+  const first=upsertOwnerTask(db,'p',{title:'One'});
+  const second=upsertOwnerTask(db,'p',{title:'Two',dependencies:[first.id]});
+  assert.throws(()=>upsertOwnerTask(db,'p',{id:first.id,expected_revision:first.revision,dependencies:[second.id]}),{code:'DEPENDENCY_CYCLE'});
+  assert.equal(db.get('owner_tasks',first.id).revision,first.revision);
  }finally{db.close();}
 });

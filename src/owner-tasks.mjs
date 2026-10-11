@@ -24,7 +24,19 @@ export function upsertOwnerTask(store,projectId,data){
  const dependencies=data.dependencies??old?.dependencies??[];
  if(!Array.isArray(dependencies)||new Set(dependencies).size!==dependencies.length||dependencies.some(id=>id===data.id||!store.get('owner_tasks',id)||store.get('owner_tasks',id).projectId!==projectId))throw fail('BAD_REQUEST','任务依赖无效');
  if(state==='done'&&dependencies.some(id=>store.get('owner_tasks',id).state!=='done'))throw fail('DEPENDENCY_UNMET','前置任务尚未完成',409);
+ const graph=new Map(projectOwnerTasks(store,projectId).map(t=>[t.id,t.dependencies||[]]));
+ graph.set(data.id||'__new__',dependencies);
+ const visiting=new Set(),visited=new Set();
+ const walk=id=>{if(visiting.has(id))throw fail('DEPENDENCY_CYCLE','任务依赖不能形成环',409);if(visited.has(id))return;visiting.add(id);for(const dep of graph.get(id)||[])walk(dep);visiting.delete(id);visited.add(id);};
+ for(const id of graph.keys())walk(id);
  const saved=store.put('owner_tasks',{...old,id:old?.id||randomUUID(),projectId,title,description:clean(data.description??old?.description,2000),state,owner:clean(data.owner??old?.owner??'本人',80),dueDate,milestoneId,dependencies,createdAt:old?.createdAt||new Date().toISOString()},old?.revision);
- store.event(old?'owner_task.updated':'owner_task.created',saved.id,'owner',{state,title:saved.title},projectId);
+ store.event(old?'owner_task.updated':'owner_task.created',saved.id,'owner',{state,title:saved.title,previousState:old?.state||null,owner:saved.owner,dueDate:saved.dueDate,dependencies:saved.dependencies,revision:saved.revision},projectId);
  return saved;
+}
+
+export function ownerTaskHistory(store,projectId,taskId,{limit=30}={}){
+ const task=store.get('owner_tasks',taskId);
+ if(!task||task.projectId!==projectId)throw fail('NOT_FOUND','任务不存在',404);
+ const n=Number(limit);if(!Number.isInteger(n)||n<1||n>100)throw fail('BAD_REQUEST','limit must be 1–100');
+ return store.db.prepare("SELECT seq,project_id,kind,entity_id,actor,detail,created_at FROM events WHERE project_id=? AND entity_id=? AND kind LIKE 'owner_task.%' ORDER BY seq DESC LIMIT ?").all(projectId,taskId,n).map(e=>({...e,detail:JSON.parse(e.detail)}));
 }

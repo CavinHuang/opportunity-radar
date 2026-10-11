@@ -1,4 +1,4 @@
-import {projectOwnerTasks,upsertOwnerTask} from './owner-tasks.mjs';
+import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory} from './owner-tasks.mjs';
 import {projectPipeline} from './project-pipeline.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -134,6 +134,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const projectFeedback=/^\/api\/projects\/([^/]+)\/feedback$/.exec(pathname);
     if(projectFeedback&&req.method==='GET')return send(res,200,{result:feedbackOverview(store,projectFeedback[1])});
     if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
+    const taskHistory=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/history$/.exec(pathname);
+    if(taskHistory&&req.method==='GET')return send(res,200,{items:ownerTaskHistory(store,taskHistory[1],taskHistory[2],{limit:u.searchParams.get('limit')??30})});
     const planning=/^\/api\/projects\/([^/]+)\/owner-tasks$/.exec(pathname);
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});
