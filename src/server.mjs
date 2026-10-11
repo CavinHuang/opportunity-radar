@@ -147,6 +147,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(generate&&req.method==='POST')return send(res,200,{draft:await draftLaunchContent(service.getFullProject(generate[1]),await body(req))});
     const content=/^\/api\/projects\/([^/]+)\/contents$/.exec(pathname);
     if(content&&req.method==='POST')return send(res,200,{item:service.saveContent(content[1],await body(req))});
+    const schedule=/^\/api\/projects\/([^/]+)\/contents\/([^/]+)\/schedule$/.exec(pathname);
+    if(schedule&&req.method==='POST')return send(res,200,{item:service.scheduleContent(schedule[1],schedule[2],await body(req))});
     const review=/^\/api\/projects\/([^/]+)\/contents\/([^/]+)\/review$/.exec(pathname);
     if(review&&req.method==='POST')return send(res,200,{item:service.reviewContent(review[1],review[2],await body(req))});
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
