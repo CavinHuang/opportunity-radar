@@ -277,7 +277,8 @@ export function growthOverview(store,projectId){
 }
 
 const DAY=86400000;
-function parseDay(value,label){
+/** Exported for the Phase D retrospective: shared YYYY-MM-DD window parsing. */
+export function parseDay(value,label){
  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T00:00:00Z')))
   throw fail('BAD_REQUEST',label+'必须是有效的 YYYY-MM-DD 日期');
  return value;
@@ -309,7 +310,8 @@ function conversionRows(entries){
   return row;
  });
 }
-function detectAnomalies(entries){
+/** Exported for the Phase D retrospective: the same anomaly scan as growthReport. */
+export function detectAnomalies(entries){
  const explained=entries.filter(e=>e.isAnomaly)
   .map(e=>({id:e.id,metric:e.metric,value:e.value,occurredAt:e.occurredAt,anomalyNote:e.anomalyNote}));
  const unexplained=[];

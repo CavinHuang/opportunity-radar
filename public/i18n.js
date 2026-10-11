@@ -342,6 +342,44 @@ const en = {
  '请先创建渠道':'Create a channel first','数据不在当前列表，请刷新':'This record is not in the current list; refresh.',
  '曝光':'Impressions','访问':'Visits','有效兴趣':'Qualified interest','试用':'Trials','激活':'Activations','留存':'Retention','收入':'Revenue','退款':'Refunds','成本':'Costs',
  '留存用户':'Retained users',
+ // Phase D · periodic opportunity review and decisions
+ '周期复盘与决策':'Periodic review & decisions','复盘数据尚未加载。':'Review data is not loaded yet.','加载复盘数据':'Load review data',
+ '创建周期复盘':'Create periodic review','执行复盘决定':'Apply review decision','复盘周期':'Review cycle','天':'days','上次复盘：':'Last review: ','最近决定：':'Latest decision: ',
+ '本轮复盘已到期':'New review cycle due','尚未创建过复盘':'No review recorded yet',
+ '系统只汇总证据与备选方案；继续、调整、暂停或停止由你确认后才执行，且不会自动宣布机会已被验证。':'The system only aggregates evidence and alternatives; continue, adjust, pause or stop run only after your confirmation, and the opportunity is never auto-declared validated.',
+ '对照最初假设':'Against the original hypothesis','最初基线':'Original baseline','当前基线':'Current baseline',
+ '最初目标 / 假设':'Original goal / hypothesis','最初停止条件':'Original stop condition','当前目标 / 假设':'Current goal / hypothesis','当前停止条件':'Current stop condition',
+ '交付完成情况':'Delivery completion','只有正式验收才算完成':'Only formal acceptance counts as done','里程碑已人工验收':'milestones owner-accepted',
+ '实际结果记录条数':'actual result records','已核验证据':'verified evidence','待核验证据':'pending evidence',
+ '当前状态：':'Current status: ','交付未完成正式验收':'delivery not formally accepted','关键结果记录不完整':'key outcome records incomplete','数据项齐备，可供人工复盘':'records complete, ready for owner review',
+ '仍有待处理的验收提交':'pending acceptance submissions exist','记录缺失：':'Missing records: ','无':'none','未记录的数据不当作零。':'Unrecorded data is never treated as zero.',
+ '实际收益与成本':'Actual returns and costs','仅统计明确标记实际发生的登记数据':'Only entries explicitly marked as actual are counted',
+ '实收（未知≠零）':'Revenue (unknown ≠ zero)','已知净现金':'Known net cash','已登记个人时间 (h)':'Recorded personal hours','已登记现金支出 (¥)':'Recorded cash spent (¥)',
+ '预算对照：批准每周':'Budget check: approved','实验已进行':'weeks since experiment start','按周折算批准额度':'approved pace to date','时间超支':'time over budget','现金超支':'cash over budget',
+ '缺失指标保持未知，不按零处理。':'Missing metrics stay unknown, never zero.','试用/访问：':'Trial/visit: ','数据不足或口径不一致':'insufficient data or inconsistent caliber',
+ '市场反馈与不确定性':'Market feedback and uncertainty','用户观察、反证与不确定性分开汇总':'Observations, counter-evidence and uncertainty are kept separate',
+ '验证观察：':'Validation observations: ','支持':'supporting','反驳':'contradicting','不确定':'unclear','位':'distinct','未经独立核验':'not independently verified',
+ '产品使用反馈：':'Product usage feedback: ','条记录':'records','全部为人工登记，未经独立核验':'all owner-entered, not independently verified','窗口内增长数据：':'Growth data in window: ',
+ '标记问题':'Flagged issues','验证不足 · 数据异常 · 未解决风险':'Insufficient validation · data anomalies · unresolved risks',
+ '高':'high','中':'medium','低':'low','本窗口没有自动标记的问题。':'No issues flagged automatically for this window.',
+ '增长数据存在':'Growth data has','条未说明异常，请先到增长数据页补充异常说明':'unexplained anomalies; add anomaly notes on the growth page first',
+ '备选方案':'Alternatives','决策支持 · 执行需你确认':'Decision support · execution needs your confirmation','存在未解决问题':'open issues','阻塞项：':'Blocked by: ',
+ '备选方案基于当前草稿数据；正式决定要在创建复盘记录后做出。':'Alternatives are based on the current draft; formal decisions require a stored review record first.',
+ '复盘记录':'Review history','决定原因、证据、时间与基线版本全部留档':'Decision reasons, evidence, timestamps and baseline versions are all archived',
+ '复盘':'Review','基线 r':'baseline r','待决策':'decision pending','窗口':'Window','停止条件判断：':'Stop-condition judgment: ','标记：':'Flagged: ',
+ '未改变项目状态':'No project state change','项目状态':'Project state','需求研究':'Research','执行中':'Execution','宣发中':'Promotion','复盘中':'Review','已停止':'Stopped',
+ '还没有复盘记录。创建第一次周期复盘后，这里会保留全部决定与依据。':'No reviews yet. After the first periodic review, every decision and rationale is kept here.',
+ '复盘记录不在当前列表，请刷新':'This review is not in the current list; refresh.','该复盘已有决定；如需新决定请再创建一次周期复盘':'This review already has a decision; create a new periodic review for another decision',
+ '窗口开始日期':'Window start','窗口结束日期':'Window end','停止条件人工判断':'Stop-condition judgment','尚未判断':'Not yet judged','未触发':'Not met','部分触发':'Partially met','已触发':'Met',
+ '停止条件判断依据（可选）':'Stop-condition rationale (optional)','复盘结论（至少16字，将留档）':'Overall assessment (at least 16 characters, archived)',
+ '用户观察（每行一条，可留空）':'User observations (one per line, optional)','反证（每行一条，可留空）':'Counter-evidence (one per line, optional)','不确定性（每行一条，可留空）':'Uncertainties (one per line, optional)','未解决风险（每行一条，可留空）':'Unresolved risks (one per line, optional)','数据异常（每行一条，可留空）':'Data anomalies (one per line, optional)',
+ '用户观察':'Observations','反证':'Counter-evidence','不确定性':'Uncertainty','未解决风险':'Unresolved risk','数据异常':'Data anomaly',
+ '交付未完成':'Delivery incomplete','验证不足':'Insufficient validation','不确定项':'Open uncertainties','预算超支':'Budget exceeded','停止条件未判断':'Stop condition unassessed','停止条件已触发':'Stop condition met','项目不在进行中':'Project not active',
+ '继续执行':'Continue','调整后继续':'Adjust and continue','停止':'Stop',
+ '只有勾选确认后才会执行项目状态变更：暂停 / 停止立即生效（外部进程不会自动停机，需要人工核对）；项目处于暂停时选择“继续执行”会恢复项目；调整本身不改基线，需单独修订并批准。决定原因、时间与基线版本会随复盘留档。':'Project state changes run only after you tick the confirmation: pause / stop take effect immediately (external processes never stop automatically; verify manually); choosing “Continue” on a paused project resumes it; “Adjust” never edits the baseline by itself — revise and approve it separately. Reasons, timestamps and baseline versions are archived with the review.',
+ '决定':'Decision','决定理由（至少16字，将留档）':'Decision rationale (at least 16 characters, archived)',
+ '我确认执行该决定':'I confirm applying this decision','我已知晓上述未解决问题，仍要记录该决定':'I acknowledge the open issues and still want this decision recorded',
+ '存在未解决问题的选项：':'Options with open issues: ',
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
@@ -388,7 +426,18 @@ const dynamic = [
  [/^最新\s*(\d+)\s*条 · 人工录入、外部导入、API 获取与已核验分开标注$/,(_m,n)=>`Latest ${n} records · Manual entry, external import, API fetch and verified data are labeled separately.`],
  [/^含异常标记\s*(\d+)\s*条$/,(_m,n)=>`${n} anomaly-flagged entries`],
  [/^导入\s*(\d+)\s*条，跳过重复\s*(\d+)\s*条，拒绝\s*(\d+)\s*条$/,(_m,a,b,c)=>`Imported ${a}; skipped ${b} duplicates; rejected ${c}`],
- [/^(曝光|访问|有效兴趣|试用|激活|留存|收入|退款|成本)\s(未知|-?\d+(?:\.\d+)?)$/,(_m,k,v)=>(en[k]||k)+': '+v]
+ [/^(曝光|访问|有效兴趣|试用|激活|留存|收入|退款|成本)\s(未知|-?\d+(?:\.\d+)?)$/,(_m,k,v)=>(en[k]||k)+': '+v],
+
+ // Phase D · periodic review and decisions
+ [/^基线已从 r1 修订到 r(\d+)(?:[：:](.+))?$/,(_m,n,reason)=>'Baseline revised from r1 to r'+n+(reason?': '+reason:'')],
+ [/^项目状态:\s*(.+?)\s*→\s*(.+)$/,(_m,a,b)=>'Project state: '+(en[a]||a)+' → '+(en[b]||b)],
+ [/^(.+?)（存在未解决问题）$/,(_m,x)=>(en[x]||x)+' (open issues)'],
+ [/^窗口\s*(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})$/,(_m,a,b)=>`Window ${a} ~ ${b}`],
+ [/^复盘周期\s*(\d+)\s*天$/,(_m,n)=>`Review cycle: ${n} days`],
+ [/^实验已进行\s*([\d.]+)\s*周$/,(_m,n)=>`${n} weeks since experiment start`],
+ [/^(\d+)\s*条未说明异常，请先到增长数据页补充异常说明$/,(_m,n)=>`${n} unexplained anomalies; add anomaly notes on the growth page first`],
+ [/^基线 r(\d+)$/,(_m,n)=>`baseline r${n}`],
+ [/^复盘 · 基线 r(\d+) · (.*)$/,(_m,n,rest)=>`Review · baseline r${n} · ${rest}`]
 ];
 export function normalizeLanguage(locale){return Object.hasOwn(LANGUAGES,locale)?locale:'zh-CN';}
 export function initialLanguage(storageValue,browserLanguage='zh-CN'){

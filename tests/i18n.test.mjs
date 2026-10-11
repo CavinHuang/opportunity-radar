@@ -102,6 +102,20 @@ test('repeated-problem research inbox has bilingual labels and observable counte
    '2 distinct URLs · 2 sites · Unique consumer count unknown · Needs manual review');
 });
 
+test('periodic review and decision labels translate without inventing verdicts',()=>{
+ assert.equal(translate('周期复盘与决策','en-US'),'Periodic review & decisions');
+ assert.equal(translate('对照最初假设','en-US'),'Against the original hypothesis');
+ assert.equal(translate('备选方案','en-US'),'Alternatives');
+ assert.equal(translate('执行复盘决定','en-US'),'Apply review decision');
+ assert.equal(translate('我确认执行该决定','en-US'),'I confirm applying this decision');
+ assert.equal(translate('停止条件人工判断','en-US'),'Stop-condition judgment');
+ assert.equal(translate('未解决风险','en-US'),'Unresolved risk');
+ assert.equal(translate('停止条件已触发','en-US'),'Stop condition met');
+ assert.equal(translate('调整后继续','en-US'),'Adjust and continue');
+ assert.equal(translate('基线已从 r1 修订到 r2：进入付费验证','en-US'),'Baseline revised from r1 to r2: 进入付费验证');
+ assert.equal(translate('继续执行（存在未解决问题）','en-US'),'Continue (open issues)');
+});
+
 test('candidate review classifications and repost warnings are translated',()=>{
  assert.equal(translate('标记为同一问题线索','en-US'),'Mark as related problem leads');
  assert.equal(translate('疑似转载或重复发帖','en-US'),'Possible repost / syndication');

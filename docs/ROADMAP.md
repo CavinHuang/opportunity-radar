@@ -31,9 +31,17 @@
 - Never auto-promote collected activity to proof of willingness to pay.
 - Still needed: sustained production monitoring and real consumer interviews.
 
-## v2.9 · Phase C · Growth data and effect attribution (this change)
+## v2.9 · Phase C · Growth data and effect attribution
 
 - Growth metric model covering impressions, visits, interest, trials, activation, retention, revenue, refunds and costs, linked at campaign / channel / content levels.
 - Provenance labels distinguish manual entry, external import, API fetch and Owner-verified records; dedup by source key + fingerprint, revisions and retractions preserve original rows, and every mutation is auditable.
 - Time-window trends and channel comparisons treat missing data as Unknown (never zero); conversion rates are computed only after numerator/denominator caliber checks and are withheld with a reason otherwise.
 - Channel/campaign/content comparisons are labeled recorded associations, never causal attribution; third-party analytics integrations stay out of scope this phase.
+
+## v2.10 · Phase D · Opportunity retrospective and decisions (this change)
+
+- Periodic opportunity reviews against the ORIGINAL approved hypothesis: every review snapshots baseline r1 and the current baseline, so later revisions never rewrite past decisions.
+- Reviews aggregate delivery acceptance, user observations / counter-evidence / uncertainty, published-feedback records, actual revenue and cost, approved-budget consumption and window anomalies; missing data stays Unknown (never zero) and no completion percentage or "validated" verdict is produced.
+- Insufficient validation, unexplained data anomalies, unresolved risks, budget overruns and unassessed stop conditions are flagged automatically; stop conditions stay a human judgment recorded on the review.
+- Continue / adjust / pause / stop alternatives are always presented with explicit preconditions; project state changes (pause, stop, resume-on-continue) execute only after the Owner's explicit confirmation, and evidence-level blockers require acknowledging open risks first.
+- Built on the v2.8 evidence-based investment review (experiment-decision.mjs), which now also tracks budget consumption against the approved baseline; decision reason, evidence summary, timestamp and baseline revision are archived on the review record and in the event log.
