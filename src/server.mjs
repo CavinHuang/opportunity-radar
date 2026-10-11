@@ -66,7 +66,109 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
     if(pathname==='/api/sources/diagnostics'&&req.method==='GET')return send(res,200,sourceDiagnostics(store,{limit:u.searchParams.get('limit')??8}));
-    const retry=/^\\/api\\/sources\\/([^/]+)\\/retry$/.exec(pathname);
+    const retry=new RegExp('^/api/sources/([^/]+)/retry
+    if(retry&&req.method==='POST')return send(res,200,{result:await retryFailedFeed(store,retry[1],await body(req))});
+    if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
+    if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
+    const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
+    if(source&&req.method==='PATCH')return send(res,200,{item:editFeed(store,source[1],await body(req))});
+    if(pathname==='/api/signals'&&req.method==='GET'){
+      const result=querySignals(store,{status:u.searchParams.get('status')||'all',sourceId:u.searchParams.get('source_id')||'',keyword:u.searchParams.get('q')||'',offset:Number(u.searchParams.get('offset')||0),limit:Number(u.searchParams.get('limit')||30)});
+      return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
+    }
+    if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/signals/scan'&&req.method==='POST'){
+      const data=await body(req);return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
+    }
+    const triage=/^\/api\/signals\/([^/]+)\/triage$/.exec(pathname);
+    if(triage&&req.method==='POST')return send(res,200,{item:triageSignal(store,triage[1],await body(req))});
+    const importing=/^\/api\/signals\/([^/]+)\/import$/.exec(pathname);
+    if(importing&&req.method==='POST'){
+      const signal=store.get('sources',importing[1]);if(!signal)return send(res,404,{error:'NOT_FOUND'});
+      if(signal.status==='converted')return send(res,409,{error:'SIGNAL_CONVERTED',message:'该来源已关联过机会，不会重复导入'});
+      const data=await body(req);
+      const result=store.transaction(()=>{
+        const item=service.createOpportunity({...data,title:data.title||signal.title,problem:data.problem||signal.description,market:data.market||signal.market||'待判断',sources:[{url:signal.url,quote:signal.description,independent:false,origin:'public_signal'}]});
+        store.put('sources',{...signal,status:'converted',linkedOpportunityId:item.id,triagedAt:new Date().toISOString()},signal.revision);
+        store.event('signal.converted',signal.id,'owner',{opportunityId:item.id});return item;
+      });
+      return send(res,201,{item:result});
+    }
+    const signal=/^\/api\/signals\/([^/]+)\/analyze$/.exec(pathname);
+    if(signal&&req.method==='POST'){
+      const item=store.get('sources',signal[1]);if(!item)return send(res,404,{error:'NOT_FOUND'});
+      return send(res,200,{suggestion:await analyzeSignal(item,{locale:(await body(req)).locale}),source:item});
+    }
+    if(pathname==='/api/agent/setup'&&req.method==='GET'){
+      const projectId=u.searchParams.get('project_id');
+      const project=projectId?service.getFullProject(projectId):null;
+      return send(res,200,agentSetupSummary(projectId,project,{enabled:Boolean(process.env.RADAR_AGENT_TOKEN),tools:service.tools}));
+    }
+    if(pathname==='/api/dashboard'&&req.method==='GET')return send(res,200,{...service.brief(),projects:store.list('projects')});
+    const research=/^\/api\/opportunities\/([^/]+)\/research$/.exec(pathname);
+    if(research&&req.method==='GET')return send(res,200,{report:researchReport(store,research[1])});
+    const reviewEvidence=/^\/api\/opportunities\/([^/]+)\/evidence\/review$/.exec(pathname);
+    if(reviewEvidence&&req.method==='POST')return send(res,200,{item:reviewOpportunityEvidence(store,reviewEvidence[1],await body(req))});
+    if(pathname==='/api/validations/overview'&&req.method==='GET')return send(res,200,{items:validationOverview(store)});
+    const validation=/^\/api\/opportunities\/([^/]+)\/validation$/.exec(pathname);
+    if(validation&&req.method==='GET')return send(res,200,{result:validationSummary(store,validation[1])});
+    if(validation&&req.method==='POST')return send(res,201,{item:createValidationPlan(store,validation[1],await body(req))});
+    const observation=/^\/api\/opportunities\/([^/]+)\/validation\/([^/]+)\/observations$/.exec(pathname);
+    if(observation&&req.method==='POST')return send(res,201,{item:recordValidationObservation(store,observation[1],observation[2],await body(req))});
+    const validationClose=/^\/api\/opportunities\/([^/]+)\/validation\/([^/]+)\/close$/.exec(pathname);
+    if(validationClose&&req.method==='POST')return send(res,200,{item:closeValidationPlan(store,validationClose[1],validationClose[2],await body(req))});
+    if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
+    if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
+    const oppStatus=/^\/api\/opportunities\/([^/]+)\/status$/.exec(pathname);
+    if(oppStatus&&req.method==='POST')return send(res,200,{item:service.changeOpportunityStatus(oppStatus[1],await body(req))});
+    const linkSignal=/^\/api\/signals\/([^/]+)\/link$/.exec(pathname);
+    if(linkSignal&&req.method==='POST'){
+      const data=await body(req);return send(res,200,{item:service.attachSignalToOpportunity(linkSignal[1],data.opportunity_id)});
+    }
+    if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:service.startExperiment(await body(req))});
+    if(pathname==='/api/history'&&req.method==='GET')return send(res,200,{projects:store.list('projects'),ledger:store.list('ledger')});
+    const kickoff=/^\/api\/projects\/([^/]+)\/kickoff$/.exec(pathname);
+    if(kickoff&&req.method==='POST')return send(res,200,service.prepareKickoff(kickoff[1]));
+    const projectFeedback=/^\/api\/projects\/([^/]+)\/feedback$/.exec(pathname);
+    if(projectFeedback&&req.method==='GET')return send(res,200,{result:feedbackOverview(store,projectFeedback[1])});
+    if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
+    const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),events:store.events(0,proj[1]).slice(-50)});}
+    const decision=/^\/api\/projects\/([^/]+)\/decide$/.exec(pathname);
+    if(decision&&req.method==='POST')return send(res,200,{result:service.ownerDecision(decision[1],await body(req))});
+    const generate=/^\/api\/projects\/([^/]+)\/contents\/generate$/.exec(pathname);
+    if(generate&&req.method==='POST')return send(res,200,{draft:await draftLaunchContent(service.getFullProject(generate[1]),await body(req))});
+    const content=/^\/api\/projects\/([^/]+)\/contents$/.exec(pathname);
+    if(content&&req.method==='POST')return send(res,200,{item:service.saveContent(content[1],await body(req))});
+    const review=/^\/api\/projects\/([^/]+)\/contents\/([^/]+)\/review$/.exec(pathname);
+    if(review&&req.method==='POST')return send(res,200,{item:service.reviewContent(review[1],review[2],await body(req))});
+    const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
+    if(ledger&&req.method==='POST')return send(res,201,{item:service.addLedger(ledger[1],await body(req))});
+    const attest=/^\/api\/projects\/([^/]+)\/evidence\/([^/]+)\/attest$/.exec(pathname);
+    if(attest&&req.method==='POST'){
+      const e=store.get('evidence',attest[2]);if(!e||e.projectId!==attest[1])return send(res,404,{error:'NOT_FOUND'});
+      const data=await body(req);if(typeof data.reason!=='string'||data.reason.trim().length<8)return send(res,400,{error:'REASON_REQUIRED',message:'人工核查需要填写具体的可复查理由（至少8个字）'});
+      if(!e.sourceUri)return send(res,409,{error:'SOURCE_REQUIRED',message:'无来源的内容不能通过人工核查'});
+      if(/^https:\/\/github\.com\//i.test(e.sourceUri)||/^github_/i.test(e.type))return send(res,409,{error:'GITHUB_AUTOMATED_CHECK_REQUIRED',message:'GitHub 交付证据必须通过 GitHub API 检查，不允许人工确认绕过 CI'});
+      const item=store.put('evidence',{...e,verificationState:'owner_attested',verificationReason:data.reason,verifiedAt:new Date().toISOString()},e.revision);
+      store.event('evidence.owner_attested',e.id,'owner',{reason:data.reason},e.projectId);return send(res,200,{item});}
+    const verify=/^\/api\/projects\/([^/]+)\/evidence\/([^/]+)\/verify$/.exec(pathname);
+    if(verify&&req.method==='POST'){
+      const e=store.get('evidence',verify[2]);if(!e||e.projectId!==verify[1])return send(res,404,{error:'NOT_FOUND'});
+      const state=await verifyGitHubEvidence(e);
+      const saved=store.put('evidence',{...e,verificationState:state.state,verificationReason:state.reason,checks:state.checks||[],verifiedAt:new Date().toISOString()},e.revision);
+      store.event('evidence.verified',e.id,'system',state,e.projectId);return send(res,200,{item:saved});}
+    return send(res,404,{error:'NOT_FOUND',message:'Unknown endpoint'});
+  }catch(e){console.error(`[${new Date().toISOString()}] ${e.code||'ERROR'}: ${e.message}`);send(res,e.status||500,{error:e.code||'INTERNAL_ERROR',message:e.status?e.message:'服务出现错误，请检查终端日志'});}
+});}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  const server=createServer();
+  server.listen(port,host,()=>console.log(`Opportunity Radar running at http://${host}:${port}\nAgent API ${process.env.RADAR_AGENT_TOKEN?'enabled':'disabled'}`));
+  const scheduler=createSourceScheduler(store);scheduler.start();
+  process.once('SIGINT',()=>{scheduler.stop();server.close();});
+  process.once('SIGTERM',()=>{scheduler.stop();server.close();});
+}
+).exec(pathname);
     if(retry&&req.method==='POST')return send(res,200,{result:await retryFailedFeed(store,retry[1],await body(req))});
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
     if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
