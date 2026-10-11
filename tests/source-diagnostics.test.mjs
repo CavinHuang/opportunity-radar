@@ -25,3 +25,20 @@ test('diagnostic history is bounded, contains durable events, and handles errors
   assert.equal(updated.enabled,false);
  }finally{db.close();}
 });
+
+test('retry requires failing enabled feed and current revision, and resets health after success',async()=>{
+ const db=openDatabase();try{
+  const f=addFeed(db,{url:'https://example.org/rss'});
+  const {retryFailedFeed}=await import('../src/source-hub.mjs');
+  await assert.rejects(retryFailedFeed(db,f.id,{expected_revision:f.revision}),{code:'SOURCE_NOT_FAILING'});
+  await scanSources(db,{dnsLookup,fetchImpl:async()=>response(503)});
+  const failing=db.get('feeds',f.id);
+  await assert.rejects(retryFailedFeed(db,f.id,{expected_revision:f.revision}),{code:'REVISION_CONFLICT'});
+  const disabled=editFeed(db,f.id,{expected_revision:failing.revision,enabled:false});
+  await assert.rejects(retryFailedFeed(db,f.id,{expected_revision:disabled.revision}),{code:'SOURCE_PAUSED'});
+  const enabled=editFeed(db,f.id,{expected_revision:disabled.revision,enabled:true});
+  const result=await retryFailedFeed(db,f.id,{expected_revision:enabled.revision},{dnsLookup,fetchImpl:async()=>response(200,xml)});
+  assert.equal(result.added,1);
+  assert.equal(db.get('feeds',f.id).consecutiveFailures,0);
+ }finally{db.close();}
+});
