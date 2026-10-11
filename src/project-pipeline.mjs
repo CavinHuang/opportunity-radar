@@ -3,6 +3,8 @@ const count=(items,predicate)=>items.filter(predicate).length;
 export function projectPipeline(project){
  const baseline=project.baselines?.at(-1);
  const tasks=(project.tasks||[]).filter(t=>!t.baselineRevision||t.baselineRevision===baseline?.revision);
+ const ownerTasks=project.ownerTasks||[];
+ const ownerTaskCounts=Object.fromEntries(['todo','doing','blocked','done'].map(s=>[s,count(ownerTasks,t=>t.state===s)]));
  const milestones=project.milestones||[],submissions=project.submissions||[],contents=project.contents||[];
  const taskCounts=Object.fromEntries(['open','in_progress','submitted','rework','blocked'].map(s=>[s,count(tasks,t=>t.status===s)]));
  const pendingAcceptance=count(submissions,s=>s.acceptanceState==='pending'&&s.baselineRevision===baseline?.revision);
@@ -15,6 +17,7 @@ export function projectPipeline(project){
  const nextActions=[];
  if(stopped)nextActions.push({kind:'project_state',label:'先确认主实验的暂停或停止状态',tab:'overview'});
  else {
+  if(ownerTaskCounts.blocked)nextActions.push({kind:'owner_blocker',label:'处理人工规划任务中的阻塞',tab:'tasks'});
   if(pendingDecisions)nextActions.push({kind:'decision',label:'处理待批准的 Agent 决策',tab:'agent'});
   if(pendingAcceptance)nextActions.push({kind:'acceptance',label:'审核最新交付与证据后决定验收',tab:'evidence'});
   if(taskCounts.rework)nextActions.push({kind:'rework',label:'跟进被退回的任务',tab:'overview'});
@@ -29,7 +32,7 @@ export function projectPipeline(project){
  }
  if(publications)nextActions.push({kind:'measure',label:'记录真实曝光、访问、试用与收入数据',tab:'ledger'});
  return {baselineRevision:baseline?.revision||null,taskCounts,totalTasks:tasks.length,
-  milestoneCounts:{total:milestones.length,accepted,pending:count(milestones,m=>m.acceptanceState==='pending'),rejected:count(milestones,m=>m.acceptanceState==='rejected')},
+  ownerTaskCounts,ownerTaskTotal:ownerTasks.length,milestoneCounts:{total:milestones.length,accepted,pending:count(milestones,m=>m.acceptanceState==='pending'),rejected:count(milestones,m=>m.acceptanceState==='rejected')},
   pendingAcceptance,pendingDecisions,contentCounts:{drafts,approved:approvals,published:publications},
   // A work-in-progress count is not a credible percent-complete measure.
   progressLabel:`${accepted}/${milestones.length} 里程碑已人工验收`,
