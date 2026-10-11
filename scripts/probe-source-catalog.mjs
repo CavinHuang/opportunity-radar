@@ -3,7 +3,7 @@ import {openDatabase} from '../src/db.mjs';
 import {CATALOG,installCatalogFeed} from '../src/source-catalog.mjs';
 import {scanSources} from '../src/source-hub.mjs';
 
-const ids=(process.env.PROBE_CATALOG_IDS||'v2ex-qna,ask-hn,superuser').split(',').map(s=>s.trim()).filter(Boolean).slice(0,20);
+const ids=(process.env.PROBE_CATALOG_IDS||'v2ex-qna,ask-hn,superuser').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30);
 const reports=[];
 for(const id of ids){
  const item=CATALOG.find(x=>x.id===id);

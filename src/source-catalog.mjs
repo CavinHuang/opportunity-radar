@@ -24,7 +24,19 @@ export const CATALOG=Object.freeze([
 {id:'se-mechanics',title:'Mechanics · 汽车养护问题',url:'https://mechanics.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'车主故障与养护描述具体且高频',caution:'硬件维修难软件化；各地法规与车型差异大'},
 {id:'se-cooking',title:'Seasoned Advice · 烹饪问题',url:'https://cooking.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'厨房场景的具体问题与工具摩擦',caution:'与软件机会的关联较弱，需人工筛选'},
 {id:'se-interpersonal',title:'Interpersonal Skills · 人际沟通问题',url:'https://interpersonal.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'沟通与协作场景的真实困境',caution:'多为软性问题，产品化路径不直接'},
-{id:'habr-best',title:'Хабр · 俄语区最佳发布',url:'https://habr.com/ru/rss/best/daily/',market:'International',language:'ru-RU',class:'firsthand_candidate',quality:'medium',intervalMinutes:1440,reason:'俄语区技术社区的用户体验复盘与工具实践',caution:'编辑聚合偏科技职业人群；不是消费者问答社区'}
+{id:'habr-best',title:'Хабр · 俄语区最佳发布',url:'https://habr.com/ru/rss/best/daily/',market:'International',language:'ru-RU',class:'firsthand_candidate',quality:'medium',intervalMinutes:1440,reason:'俄语区技术社区的用户体验复盘与工具实践',caution:'编辑聚合偏科技职业人群；不是消费者问答社区'},
+// Global wave 3 (v2.16): recommendation-request sites are the most direct
+// tool-gap signal; gear domains, workplace friction, and Chinese/Spanish
+// language coverage. Same firsthand-candidate bar throughout.
+{id:'softwarerecs',title:'Software Recommendations · 软件求荐',url:'https://softwarerecs.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'high',intervalMinutes:720,reason:'整站都是「我在找能做 X 的工具」——最直接的工具缺口信号',caution:'提问不等于付费意愿；部分需求已有成熟方案'},
+{id:'hardwarerecs',title:'Hardware Recommendations · 硬件求荐',url:'https://hardwarerecs.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'high',intervalMinutes:720,reason:'硬件选型困惑直接暴露产品缺口',caution:'硬件供给链重，个人机会多在配套软件与服务层'},
+{id:'se-photo',title:'Photography · 摄影问题',url:'https://photo.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'摄影器材与后期流程是强消费域',caution:'器材党偏多； Gear 讨论未必指向未满足需求'},
+{id:'se-bicycles',title:'Bicycles · 骑行问题',url:'https://bicycles.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'骑行装备、维护与训练的真实问题',caution:'本地化维修场景多，软件机会偏配套'},
+{id:'se-outdoors',title:'The Great Outdoors · 户外问题',url:'https://outdoors.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'露营徒步等户外装备与安全决策问题',caution:'安全类话题需克制，不能拿安全痛点做营销'},
+{id:'se-gardening',title:'Gardening · 园艺问题',url:'https://gardening.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'家庭园艺的场景与工具摩擦',caution:'季节性与地域气候差异大'},
+{id:'se-workplace',title:'Workplace · 职场问题',url:'https://workplace.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'职场协作与流程摩擦是工具机会的重要来源',caution:'员工视角偏多；涉雇佣敏感话题需克制'},
+{id:'sspai',title:'少数派 · 产品体验',url:'https://sspai.com/feed',market:'中国大陆',language:'zh-CN',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'中文世界少见的高质量产品使用体验写手社区',caution:'编辑部内容为作者视角，不是问答式消费者证言'},
+{id:'es-stackoverflow',title:'Stack Overflow en Español',url:'https://es.stackoverflow.com/feeds',market:'International',language:'es',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'西语开发者问答，首个西语覆盖源',caution:'偏开发人群；与英文 SO 主题重叠'}
 ]);
 export function catalogList(store){
  const feeds=store.list('feeds');
