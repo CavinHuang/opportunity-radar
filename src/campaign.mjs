@@ -7,8 +7,9 @@ const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,sta
 const clean=(v,max=500)=>String(v??'').trim().slice(0,max);
 const now=()=>new Date().toISOString();
 const CAMPAIGN_STATUSES=['active','completed','cancelled'];
-// Metrics attributed per campaign through contentId → content.campaignId. Only
-// actual===true ledger entries count; an unrecorded metric stays null (unknown),
+// Metrics attributed per campaign through the campaignId snapshot each ledger entry
+// records at entry time (legacy entries fall back to the content's current campaign).
+// Only actual===true ledger entries count; an unrecorded metric stays null (unknown),
 // never zero — matching the experiment-decision honesty rules.
 const ACTUAL_METRICS=['impressions','visits','trials','activation','income','refund','transaction_fee','service_cost','cash_cost'];
 const nonNegative=(v,name,max=10000000)=>{const n=Number(v);if(!Number.isFinite(n)||n<0||n>max)throw fail('BAD_REQUEST',name+' 必须是 0 到 '+max+' 之间的数字');return n;};
@@ -165,15 +166,24 @@ export function campaignOverview(store,project,{now:nowOverride}={}){
    approved:owned.filter(x=>x.reviewState==='approved').length,
    published:owned.filter(x=>x.reviewState==='published').length,
    scheduled:owned.filter(x=>x.plannedAt&&x.reviewState!=='published').length};
-  // Actuals come only from actual===true ledger entries attributed via published content.
-  const entries=ledger.filter(x=>x.actual===true&&x.contentId&&campaignByContent.get(x.contentId)===c.id);
+  // Actuals come from actual===true ledger entries only. Each entry snapshots the
+  // campaign at recording time, so moving a content between campaigns afterwards
+  // cannot rewrite a closed campaign's actuals; entries recorded before the snapshot
+  // (no campaignId field on legacy records) fall back to the content's current
+  // attribution. An entry stays counted once recorded — even if the content is later
+  // edited back to draft — because it was valid against a published record at the time.
+  const entries=ledger.filter(x=>{
+   if(x.actual!==true||!x.contentId)return false;
+   if(Object.hasOwn(x,'campaignId'))return x.campaignId===c.id;
+   return campaignByContent.get(x.contentId)===c.id;
+  });
   const actuals={};
   for(const type of ACTUAL_METRICS){
    const rows=entries.filter(x=>x.type===type);
    actuals[type]=rows.length?rows.reduce((sum,x)=>sum+Number(x.value||0),0):null;
   }
   return {...c,contentCounts,actuals,
-   actualsNote:'仅统计 actual=true 且按内容归因到本活动的账本记录；未记录的指标为未知，不当作零，也不代表市场结果。'};
+   actualsNote:'仅统计 actual=true 的账本记录；归因按录入时快照的活动归属（快照之前的旧记录按内容当前归属），内容事后移动不追溯改写已完成活动；未记录的指标为未知，不当作零，也不代表市场结果。'};
  });
  return {projectId:project.id,generatedAt:generatedAt.toISOString(),today,
   campaigns:decorated,calendar,

@@ -334,6 +334,7 @@ const en = {
  '宣发日历':'Promotion calendar','今日计划':'Due today','即将到来':'Upcoming','已发布':'Published',
  '未归属活动':'Not assigned to a campaign','活动已取消，不再提醒':'Campaign cancelled; reminders stopped','活动已完成':'Campaign completed',
  '登记发布':'Record publication',
+ '需先完成事实与隐私审核，才能登记发布':'Review facts & privacy first to record publication',
  '还没有宣发活动。活动只用于组织内容、记录预算与排期；系统绝不代发到外部平台。':'No campaigns yet. Campaigns organize content, budget and schedules; the system never posts to external platforms.',
  '暂无排期中的内容。先起草内容，再用“设置排期”安排发布时间。':'Nothing scheduled yet. Draft content first, then use “Set Schedule” to plan a publish time.',
  '到期提醒基于内容排期与本机日历日；缺失或已取消的活动不再提醒，但条目保留可见。':'Due hints come from content schedules and the local calendar day; cancelled campaigns stop reminding, but entries stay visible.',

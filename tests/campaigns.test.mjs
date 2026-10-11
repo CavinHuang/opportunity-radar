@@ -181,6 +181,40 @@ test('campaign lifecycle: adjust fence, cancel reason, completion freeze and ret
  }finally{db.close();}
 });
 
+test('ledger attribution snapshots the campaign at entry time; later content moves never rewrite closed campaigns',()=>{
+ const {db,s,p}=setup();try{
+  const c1=createCampaign(db,p.id,{name:'活动一',goal:'目标一',channels:['blog']});
+  const c2=createCampaign(db,p.id,{name:'活动二',goal:'目标二',channels:['community']});
+  const a=s.saveContent(p.id,{title:'A',body:'B',objective:'O',channel:'blog',campaignId:c1.id});
+  s.reviewContent(p.id,a.id,{action:'approve',factsChecked:true,privacyChecked:true});
+  s.reviewContent(p.id,a.id,{action:'publish_record',url:'https://example.com/a'});
+  const entry=s.addLedger(p.id,{type:'visits',value:8,contentId:a.id,actual:true});
+  assert.equal(entry.campaignId,c1.id); // snapshot recorded at entry time
+  // moving the content to another campaign afterwards does not rewrite history
+  const moved=s.saveContent(p.id,{id:a.id,expected_revision:db.get('contents',a.id).revision,title:'A',body:'B',objective:'O',channel:'blog',campaignId:c2.id});
+  assert.equal(moved.campaignId,c2.id);
+  let overview=campaignOverview(db,s.getFullProject(p.id));
+  assert.equal(overview.campaigns.find(x=>x.id===c1.id).actuals.visits,8);
+  assert.equal(overview.campaigns.find(x=>x.id===c2.id).actuals.visits,null);
+  // an entry recorded while the content was published stays counted even after the
+  // content is edited back to draft — and it stays attributed to the campaign recorded
+  // at entry time (c1), never re-attributed to the content's current campaign.
+  const edited=s.saveContent(p.id,{id:a.id,expected_revision:db.get('contents',a.id).revision,title:'A2',body:'B',objective:'O',channel:'blog'});
+  assert.equal(edited.reviewState,'draft');
+  overview=campaignOverview(db,s.getFullProject(p.id));
+  assert.equal(overview.campaigns.find(x=>x.id===c1.id).actuals.visits,8);
+  assert.equal(overview.campaigns.find(x=>x.id===c2.id).actuals.visits,null);
+  // legacy entries without the snapshot field (recorded before this fix) attribute
+  // via the content's current campaign — old data keeps working without rewrite.
+  db.put('ledger',{...entry,campaignId:undefined},entry.revision);
+  const storedLegacy=db.get('ledger',entry.id);
+  assert.equal(Object.hasOwn(storedLegacy,'campaignId'),false);
+  overview=campaignOverview(db,s.getFullProject(p.id));
+  assert.equal(overview.campaigns.find(x=>x.id===c2.id).actuals.visits,8); // fallback: content now belongs to c2
+  assert.equal(overview.campaigns.find(x=>x.id===c1.id).actuals.visits,null);
+ }finally{db.close();}
+});
+
 test('completion freezes the campaign; actuals aggregate only real ledger attributed through published content',()=>{
  const {db,s,p}=setup();try{
   const c=createCampaign(db,p.id,{name:'活动',goal:'目标',channels:['blog']});
