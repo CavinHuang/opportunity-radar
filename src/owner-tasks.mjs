@@ -38,5 +38,5 @@ export function ownerTaskHistory(store,projectId,taskId,{limit=30}={}){
  const task=store.get('owner_tasks',taskId);
  if(!task||task.projectId!==projectId)throw fail('NOT_FOUND','任务不存在',404);
  const n=Number(limit);if(!Number.isInteger(n)||n<1||n>100)throw fail('BAD_REQUEST','limit must be 1–100');
- return store.events(0,projectId).filter(e=>e.entity_id===taskId&&e.kind.startsWith('owner_task.')).slice(-n).reverse();
+ return store.db.prepare("SELECT seq,project_id,kind,entity_id,actor,detail,created_at FROM events WHERE project_id=? AND entity_id=? AND kind LIKE 'owner_task.%' ORDER BY seq DESC LIMIT ?").all(projectId,taskId,n).map(e=>({...e,detail:JSON.parse(e.detail)}));
 }
