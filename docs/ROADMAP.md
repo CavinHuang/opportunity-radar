@@ -77,3 +77,11 @@
 - Owner creation endpoints (`POST /api/opportunities`, `/api/experiments`, campaigns, ledger) accept an optional `Idempotency-Key` header: same key + same method/path/body replays the first response, same key + different body is a 409, and no header keeps the old behavior so deliberately repeated ledger entries stay possible. Negative coverage in `tests/security-hardening.test.mjs`.
 - Removed the unreferenced `scanFeeds` helper (plain `fetch`, no DNS pinning / private-network checks) so it cannot be reintroduced as an SSRF bypass; all real feed fetching keeps going through pinned-https.
 - Frontend rendering degrades instead of crashing on malformed stored data: signal source hostnames go through a `safeHostname()` guard and history rows tolerate a project without baselines.
+
+## v2.13 · Real-browser walkthrough fixes
+
+- A scripted real-browser walkthrough of the whole journey (task board → campaign/content/publish → growth → review → archive) found one real cross-phase seam: actual ledger entries never reached the growth model, so the growth page and the review's in-window growth section stayed Unknown forever. Actual ledger entries now mirror into `growth_metrics` inside the same transaction (provenance `manual_entry`, dedupKey `ledger:<id>`, per-project「结果账本」bucket channel); unmapped calibers (reuse, transaction_fee, service_cost, hours, brand, learning) intentionally do not mirror. A backfill on database open upgrades pre-existing ledgers idempotently; rows that cannot validate are recorded as events, never silently dropped.
+- `store.transaction` is now re-entrant, so owner writes wrapped in the idempotency key transaction keep working when the handler opens its own transaction (latent breakage found by reasoning, covered by the idempotent ledger test).
+- Content card status line no longer tells published items "尚未完成发布审核" (adds 已发布并登记 state, bilingual).
+- Task state-timeline dialog no longer prints "持续 进行中" for the ongoing segment (now 持续中（尚未结束）).
+- browser-smoke.py now covers the new surfaces end-to-end: human task creation, campaign → content → owner review → manual publish registration, growth window totals and the periodic-review entry point.

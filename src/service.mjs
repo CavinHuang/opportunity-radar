@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import {approvedResearchBasis} from './delivery-trace.mjs';
 import {currentDiscoveryGroup} from './discovery.mjs';
+import {hasLedgerMirror,mirrorLedgerMetric} from './growth.mjs';
 
 const now=()=>new Date().toISOString();
 const err=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
@@ -242,11 +243,16 @@ export function createService(store, options={}){
     }
     throw err('BAD_REQUEST','unknown content action');}
   function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
+   return store.transaction(()=>{
     const contentId=data.contentId||null;let campaignId=null;
     // Review fix: the campaign attribution is snapshotted at recording time, so moving
     // a content between campaigns later cannot rewrite a closed campaign's actuals.
     if(contentId){const content=get('contents',contentId);if(content.projectId!==id||content.reviewState!=='published')throw err('BAD_CAMPAIGN_REF','只能关联当前项目已经登记发布的内容',409);campaignId=content.campaignId||null;}
-    const entry=store.put('ledger',{id:randomUUID(),projectId:id,contentId,campaignId,type:data.type,value:nonNegative(data.value,'value'),unit:data.unit||(['user_hours','agent_hours'].includes(data.type)?'h':['income','refund','transaction_fee','service_cost','cash_cost'].includes(data.type)?'CNY':'count'),source:data.source||'manual_unverified',actual:data.actual===true,notes:data.notes||'',at:now(),createdAt:now()});event('ledger.recorded',entry.id,owner,{type:entry.type,value:entry.value,actual:entry.actual,campaignId},id);return entry;}
+    const entry=store.put('ledger',{id:randomUUID(),projectId:id,contentId,campaignId,type:data.type,value:nonNegative(data.value,'value'),unit:data.unit||(['user_hours','agent_hours'].includes(data.type)?'h':['income','refund','transaction_fee','service_cost','cash_cost'].includes(data.type)?'CNY':'count'),source:data.source||'manual_unverified',actual:data.actual===true,notes:data.notes||'',at:now(),createdAt:now()});event('ledger.recorded',entry.id,owner,{type:entry.type,value:entry.value,actual:entry.actual,campaignId},id);
+    // Actual entries of mapped calibers become growth metrics in the same
+    // transaction, so the growth page and the ledger can never disagree.
+    if(hasLedgerMirror(entry))mirrorLedgerMetric(store,id,entry);
+    return entry;});}
   function summaryLedger(entries){const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
 
   function tool(name,p={}){
