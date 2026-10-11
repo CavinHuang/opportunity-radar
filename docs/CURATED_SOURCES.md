@@ -1,4 +1,4 @@
-# Curated sources · v0.9
+# Curated sources · v0.10
 
 Updated: 2026-10-11. **A documented feed address is not proof it is reachable in your network. Feed posts are not proof of consumer demand.**
 
@@ -25,10 +25,17 @@ Updated: 2026-10-11. **A documented feed address is not proof it is reachable in
 | se-parenting | Parenting | https://parenting.stackexchange.com/feeds | International | High-friction everyday family scenarios; child-privacy topics need stricter de-identification |
 | se-diy | Home Improvement | https://diy.stackexchange.com/feeds | International | Concrete home and repair pain points; hardware problems rarely become software |
 | lobsters | Lobsters | https://lobste.rs/rss | International | High signal-to-noise tech discussion and tool friction; link aggregation with a technical-crowd skew |
+| se-travel | Travel | https://travel.stackexchange.com/feeds | International | Visa, gear and itinerary friction; clear consumer-purchase domains | 
+| se-pets | Pets | https://pets.stackexchange.com/feeds | International | Concrete pet-owner care problems; health questions belong to vets, not product evidence |
+| se-fitness | Fitness | https://fitness.stackexchange.com/feeds | International | Training, gear and habit friction; person-dependent advice and marketing noise |
+| se-mechanics | Mechanics | https://mechanics.stackexchange.com/feeds | International | Specific car-owner fault and maintenance descriptions; hardware rarely becomes software |
+| se-cooking | Seasoned Advice | https://cooking.stackexchange.com/feeds | International | Concrete kitchen-scene questions; weak link to software opportunities |
+| se-interpersonal | Interpersonal Skills | https://interpersonal.stackexchange.com/feeds | International | Real communication and collaboration dilemmas; soft problems with indirect product paths |
+| habr-best | Хабр (best daily) | https://habr.com/ru/rss/best/daily/ | International (ru-RU) | Russian-language tech community write-ups; editorially aggregated, not a consumer Q&A |
 
 See V2EX official feed pattern: https://blog.v2ex.com/rss/ and Stack Exchange RSS endpoints above.
 
-**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Indie Hackers discontinued its public RSS (`/feed.rss` and alternatives return 404 as of 2026-10-11). Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
+**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Indie Hackers discontinued its public RSS (`/feed.rss` and alternatives return 404 as of 2026-10-11). Ask MetaFilter returns 403 to non-browser agents, so server-side fetching is not durable. Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
 
 ## Verified public availability — GitHub runner, 2026-10-10
 
