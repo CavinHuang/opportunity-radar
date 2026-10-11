@@ -20,20 +20,9 @@ export function parseFeed(xml,source){
     return {id,title,description,author,url,feed:source,publishedAt,createdAt:new Date().toISOString(),status:'signal_only'};
   }).filter(Boolean);
 }
-export async function scanFeeds(store,feedUrls=configuredFeeds()){
-  const results={feeds:feedUrls.length,received:0,added:0,errors:[]};
-  for(const feed of feedUrls){
-    try{
-      const r=await fetch(feed,{signal:AbortSignal.timeout(8000),headers:{'User-Agent':'OpportunityRadar/0.1 (personal RSS reader)','Accept':'application/atom+xml,application/rss+xml,application/xml,text/xml'}});
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const size=Number(r.headers.get('content-length')||0);if(size>1024*1024)throw new Error('Feed exceeds 1 MB limit');
-      const xml=(await r.text()).slice(0,1024*1024);
-      const parsed=parseFeed(xml,feed);results.received+=parsed.length;
-      for(const item of parsed)if(!store.get('sources',item.id)){store.put('sources',item);results.added++;}
-    }catch(e){results.errors.push({feed,error:e.message});}
-  }
-  return results;
-}
+// (The old scanFeeds helper — plain fetch without DNS pinning or private-network
+// checks — was removed: it was unreferenced, and reusing it would bypass the
+// pinned-https SSRF protections that all real feed fetching goes through.)
 // Optional LLM is only a drafting assistant. Suggestions are never promoted or approved automatically.
 export async function analyzeSignal(signal,{baseUrl=process.env.RADAR_LLM_BASE_URL,apiKey=process.env.RADAR_LLM_API_KEY,model=process.env.RADAR_LLM_MODEL,locale='zh-CN'}={}){
   if(!baseUrl||!apiKey||!model)throw Object.assign(new Error('尚未配置可用的模型提供商，请先设置 RADAR_LLM_*'),{status:503,code:'LLM_NOT_CONFIGURED'});
