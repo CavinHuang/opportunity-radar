@@ -391,6 +391,8 @@ const en = {
  '正在加载数据':'Loading data',
  '正在从本机 SQLite 读取机会、来源与实验状态；首次加载完成后这里会显示真实数据，不填充演示内容。':'Reading opportunities, sources and experiment state from local SQLite. Real data appears after the first load — demo content is never filled in.',
  '加载失败':'Load failed',
+ '数据尚未加载':'Data not loaded yet',
+ '服务或网络不可用时，不显示任何统计，也不会把未加载的数据当作零或空库。确认服务正在运行后，点击上方「重试加载」。':'While the service or network is unavailable, no statistics are shown; unloaded data is never treated as zero or an empty library. Confirm the service is running, then use “Retry” above.',
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [

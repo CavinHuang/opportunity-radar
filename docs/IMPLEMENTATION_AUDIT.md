@@ -31,6 +31,7 @@ Branch basis: `feat/v2.9-phase-e-reliability`（基于 main @ 3880ed2，Phase D�
 **本阶段补齐**（`src/server.mjs`）：
 - Owner 键与 Agent Bearer 令牌改为**常数时间比较**（`timingSafeEqual`，长度不一致时同样走等长哑比较以抹平计时差）。
 - `/api/signals/scan` 对 `source_id` 增加字符串类型校验（非字符串 400），避免把对象/数字透传进扫描管道。
+- **有界分页的范围如实说明**：带 limit/offset 校验的是 signals、来源诊断、任务历史、增长历史/报告窗口；`/api/opportunities`、`/api/history`、`/api/sources`、`/api/validations/overview`、`/api/discovery/clusters` 等按单机单人设计仍为全量返回、未分页，本阶段未改变也不宣称已分页。
 
 **验证**：`tests/phase-e-http-e2e.test.mjs` 用例 1 的边界段：401（错误 Owner/Agent 令牌）、403 `ORIGIN_DENIED`、400 `BAD_JSON`、413 `PAYLOAD_TOO_LARGE`、`limit=0`/`limit=99`/`offset=-5`/`source_id:123` 均 400。全套件 194/194 通过（`npm test`）。
 
@@ -50,11 +51,11 @@ Branch basis: `feat/v2.9-phase-e-reliability`（基于 main @ 3880ed2，Phase D�
 
 **本阶段补齐**（`public/app.js`、`public/style.css`、`public/i18n.js`）：
 - **首次加载态**：数据未到达时显示「正在加载数据」面板，不再把未加载渲染成“空数据”。
-- **错误恢复态**：页面加载失败显示持横幅错误卡（含原始错误信息、明示“数据保存在本机 SQLite，不会因此丢失”、重试按钮 `retry-load`）；首次失败不再只靠 3 秒即逝的 toast。
+- **错误恢复态**：页面加载失败显示持横幅错误卡（含原始错误信息、明示“数据保存在本机 SQLite，不会因此丢失”、重试按钮 `retry-load`）；首次失败不再只靠 3 秒即逝的 toast。**首载失败且没有任何已加载数据时，页面主体只显示中性的「数据尚未加载」占位**，不渲染任何统计数字或首用引导，避免把打不开的旧库误读成空库；未知 ≠ 零的原则同样适用于界面状态。
 - **离线态**：`offline` 事件显示提示横幅（不要重复提交表单），`online` 自动重载；`aria-busy` 标注首载。
 - **操作并发防护**：动作点击加 `S.busy` 双击防护（模态内提交原有禁用逻辑保留）。
 - 导航按钮加 `aria-current="page"`；侧栏版本标注更新为 v2.9。
-- 新增文案均有中英对照（`public/i18n.js` COPY 表，`tests/i18n.test.mjs` 14/14 通过）。
+- 新增文案均有中英对照（`public/i18n.js` COPY 表）；Phase E 新增键在 `tests/i18n.test.mjs` 中有逐条 `translate()` 断言（含首载失败占位文案）。
 
 **未做（如实）**：未引入浏览器端自动化 E2E（无 Chromium 环境）；UI 状态变更以代码审查 + 既有静态资源 HTTP 测试为验证，真实浏览器回归仍需在可访问 localhost 的环境执行。
 
