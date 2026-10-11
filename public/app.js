@@ -125,11 +125,12 @@ const fmtMetricValue=v=>{if(v==null)return t('未知');const n=Number(v);return 
 const growthMetricText=m=>t(GROWTH_LABELS[m]||m);
 function growthValueSpans(values){return GROWTH_METRIC_IDS.filter(k=>values[k]!=null).map(k=>`<span>${esc(growthMetricText(k))} ${esc(fmtMetricValue(values[k]))}</span>`).join('<span class="muted"> · </span>')||`<span>${esc(t('本窗口无登记数据'))}</span>`;}
 function growthRateLine(r){
+  const pair=`${esc(growthMetricText(r.numerator))}/${esc(growthMetricText(r.denominator))}`;
   if(r.rate==null){
     const reason={unknown_data:t('数据不足（未知）'),zero_denominator:t('分母明确为零'),caliber_inconsistent:t('口径不一致：分子大于分母')}[r.reason]||r.reason;
-    return `${esc(r.numerator)}/${esc(r.denominator)} · ${esc(reason)}`;
+    return `${pair} · ${esc(reason)}`;
   }
-  return `${esc(r.numerator)}/${esc(r.denominator)} ${esc((r.rate*100).toFixed(1))}%${r.provenanceMixed?` · ${esc(t('分子分母来源可信度不同'))}`:''}`;
+  return `${pair} ${esc((r.rate*100).toFixed(1))}%${r.provenanceMixed?` · ${esc(t('分子分母来源可信度不同'))}`:''}`;
 }
 function growthRateSummary(rows){
   const shown=rows.filter(r=>r.rate!=null).map(r=>growthRateLine(r));
@@ -145,7 +146,7 @@ function renderGrowthPanel(p){
   const campaignName=id=>ov.campaigns.find(c=>c.id===id)?.name||'未知活动';
   const windowForm=`<form id="growth-window-form" class="source-controls"><label class="subtext" for="growth-from">开始日期</label><input id="growth-from" name="from" type="date" value="${esc(win.from)}"/><label class="subtext" for="growth-to">结束日期</label><input id="growth-to" name="to" type="date" value="${esc(win.to)}"/><label class="subtext" for="growth-granularity">趋势粒度</label><select id="growth-granularity" name="granularity"><option value="day" ${win.granularity==='day'?'selected':''}>按天</option><option value="week" ${win.granularity==='week'?'selected':''}>按周</option></select><button type="submit" class="btn btn-sm">应用窗口</button></form>`;
   const totals=`<div class="source-quality-stats">${GROWTH_METRIC_IDS.map(k=>`<div><strong>${esc(fmtMetricValue(rp.totals[k]))}</strong><small>${esc(growthMetricText(k))}</small></div>`).join('')}</div>
-  <p class="subtext">窗口 ${esc(rp.window.from)} 至 ${esc(rp.window.to)}。缺失指标显示为未知，不按零计算；金额与计数分开统计。</p>`;
+  <p class="subtext">窗口 ${esc(rp.window.from)} 至 ${esc(rp.window.to)}（按 UTC 日界）。缺失指标显示为未知，不按零计算；金额与计数分开统计。</p>`;
   const conversions=`<div class="small-title" style="margin-top:14px">整体转化率（项目范围）</div>
   ${rp.conversions.map(r=>`<p class="subtext">${growthRateLine(r)}</p>`).join('')}
   <p class="subtext">转化率只在同窗口、同范围内计算，且要求分子是分母的下游计数层级；只代表登记数据的相关性，不是因果归因。金额指标不参与转化率。</p>`;
@@ -160,7 +161,7 @@ function renderGrowthPanel(p){
   ${!rp.anomalies.explained.length&&!rp.anomalies.unexplained.length?`<p class="subtext">${esc(t('本窗口没有需要说明的异常'))}</p>`:''}</div>`;
   const records=`<div class="section-heading"><h2>登记数据</h2><span>最新 ${ov.latest.length} 条 · 人工录入、外部导入、API 获取与已核验分开标注</span></div>
   ${ov.latest.length?ov.latest.map(m=>`<div class="source-row"><div class="grow"><div class="flex"><strong>${esc(growthMetricText(m.metric))} ${esc(fmtMetricValue(m.value))} ${esc(m.unit)}</strong><span class="tag ${m.provenance==='verified'?'':'tag-gray'}">${esc(t(GROWTH_PROVENANCE[m.provenance]||m.provenance))}</span>${m.isAnomaly?`<span class="tag tag-warn">${esc(t('异常'))}</span>`:''}</div>
-  <p class="subtext">${esc(channelName(m.channelId))}${m.campaignId?' · '+esc(campaignName(m.campaignId)):''}${m.contentId?' · '+esc(t('关联已发布内容')):''} · ${esc(m.occurredAt.slice(0,16).replace('T',' '))}${m.revisionNumber>1?' · '+esc(t('修订版')+' r'+m.revisionNumber):''}</p>
+  <p class="subtext">${esc(channelName(m.channelId))}${m.campaignId?' · '+esc(campaignName(m.campaignId)):''}${m.contentId?' · '+esc(t('关联已发布内容')):''} · ${esc(m.occurredAt.slice(0,16).replace('T',' '))} UTC${m.revisionNumber>1?' · '+esc(t('修订版')+' r'+m.revisionNumber):''}</p>
   ${m.notes?`<p class="subtext" data-i18n-skip>${esc(m.notes)}</p>`:''}</div>
   <div class="source-buttons"><button class="btn btn-sm" data-action="growth-history" data-id="${esc(m.id)}">${esc(t('历史'))}</button><button class="btn btn-sm" data-action="revise-growth-metric" data-id="${esc(m.id)}">${esc(t('修订'))}</button><button class="btn btn-sm" data-action="verify-growth-metric" data-id="${esc(m.id)}">${esc(t('核验'))}</button><button class="btn btn-sm" data-action="retract-growth-metric" data-id="${esc(m.id)}">${esc(t('撤回'))}</button></div></div>`).join(''):`<p class="subtext">${esc(t('本窗口没有登记数据。缺失的数据保持未知，不会当作零。'))}</p>`}`;
   const management=`<div class="section-heading"><h2>渠道与活动</h2><div class="flex"><button class="btn btn-sm" data-action="new-growth-channel">${icon('plus',13)} 新增渠道</button><button class="btn btn-sm" data-action="new-growth-campaign">${icon('plus',13)} 新增活动</button><button class="btn btn-sm btn-primary" data-action="record-growth-metric">${icon('plus',13)} 记录指标</button><button class="btn btn-sm" data-action="import-growth-metrics">粘贴导入</button></div></div>
@@ -536,8 +537,9 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
      field('value','新数值',{required:true,type:'number',min:0,value:m.value})+
      field('occurredAt','新统计时间（含时区）',{required:true,wide:true,value:m.occurredAt})+
      field('notes','新备注',{wide:true,type:'textarea',value:m.notes})+
+     `<div class="field wide"><label><input type="checkbox" name="isAnomaly" ${m.isAnomaly?'checked':''} style="width:auto;margin-right:8px"/>${esc(t('这是需要说明的异常数据'))}</label>${field('anomalyNote','异常说明（勾选后必填）',{value:m.anomalyNote||''})}</div>`+
      field('reason','修订理由（至少10字）',{required:true,wide:true,type:'textarea'}),
-     async d=>await api(`/projects/${encodeURIComponent(p.id)}/growth/metrics/${encodeURIComponent(m.id)}/revise`,{method:'POST',body:{...d,value:Number(d.value)}}));break;}
+     async d=>await api(`/projects/${encodeURIComponent(p.id)}/growth/metrics/${encodeURIComponent(m.id)}/revise`,{method:'POST',body:{...d,value:Number(d.value),isAnomaly:d.isAnomaly==='on'}}));break;}
   case 'retract-growth-metric':modal('撤回错误数据','<div class="field wide"><div class="note-box">撤回不是删除：原记录会保留并标注撤回原因，报告不再计入。</div></div>'+field('reason','撤回理由（至少10字）',{required:true,wide:true,type:'textarea'}),async d=>await api(`/projects/${encodeURIComponent(p.id)}/growth/metrics/${encodeURIComponent(id)}/retract`,{method:'POST',body:d}));break;
   case 'verify-growth-metric':modal('人工核验数据来源','<div class="field wide"><div class="note-box">只在你亲自核对过来源凭证后核验。核验会标注为已核验，并保留人工核验依据；这不等于自动化验证。</div></div>'+field('reason','核验依据（至少8个字，例如核对了哪个后台或凭证）',{required:true,wide:true,type:'textarea'})+field('sourceRef','凭证链接（可选）',{wide:true}),async d=>await api(`/projects/${encodeURIComponent(p.id)}/growth/metrics/${encodeURIComponent(id)}/verify`,{method:'POST',body:d}));break;
   case 'growth-history':{

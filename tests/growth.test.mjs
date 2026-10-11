@@ -66,6 +66,25 @@ test('content links require actually published content of the same project',()=>
  }finally{db.close();}
 });
 
+test('missing or mistyped values are rejected instead of becoming explicit zeros',()=>{
+ const {db,s,p}=setup();try{
+  const ch=createGrowthChannel(db,p.id,{name:'博客'});
+  for(const bad of [null,'',false,[],undefined,'  ']){
+   assert.throws(()=>recordGrowthMetric(db,p.id,{metric:'activation',value:bad,channelId:ch.id,occurredAt:T0}),{code:'BAD_REQUEST'});
+  }
+  assert.equal(growthOverview(db,p.id).counts.active,0);
+  const report=growthReport(db,p.id,WIN);
+  assert.equal(report.totals.activation,null); // Unknown, never a coerced zero
+  assert.equal(rate(report,'activation','trials').reason,'unknown_data'); // not zero_denominator
+  // numeric strings from paste imports are accepted; explicit zero strings stay zero
+  assert.equal(recordGrowthMetric(db,p.id,{metric:'activation',value:'7',channelId:ch.id,occurredAt:T0}).value,7);
+  assert.equal(recordGrowthMetric(db,p.id,{metric:'trials',value:'0',channelId:ch.id,occurredAt:T0,dedupKey:'zero-str'}).value,0);
+  // the report labels its UTC day-boundary caliber
+  assert.equal(report.window.timezone,'UTC');
+  assert.ok(report.caveats.some(c=>c.includes('UTC')));
+ }finally{db.close();}
+});
+
 test('duplicates are rejected with an explicit escape hatch, not silently merged',()=>{
  const {db,s,p}=setup();try{
   const ch=createGrowthChannel(db,p.id,{name:'博客'});

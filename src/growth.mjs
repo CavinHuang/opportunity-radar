@@ -56,9 +56,20 @@ function parseIsoTime(value,label){
  return new Date(ms).toISOString();
 }
 function parseMetricValue(value){
- const n=Number(value);
- if(!Number.isFinite(n)||n<0||n>1e12)throw fail('BAD_REQUEST','指标数值必须是不小于 0 的数字');
- return round4(n);
+ // Missing or mistyped values must never coerce into an explicit zero
+ // (Number(null)/Number('')/Number(false) are all 0). Absent data stays absent.
+ if(typeof value==='number'){
+  if(!Number.isFinite(value)||value<0||value>1e12)throw fail('BAD_REQUEST','指标数值必须是不小于 0 的数字');
+  return round4(value);
+ }
+ if(typeof value==='string'){
+  const s=value.trim();
+  if(!s||!/^[-+]?(\d+(\.\d+)?|\.\d+)$/.test(s))throw fail('BAD_REQUEST','指标数值必须是数字；缺失的数据请直接不录入，不会按零处理');
+  const n=Number(s);
+  if(!Number.isFinite(n)||n<0||n>1e12)throw fail('BAD_REQUEST','指标数值必须是不小于 0 的数字');
+  return round4(n);
+ }
+ throw fail('BAD_REQUEST','指标数值缺失或类型无效；缺失的数据请直接不录入，系统会显示为未知，不会当作零');
 }
 function cleanSourceRef(value,{required=false}={}){
  const s=clean(value,300);
@@ -349,7 +360,7 @@ export function growthReport(store,projectId,{from,to,granularity='day'}={}){
   const ce=entries.filter(e=>e.contentId===cid);
   return {contentId:cid,title:contentTitles.get(cid)||'内容已不存在',entryCount:ce.length,values:valuesOf(ce),conversions:conversionRows(ce)};
  });
- return {projectId,generatedAt:now(),window:{from:fromDay,to:toDay,granularity},
+ return {projectId,generatedAt:now(),window:{from:fromDay,to:toDay,granularity,timezone:'UTC'},
   totals:valuesOf(entries),
   conversions:conversionRows(entries),
   trend:bucketOrder.map(k=>bucketMap.get(k)),
@@ -362,6 +373,7 @@ export function growthReport(store,projectId,{from,to,granularity='day'}={}){
   anomalies:detectAnomalies(entries),
   caveats:[
    '缺失的指标一律显示为未知，不按零计算；零值只代表明确登记为零。',
+   '窗口与趋势分桶按 UTC 日界切分；带本地时区录入的数据按其 UTC 日期归属，与本地日期可能相差一天。',
    '转化率只在相同范围、相同时间窗口内计算，且要求分子是分母的下游计数层级；分子大于分母视为口径不一致并拒绝展示。',
    '渠道、活动与内容级别的对比来自登记关联，只能说明相关性，不能证明因果归因。',
    '人工录入、外部导入、API 获取与已核验数据分别标注；人工核验不等于自动化验证。',
