@@ -179,7 +179,18 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.get_by_text('批准的研究依据').first.wait_for(timeout=8000)
             page.on('dialog',lambda dialog:dialog.accept())
             page.locator('[data-action="prepare-kickoff"]').click()
-            page.get_by_text('已准备首个可领取任务').wait_for(timeout=10000)
+            try:
+                page.get_by_text('已准备首个可领取任务').wait_for(timeout=10000)
+            except Exception:
+                # Dump the page state so a missed confirmation toast is diagnosable.
+                out=ROOT/'artifacts'/'browser-smoke'
+                out.mkdir(parents=True,exist_ok=True)
+                page.screenshot(path=str(out/'kickoff-failure.png'),full_page=True)
+                print('BROWSER ERRORS:',errors,flush=True)
+                print('BROWSER URL:',page.url,flush=True)
+                print('TOAST ROOT:',page.locator('#toast-root').inner_text(),flush=True)
+                print('BROWSER TEXT:',page.locator('body').inner_text()[:3500],flush=True)
+                raise
             assert any(t.get('ownerKickoff') for t in call('/api/projects/'+linked['id'])['tasks'])
             page.locator('[data-tab="agent"]').click()
             page.get_by_text('外部 Agent 同步可信度').first.wait_for(timeout=10000)
