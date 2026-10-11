@@ -43,3 +43,20 @@ test('campaign measurements only reference actually published content in same pr
   assert.ok(other.id);
  }finally{db.close();}
 });
+
+test('manual publication scheduling fences revisions, validates timezone and preserves approval',()=>{
+ const {db,s,o}=setup();try{
+  const p=experiment(s,o);
+  const c=s.saveContent(p.id,{title:'Launch',body:'True information',objective:'Research',channel:'blog',claims:[]});
+  assert.throws(()=>s.scheduleContent(p.id,c.id,{plannedAt:'2028-03-20T12:00:00+08:00',expected_revision:99}),{code:'REVISION_CONFLICT'});
+  assert.throws(()=>s.scheduleContent(p.id,c.id,{plannedAt:'2028-03-20T12:00:00',expected_revision:c.revision}),{code:'BAD_REQUEST'});
+  const approved=s.reviewContent(p.id,c.id,{action:'approve',factsChecked:true,privacyChecked:true});
+  const scheduled=s.scheduleContent(p.id,c.id,{plannedAt:'2028-03-20T12:00:00+08:00',expected_revision:approved.revision});
+  assert.equal(scheduled.reviewState,'approved');
+  assert.equal(scheduled.plannedAt,'2028-03-20T04:00:00.000Z');
+  assert.equal(scheduled.approvedRevision,scheduled.revision);
+  const publication=s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/article'});
+  assert.equal(publication.reviewState,'published');
+  assert.throws(()=>s.scheduleContent(p.id,c.id,{plannedAt:'2028-04-20T12:00:00+08:00',expected_revision:publication.revision}),{code:'CONTENT_ALREADY_PUBLISHED'});
+ }finally{db.close();}
+});

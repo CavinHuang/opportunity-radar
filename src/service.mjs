@@ -174,8 +174,22 @@ export function createService(store, options={}){
     }
     throw err('BAD_REQUEST','unknown decision action');
   }
-  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
+  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,plannedAt:null,scheduledRevision:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
     const c=store.put('contents',{id:randomUUID(),projectId:id,title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),materialRefs:data.materialRefs||[],claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,createdAt:now()});event('content.created',c.id,owner,{},id);return c;}
+  function scheduleContent(id,contentId,data){
+    const p=assertActive(id),c=get('contents',contentId);
+    if(c.projectId!==p.id)throw err('NOT_FOUND','内容不属于当前项目',404);
+    if(data.expected_revision!==c.revision)throw err('REVISION_CONFLICT','内容版本已变化，请刷新',409);
+    if(c.reviewState==='published')throw err('CONTENT_ALREADY_PUBLISHED','已发布内容不能重新排期',409);
+    const plannedAt=required(data.plannedAt,'plannedAt');
+    const parsed=Date.parse(plannedAt);
+    if(!Number.isFinite(parsed)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(plannedAt))throw err('BAD_REQUEST','排期应包含具体日期、时间和时区');
+    if(!/(Z|[+-]\d{2}:\d{2})$/.test(plannedAt))throw err('BAD_REQUEST','排期必须指定时区');
+    if(parsed<Date.now()-60000)throw err('BAD_REQUEST','不能将宣发计划排到过去');
+    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),scheduledRevision:c.revision+1,approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
+    event('content.scheduled',c.id,owner,{plannedAt:updated.plannedAt,revision:updated.revision},id);
+    return updated;
+  }
   function reviewContent(id,contentId,data){const c=get('contents',contentId);if(c.projectId!==id)throw err('NOT_FOUND','content outside project',404);const action=required(data.action,'action');
     if(action==='approve'){
       if(data.privacyChecked!==true||data.factsChecked!==true)throw err('REVIEW_REQUIRED','需要人工确认真实性和隐私审查',409);
@@ -248,5 +262,5 @@ export function createService(store, options={}){
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);
   }
   const tools=['project.get_context','project.get_next_work','project.watch_changes','task.claim','task.upsert','task.transition','task.release','progress.report','evidence.attach','issue.raise_blocker','decision.request','handoff.submit'];
-  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,linkDiscoveryCluster,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
+  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,linkDiscoveryCluster,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,scheduleContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
 }
