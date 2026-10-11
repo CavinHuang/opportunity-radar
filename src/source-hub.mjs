@@ -146,7 +146,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
   if(requested&&feeds.length!==requested.length)throw error('NOT_FOUND','指定的信息源不存在',404);
   if(onlyDue)feeds=feeds.filter(f=>f.enabled&&(!f.nextScanAt||!Number.isFinite(Date.parse(f.nextScanAt))||Date.parse(f.nextScanAt)<=nowMs));
   if(feeds.length>30)throw error('SOURCE_LIMIT','最多扫描 30 个信息源');
-  const result={feeds:feeds.length,received:0,added:0,filtered:0,duplicates:0,notModified:0,errors:[],details:[]};
+  const result={feeds:feeds.length,received:0,added:0,filtered:0,duplicates:0,notModified:0,skipped:0,errors:[],details:[]};
   scansInProgress.add(store);
   try{
     for(const feed of feeds){
@@ -159,6 +159,9 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         // invalid late items must never leave an apparently successful partial import.
         const items=notModified?[]:parseFeed(response.xml,feed.url);
         store.transaction(()=>{
+          const current=store.get('feeds',feed.id);
+          if(!current||current.revision!==feed.revision)
+            throw error('SOURCE_CHANGED','信息源在采集过程中被修改或删除',409);
           received=items.length;
           for(const candidate of items){
             const text=(candidate.title+' '+candidate.description).toLocaleLowerCase();
@@ -177,6 +180,14 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
             itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
         });
       }catch(e){
+        // A concurrent edit/delete invalidates the in-flight snapshot. Never
+        // import signals, overwrite revised scheduling, or mark it as failure.
+        const current=store.get('feeds',feed.id);
+        if(!current||current.revision!==feed.revision){
+          result.skipped++;
+          result.details.push({feedId:feed.id,title:feed.title,received:0,added:0,filtered:0,duplicates:0,notModified:false,skipped:true,error:null});
+          continue;
+        }
         // A failed feed transaction has rolled back all candidate writes.
         // Never report rolled-back rows as successfully imported signals.
         received=0;added=0;filtered=0;duplicates=0;notModified=false;

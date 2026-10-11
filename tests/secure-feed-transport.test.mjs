@@ -180,3 +180,60 @@ test('a timeout still aborts a stalled HTTPS response body after headers were re
  await assert.rejects(pending);
  assert.equal(aborted,true);
 });
+
+test('editing feed keywords mid-request discards stale response without changing health',async()=>{
+ const db=openDatabase();try{
+  const original=addFeed(db,{url:'https://feed.example/rss',keywords:'receipts'});
+  let release,entered;
+  const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+  const pending=scanSources(db,{dnsLookup:dnsPublic,fetchImpl:async()=>{entered();await gate;return okResponse();}});
+  await started;
+  const changed=db.get('feeds',original.id);
+  const edited=(await import('../src/source-hub.mjs')).editFeed(db,original.id,{expected_revision:changed.revision,keywords:'unrelated'});
+  release();
+  const result=await pending;
+  assert.equal(result.skipped,1);
+  assert.equal(result.errors.length,0);
+  assert.equal(result.added,0);
+  assert.equal(db.list('sources').length,0);
+  const final=db.get('feeds',original.id);
+  assert.equal(final.revision,edited.revision);
+  assert.deepEqual(final.keywords,['unrelated']);
+  assert.equal(final.lastCheckedAt,null);
+  assert.equal(final.consecutiveFailures,0);
+ }finally{db.close();}
+});
+test('deleting a feed during network fetch does not resurrect it or create orphan signals',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://feed.example/rss'});
+  let release,entered;
+  const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+  const pending=scanSources(db,{dnsLookup:dnsPublic,fetchImpl:async()=>{entered();await gate;return okResponse();}});
+  await started;
+  db.db.prepare('DELETE FROM records WHERE kind=? AND id=?').run('feeds',feed.id);
+  release();
+  const result=await pending;
+  assert.equal(result.skipped,1);
+  assert.equal(result.errors.length,0);
+  assert.equal(db.get('feeds',feed.id),null);
+  assert.equal(db.list('sources').length,0);
+ }finally{db.close();}
+});
+test('network failure after editing a feed does not overwrite new source settings with stale backoff',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://feed.example/rss'});
+  let release,entered;
+  const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+  const pending=scanSources(db,{dnsLookup:dnsPublic,fetchImpl:async()=>{entered();await gate;throw new Error('connection lost');}});
+  await started;
+  const cur=db.get('feeds',feed.id);
+  const updated=(await import('../src/source-hub.mjs')).editFeed(db,feed.id,{expected_revision:cur.revision,enabled:false});
+  release();
+  const result=await pending;
+  assert.equal(result.skipped,1);
+  assert.equal(result.errors.length,0);
+  assert.equal(db.get('feeds',feed.id).revision,updated.revision);
+  assert.equal(db.get('feeds',feed.id).consecutiveFailures,0);
+  assert.equal(db.get('feeds',feed.id).enabled,false);
+ }finally{db.close();}
+});
