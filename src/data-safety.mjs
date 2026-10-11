@@ -126,6 +126,28 @@ export function restoreDatabase({input,destination,confirmed=false}){
     nextStep:'Stop the running Radar server, set RADAR_DB to this NEW path, then restart. The original DB is preserved.'};
  }finally{rmSync(tmp,{force:true});}
 }
+const EVENT_PRUNE_NOTE='Events are the audit trail. Run a backup first: deleted events are gone from this database for good.';
+/** Explicit, user-initiated audit-trail housekeeping. Nothing is deleted
+ * automatically: a dry run without --confirm only reports what WOULD go, and
+ * --confirm deletes event rows older than the cutoff (ISO date or span like 90d).
+ * records and idem tables are never touched. */
+export function pruneEvents({database=defaultDatabasePath(),before,confirmed=false}){
+ if(!before)throw fail('BEFORE_REQUIRED','--before is required: an ISO date (2026-01-01) or a span like 90d');
+ let cutoffMs;
+ if(/^\d{1,4}d$/.test(String(before).trim()))cutoffMs=Date.now()-Number(String(before).trim().slice(0,-1))*86400000;
+ else cutoffMs=Date.parse(before);
+ if(!Number.isFinite(cutoffMs)||cutoffMs>Date.now())
+  throw fail('BAD_BEFORE','--before must be a past date or a span like 90d');
+ const cutoff=new Date(cutoffMs).toISOString();
+ const db=new DatabaseSync(resolve(database));
+ try{
+  const row=db.prepare('SELECT COUNT(*) AS n,MIN(created_at) AS oldest,MAX(created_at) AS newest FROM events WHERE created_at<?').get(cutoff);
+  if(!confirmed)return {database:resolve(database),cutoff,wouldDelete:Number(row.n),oldest:row.oldest,newest:row.newest,
+    confirmed:false,note:'Dry run. Add --confirm to delete. '+EVENT_PRUNE_NOTE};
+  const result=db.prepare('DELETE FROM events WHERE created_at<?').run(cutoff);
+  return {database:resolve(database),cutoff,deleted:Number(result.changes),confirmed:true,note:EVENT_PRUNE_NOTE};
+ }finally{db.close();}
+}
 export function readinessSummary(store,{ownerProtected=false}={}){
  const feeds=store.list('feeds'),enabled=feeds.filter(x=>x.enabled);
  const opportunities=store.list('opportunities');

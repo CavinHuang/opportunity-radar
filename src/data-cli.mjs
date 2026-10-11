@@ -1,13 +1,13 @@
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,defaultDatabasePath} from './data-safety.mjs';
+import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,defaultDatabasePath,pruneEvents} from './data-safety.mjs';
 
 const err=(code,message)=>Object.assign(new Error(message),{code});
-const supported=new Set(['doctor','backup','verify','restore']);
+const supported=new Set(['doctor','backup','verify','restore','prune-events']);
 export function parseDataCommand(argv){
  const [command,...rest]=argv;
- if(!supported.has(command))throw err('BAD_COMMAND','Use doctor, backup, verify or restore');
- const allowed=new Set(['db','input','output','destination','confirm']);
+ if(!supported.has(command))throw err('BAD_COMMAND','Use doctor, backup, verify, restore or prune-events');
+ const allowed=new Set(['db','input','output','destination','confirm','before']);
  const options={command};
  for(let i=0;i<rest.length;i++){
   const item=rest[i];
@@ -28,6 +28,7 @@ export function runDataCommand(argv){
  }
  if(options.command==='backup')return backupDatabase({database:options.db||defaultDatabasePath(),output:options.output});
  if(options.command==='verify')return verifyBackup({input:options.input});
+ if(options.command==='prune-events')return pruneEvents({database:options.db||defaultDatabasePath(),before:options.before,confirmed:options.confirm===true});
  return restoreDatabase({input:options.input,destination:options.destination,confirmed:options.confirm});
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
