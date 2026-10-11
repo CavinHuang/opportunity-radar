@@ -35,9 +35,13 @@ function validate(db){
   if(item?.id!==r.id||!Number.isInteger(r.revision)||r.revision<1||item.revision!==r.revision)
    throw fail('BACKUP_RECORD_CORRUPT','Application record identity or revision is invalid');
  }
+ // Report which schema version the file was written with (0 = pre-versioning
+ // database). Informational only: both 0 and any current version stay readable.
+ const schemaVersion=Number(db.prepare('PRAGMA user_version').get().user_version||0);
+ const sqliteVersion=String(db.prepare('select sqlite_version() as v').get().v);
  return {counts,totalRecords:Object.values(counts).reduce((a,b)=>a+b,0),
    eventCount:db.prepare('SELECT COUNT(*) AS n FROM events').get().n,
-   schema:'Radar records/events/idem',integrity:'ok'};
+   schema:'Radar records/events/idem',integrity:'ok',schemaVersion,sqliteVersion};
 }
 export function inspectRadarDatabase(path){
  const db=readonly(path);
@@ -62,6 +66,10 @@ export function backupDatabase({database=defaultDatabasePath(),output}){
   const snapshot={format:'opportunity-radar-sqlite-backup',version:1,
     createdAt:new Date().toISOString(),file:basename(target),bytes:statSync(tmp).size,
     sha256,integrity:verified.integrity,counts:verified.counts,eventCount:verified.eventCount,
+    // Engine/schema provenance is recorded so a future restore can tell which
+    // application version may read this file; older manifests without the fields
+    // keep verifying, the fields are never used as a pass/fail gate.
+    schemaVersion:verified.schemaVersion,sqliteVersion:verified.sqliteVersion,
     containsPersonalData:true,
     note:'Unencrypted local copy including private research. Protect and transfer securely. Manifest checksum detects accidental corruption, not malicious modification.'};
   // hard-link is an atomic no-clobber create on the same filesystem.
