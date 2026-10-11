@@ -120,3 +120,63 @@ test('one malformed feed failure does not block a healthy feed from committing',
   assert.equal(db.list('feeds').filter(f=>f.lastSuccessAt!==null).length,1);
  }finally{db.close();}
 });
+
+test('cross-origin redirect never stores or replays the other host ETag',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://primary.example/rss'});
+  let requests=[];
+  const fetchImpl=async(url,opts)=>{
+   requests.push({url,etag:opts.headers['If-None-Match']});
+   if(url==='https://primary.example/rss')
+    return {status:302,headers:new Headers({location:'https://secondary.example/rss'}),body:null};
+   const ok=okResponse();ok.headers.set('etag','"secondary-secret"');return ok;
+  };
+  await scanSources(db,{dnsLookup:dnsPublic,fetchImpl});
+  assert.equal(db.get('feeds',feed.id).etag,null);
+  assert.equal(requests[1].etag,undefined);
+  requests=[];
+  await scanSources(db,{dnsLookup:dnsPublic,fetchImpl});
+  assert.equal(requests[0].etag,undefined);
+  assert.equal(requests[1].etag,undefined);
+  assert.equal(db.get('feeds',feed.id).consecutiveFailures,0);
+ }finally{db.close();}
+});
+test('unexpected 304 after a cross-site redirect never counts as a successful scan',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://primary.example/rss'});
+  const first=await scanSources(db,{dnsLookup:dnsPublic,fetchImpl:async()=>okResponse()});
+  assert.equal(first.errors.length,0);
+  // Populate a validator that belongs strictly to the initial origin.
+  const current=db.get('feeds',feed.id);
+  db.put('feeds',{...current,etag:'"primary-etag"'},current.revision);
+  const redirectFetch=async(url,opts)=>{
+   if(url==='https://primary.example/rss')return {status:302,headers:new Headers({location:'https://secondary.example/rss'}),body:null};
+   assert.equal(opts.headers['If-None-Match'],undefined);
+   return {status:304,headers:new Headers(),body:null};
+  };
+  const result=await scanSources(db,{dnsLookup:dnsPublic,fetchImpl:redirectFetch});
+  assert.equal(result.notModified,0);
+  assert.equal(result.errors.length,1);
+  assert.equal(db.get('feeds',feed.id).consecutiveFailures,1);
+ }finally{db.close();}
+});
+test('a timeout still aborts a stalled HTTPS response body after headers were received',async()=>{
+ const controller=new AbortController();let aborted=false,stream;
+ const fakeRequest=(url,options,onResponse)=>{
+  const req=new EventEmitter();
+  req.end=()=>queueMicrotask(()=>{
+   stream=new PassThrough();stream.statusCode=200;stream.headers={};
+   onResponse(stream); // Intentionally do not finish streaming.
+  });
+  req.destroy=err=>{aborted=true;stream?.destroy(err);req.emit('error',err);};
+  return req;
+ };
+ const result=await pinnedHttpsFetch('https://feed.example/rss',{
+  addresses:[{address:'8.8.8.8',family:4}],signal:controller.signal,requestImpl:fakeRequest
+ });
+ const reader=result.body.getReader();
+ const pending=reader.read();
+ controller.abort();
+ await assert.rejects(pending);
+ assert.equal(aborted,true);
+});
