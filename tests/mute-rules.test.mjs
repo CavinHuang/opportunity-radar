@@ -58,9 +58,33 @@ test('mute rule CRUD over HTTP; scan-muted signals restore; manual entries are n
   assert.equal(del.status,200);
   assert.equal((await call('/api/mute-rules')).data.items.length,0);
   assert.equal((await call('/api/mute-rules/'+created.data.item.id,'DELETE')).status,404);
+
+  // apply-now：owner 显式命令，重新建规则后对整个待研判队列立即生效——
+  // 连手动录入也一并处理（与自动摄入只影响扫描信号不同，这是点击的语义）。
+  await call('/api/mute-rules','POST',{keyword:'招聘'});
+  const seed=async(title)=>(await call('/api/signals/manual','POST',{title,description:'走查合成信号',url:'https://example.org/apply/'+encodeURIComponent(title),market:'中国大陆'})).data.item.id;
+  const convertedSeed=await seed('招聘但先被转换');
+  const match1=await seed('招聘匹配一');
+  const match2=await seed('招聘匹配二');
+  const nomatch=await seed('无关键词的普通信号');
+  const opp=await call('/api/opportunities','POST',{title:'转换目标',problem:'p',market:'m',sources:[{url:'https://example.org/apply/conv'}]});
+  const conv=await call('/api/signals/'+convertedSeed+'/import','POST',{title:'转换目标',problem:'p',market:'m'});
+  assert.equal(conv.status,201);
+  const applied=await call('/api/mute-rules/apply','POST',{});
+  assert.equal(applied.status,200);
+  const sig=async(id)=>(await call('/api/signals?status=all')).data.items.find(x=>x.id===id);
+  assert.equal((await sig(match2)).status,'dismissed');
+  assert.equal((await sig(match2)).muteRule.keyword,'招聘');
+  assert.equal((await sig(nomatch)).status,'new','未命中的待研判信号保持 new');
+  assert.equal((await sig(convertedSeed)).status,'converted','已转换信号不被触碰');
+  assert.equal((await sig(match1)).status,'dismissed');
+  assert.equal((await sig(manual.data.item.id)).status,'dismissed','显式 apply 连手动录入也处理（owner 命令）');
+  const counts=await call('/api/signals?status=all');
+  assert.equal(counts.data.counts.dismissed,4);
  }finally{
   await new Promise(r=>server.close(r));
   closeStore();
   rmSync(dir,{recursive:true,force:true});
  }
 });
+

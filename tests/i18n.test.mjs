@@ -25,6 +25,7 @@ test('navigation, forms, dialogs and accessibility strings translate into Englis
     '已发布并登记':'Published & registered',
     '待研判':'Awaiting triage','批量分诊完成':'Bulk triage done','忽略所选':'Dismiss selected',
     '静音规则':'Mute rules','命中静音规则':'Matched mute rule',
+    '版本历史':'Version history','应用到待研判信号':'Apply to untriaged signals',
     '关闭':'Close',
     'Language / 语言':'Language',
   }))assert.equal(translate(zh,'en-US'),en);

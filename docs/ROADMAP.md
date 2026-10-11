@@ -102,3 +102,8 @@
 - Owner-defined mute keywords (up to 50, deduplicated case-insensitively): new signals entering via scans whose title or summary matches a rule are auto-dismissed with the matched rule recorded on the signal and an audit event — the exclude-list complement to per-feed keyword include-filters.
 - Scope is deliberately narrow: manual entries are never muted (they are explicit owner actions), existing signals are never retroactively touched, and restoring a muted signal keeps the matched rule visible. Matching is documented case-insensitive substring, not AI classification.
 - CRUD over HTTP (owner-gated) with a 静音规则 card in the source workbench; deletion stops future muting but leaves already-muted signals unchanged.
+
+## v2.19 · Apply-now muting and content version history
+
+- `POST /api/mute-rules/apply` + a one-click button: evaluate the whole untriaged (new) queue against current rules immediately, so a fresh rule does not have to wait for the next scheduled scan. Explicit owner command semantics — it touches even manual entries, by design; converted and already-triaged signals are never touched. Counts (scanned/applied) returned and toasted.
+- Content version history UI: the versions array (kept intact since v2.8, every edit archiving the old revision and voiding approvals) is now browsable from a 历史 button on each content card — current revision plus archived versions newest-first with status and timestamps.

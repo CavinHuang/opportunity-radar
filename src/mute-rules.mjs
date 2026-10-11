@@ -40,3 +40,25 @@ export function evaluateMuteRules(rules,candidate){
  return muteRulesOf(rules).find(r=>text.includes(r.keyword.toLocaleLowerCase()))||null;
 }
 const muteRulesOf=rules=>rules.filter(r=>!r.deletedAt);
+
+/** Owner-initiated "apply now": evaluate every untriaged (new) signal against
+ * the current rules — the explicit complement to scan-time muting, so a fresh
+ * rule does not have to wait for the next scan. Converted and already-triaged
+ * signals are untouched by design; the owner's click is the authorization. */
+export function applyMuteRules(store){
+ const rules=muteRules(store);
+ if(!rules.length)return {scanned:0,applied:0,note:'没有静音规则'};
+ return store.transaction(()=>{
+  let scanned=0,applied=0;
+  for(const signal of store.list('sources')){
+   if(signal.status!=='new')continue;
+   scanned++;
+   const rule=evaluateMuteRules(rules,signal);
+   if(!rule)continue;
+   store.put('sources',{...signal,status:'dismissed',muteRule:{id:rule.id,keyword:rule.keyword},triagedAt:now()},signal.revision);
+   store.event('signal.muted',signal.id,'owner',{ruleId:rule.id,keyword:rule.keyword,origin:'apply'});
+   applied++;
+  }
+  return {scanned,applied,note:'只影响待研判（new）状态的信号；已收藏、已忽略、已关联机会的信号不会被触碰。'};
+ });
+}
