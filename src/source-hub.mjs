@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { configuredFeeds, parseFeed } from './signals.mjs';
+import { pinnedHttpsFetch } from './pinned-https.mjs';
 
 const error=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const clean=(value,max=200)=>String(value??'').trim().slice(0,max);
@@ -87,16 +88,25 @@ function scanResultStore(store,feed,updates,nowMs){
   return store.put('feeds',{...fresh,...updates,lastCheckedAt:new Date(nowMs).toISOString()},fresh.revision);
 }
 const checkPublicHost=async(url,dnsLookup)=>{
-  const host=new URL(url).hostname;if(isIP(host)){if(isPrivateAddress(host))throw error('SOURCE_PRIVATE_NETWORK','不允许访问内部网络',400);return;}
+  const host=new URL(url).hostname;
+  if(isIP(host)){
+    if(isPrivateAddress(host))throw error('SOURCE_PRIVATE_NETWORK','不允许访问内部网络',400);
+    return [{address:host,family:isIP(host)}];
+  }
   const records=await dnsLookup(host,{all:true});
-  if(!records?.length||records.some(r=>isPrivateAddress(r.address)))throw error('SOURCE_PRIVATE_NETWORK','来源解析到了不允许访问的地址',400);
+  if(!records?.length||records.some(r=>!isIP(r.address)||isPrivateAddress(r.address)||
+    r.family&&r.family!==isIP(r.address)))
+    throw error('SOURCE_PRIVATE_NETWORK','来源解析到了不允许访问的地址',400);
+  return records;
 };
 async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastModified}){
   const origin=new URL(validateFeedUrl(url)).origin;
   let current=validateFeedUrl(url);
   for(let i=0;i<=2;i++){
-    await checkPublicHost(current,dnsLookup);
-    const response=await fetchImpl(current,{redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'User-Agent':'NorthstarRadar/0.6 (+personal RSS reader)','Accept':'application/rss+xml,application/atom+xml,application/xml,text/xml',...(new URL(current).origin===origin&&etag?{'If-None-Match':etag}:{}),...(new URL(current).origin===origin&&lastModified?{'If-Modified-Since':lastModified}:{})}});
+    const addresses=await checkPublicHost(current,dnsLookup);
+    const sameOrigin=new URL(current).origin===origin;
+    const sentEtag=sameOrigin?etag:null,sentLastModified=sameOrigin?lastModified:null;
+    const response=await fetchImpl(current,{addresses,redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'User-Agent':'NorthstarRadar/1.9 (+personal RSS reader)','Accept':'application/rss+xml,application/atom+xml,application/xml,text/xml',...(sentEtag?{'If-None-Match':sentEtag}:{}),...(sentLastModified?{'If-Modified-Since':sentLastModified}:{})}});
     if([301,302,303,307,308].includes(response.status)){
       if(i>=2)throw error('SOURCE_REDIRECT','来源重定向次数超限');
       const location=response.headers.get('location');if(!location)throw error('SOURCE_REDIRECT','来源的重定向缺少目标地址');
@@ -104,8 +114,8 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
     }
     if(response.status===304){
       await response.body?.cancel();
-      if(!etag&&!lastModified)throw error('SOURCE_HTTP','服务器错误地返回了 304');
-      return {notModified:true,etag,lastModified};
+      if(!sentEtag&&!sentLastModified)throw error('SOURCE_HTTP','来源未提供条件请求却返回了 304');
+      return {notModified:true,etag:sentEtag,lastModified:sentLastModified};
     }
     if(!response.ok){
       const failure=error('SOURCE_HTTP',`HTTP ${response.status}`);
@@ -124,11 +134,11 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
     }finally{await reader.cancel().catch(()=>{});}
     const xml=new TextDecoder().decode(Buffer.concat(chunks));
     if(!/<(?:rss|feed|rdf:RDF)\b/i.test(xml))throw error('SOURCE_NOT_RSS','来源不是有效的 RSS 或 Atom 文档');
-    return {xml,notModified:false,etag:response.headers.get('etag')||null,lastModified:response.headers.get('last-modified')||null};
+    return {xml,notModified:false,etag:sameOrigin?response.headers.get('etag')||null:null,lastModified:sameOrigin?response.headers.get('last-modified')||null:null};
   }
   throw error('SOURCE_REDIRECT','无法获取 RSS');
 }
-export async function scanSources(store,{ids,fetchImpl=fetch,dnsLookup=lookup,onlyDue=false,nowMs=Date.now()}={}){
+export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLookup=lookup,onlyDue=false,nowMs=Date.now()}={}){
   if(scansInProgress.has(store))throw error('SCAN_IN_PROGRESS','采集任务正在运行，请稍后重试',409);
   const requested=ids?.length?ids:null;
   if(requested&&new Set(requested).size!==requested.length)throw error('BAD_REQUEST','来源 ID 重复');
@@ -145,8 +155,10 @@ export async function scanSources(store,{ids,fetchImpl=fetch,dnsLookup=lookup,on
       try{
         const response=await fetchFeed(feed.url,{fetchImpl,dnsLookup,etag:feed.etag,lastModified:feed.lastModified});
         notModified=response.notModified;
-        if(!notModified){
-          const items=parseFeed(response.xml,feed.url);
+        // Commit each feed's new signals and its scan watermark atomically:
+        // invalid late items must never leave an apparently successful partial import.
+        const items=notModified?[]:parseFeed(response.xml,feed.url);
+        store.transaction(()=>{
           received=items.length;
           for(const candidate of items){
             const text=(candidate.title+' '+candidate.description).toLocaleLowerCase();
@@ -160,11 +172,14 @@ export async function scanSources(store,{ids,fetchImpl=fetch,dnsLookup=lookup,on
             }
             store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:candidate.publishedAt||null,createdAt:time(),status:'new',linkedOpportunityId:null});added++;
           }
-        }
-        scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
-          nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
-          itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
+          scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
+            nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
+            itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
+        });
       }catch(e){
+        // A failed feed transaction has rolled back all candidate writes.
+        // Never report rolled-back rows as successfully imported signals.
+        received=0;added=0;filtered=0;duplicates=0;notModified=false;
         const failures=(feed.consecutiveFailures||0)+1;
         const backoff=Math.min(MAX_BACKOFF_MINUTES,normal*Math.pow(2,Math.min(failures-1,8)));
         const retryMs=Number.isFinite(e.retryAfterMs)?Math.min(24*60*60_000,e.retryAfterMs):0;
