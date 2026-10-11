@@ -36,6 +36,8 @@ The first live public probe returned **25 V2EX Q&A, 20 Ask HN, and 25 Super User
 
 [Inspect the complete initial GitHub Actions source-probe log](https://github.com/CavinHuang/opportunity-radar/actions/runs/38043278997).
 
+**2026-10-11 follow-up probe (GitHub runner):** all 11 catalog feeds returned reachable with parsed items — the five global additions fetched 25 (Lifehacks), 25 (Money), 25 (Parenting), 25 (Home Improvement) and 24 (Lobsters) posts ([run log](https://github.com/CavinHuang/opportunity-radar/actions/runs/38137394918)). As always: reachability is not consumer demand.
+
 This is a single-run availability result from a GitHub Runner, not a guarantee of availability from the user's location. Other catalog feeds are queued for independent checks, and no claim is made about uniqueness, consumer identity, or willingness to pay.
 
 ## Testing real external availability
