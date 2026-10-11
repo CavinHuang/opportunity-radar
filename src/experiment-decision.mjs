@@ -18,7 +18,7 @@ export function experimentDecisionReview(project){
  const missing=['visits','trials','income','cash_cost'].filter(x=>!reported.has(x));
  const attempts=sum('trials'),visits=sum('visits');
  const baseline=Array.isArray(project.baselines)&&project.baselines.length?project.baselines.at(-1):null;
- const budget=budgetReview(baseline,actual);
+ const budget=budgetReview(project.baselines,actual);
  return {
    milestoneAccepted:allAccepted,pendingAcceptance:pending,
    baselineRevision:baseline?.revision??null,
@@ -33,24 +33,45 @@ export function experimentDecisionReview(project){
      '系统只汇总证据与备选方案，不宣布机会已被验证，也不代替用户执行状态变更']
  };
 }
-/** Compare explicitly recorded actuals against the currently approved baseline
- * budget. Any leg without actual entries is Unknown (null), never zero. */
-function budgetReview(baseline,actual){
- if(!baseline?.budget)return {weeklyUserHours:null,cashBudget:null,approvedAt:null,weeksElapsed:null,
+/** Compare explicitly recorded actuals against the approved baseline budgets.
+ * Both sides of the comparison are cumulative over the whole experiment: the
+ * approved pace sums each baseline's weekly budget × the weeks it was in
+ * effect, so a baseline revision never retro-actively re-judges hours consumed
+ * under a previous baseline as an overrun. Recorded hours stay unfiltered (the
+ * project ledger is lifetime). Any leg without actual entries is Unknown
+ * (null), never zero; a segment with missing timestamps makes the pace Unknown
+ * instead of guessing. */
+function budgetReview(baselines,actual){
+ const list=Array.isArray(baselines)?baselines:[];
+ const first=list[0]||null,current=list.at(-1)||null;
+ if(!first?.budget)return {weeklyUserHours:null,cashBudget:null,approvedAt:null,startedAt:null,weeksElapsed:null,
   approvedHoursToNow:null,recordedUserHours:null,recordedCashCost:null,paceExceeded:null,cashExceeded:null,
   note:'没有已批准基线，无法对照预算'};
- const approvedAt=baseline.approvedAt&&Number.isFinite(Date.parse(baseline.approvedAt))?baseline.approvedAt:null;
- const weeksElapsed=approvedAt?round1(Math.max(0,(Date.now()-Date.parse(approvedAt))/WEEK)):null;
- const weekly=Number.isFinite(baseline.budget.weeklyUserHours)?baseline.budget.weeklyUserHours:null;
- const cash=Number.isFinite(baseline.budget.cash)?baseline.budget.cash:null;
+ const parse=t=>t!=null&&Number.isFinite(Date.parse(t))?Date.parse(t):null;
+ const startedAt=parse(first.approvedAt);
+ const weeksElapsed=startedAt!=null?round1(Math.max(0,(Date.now()-startedAt)/WEEK)):null;
+ let approvedHoursToNow=null;
+ if(startedAt!=null){
+  approvedHoursToNow=0;
+  for(let i=0;i<list.length;i++){
+   const weekly=list[i].budget&&Number.isFinite(list[i].budget.weeklyUserHours)?list[i].budget.weeklyUserHours:null;
+   const start=parse(list[i].approvedAt);
+   const end=i<list.length-1?parse(list[i+1]?.approvedAt):Date.now();
+   if(weekly==null||start==null||end==null||end<start){approvedHoursToNow=null;break;}
+   approvedHoursToNow+=weekly*((end-start)/WEEK);
+  }
+  if(approvedHoursToNow!=null)approvedHoursToNow=round1(approvedHoursToNow);
+ }
+ const weekly=current.budget&&Number.isFinite(current.budget.weeklyUserHours)?current.budget.weeklyUserHours:null;
+ const cash=current.budget&&Number.isFinite(current.budget.cash)?current.budget.cash:null;
  const hoursRows=actual.filter(x=>x.type==='user_hours');
  const cashRows=actual.filter(x=>x.type==='cash_cost');
  const recordedHours=hoursRows.length?round1(hoursRows.reduce((n,x)=>n+Number(x.value||0),0)):null;
  const recordedCash=cashRows.length?round1(cashRows.reduce((n,x)=>n+Number(x.value||0),0)):null;
- const approvedHoursToNow=weekly!=null&&weeksElapsed!=null?round1(weekly*weeksElapsed):null;
- return {weeklyUserHours:weekly,cashBudget:cash,approvedAt,weeksElapsed,approvedHoursToNow,
+ return {weeklyUserHours:weekly,cashBudget:cash,approvedAt:current.approvedAt||null,
+  startedAt:first.approvedAt||null,weeksElapsed,approvedHoursToNow,
   recordedUserHours:recordedHours,recordedCashCost:recordedCash,
   paceExceeded:recordedHours!=null&&approvedHoursToNow!=null?recordedHours>approvedHoursToNow:null,
   cashExceeded:recordedCash!=null&&cash!=null?recordedCash>cash:null,
-  note:'时间按“已批准周预算 × 自基线批准以来的自然周数”折算；现金只对照 cash_cost 口径，不含服务成本与交易手续费。未登记的消耗保持未知，不当作零。'};
+  note:'时间按“各已批准基线的周预算 × 其生效周数”累计对照；基线修订不会把旧基线额度内的已登记消耗重算为超支。现金只对照 cash_cost 口径，不含服务成本与交易手续费。未登记的消耗保持未知，不当作零。'};
 }

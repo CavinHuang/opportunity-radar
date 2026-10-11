@@ -128,11 +128,13 @@ function collectIssues(decision,validation,growth,stopAssessment){
  return issues;
 }
 
+/** Issue kinds that block a plain "continue" until the owner acknowledges them. */
+const BLOCKING_KINDS=['delivery_incomplete','insufficient_validation','data_anomaly','budget_exceeded','stop_condition_met'];
+
 /** Always present all four alternatives with explicit preconditions. A choice
  * with blockers stays selectable, but requires acknowledging the open risks. */
 function buildOptions(decision,issues,stopAssessment,projectStatus){
- const blocking=['delivery_incomplete','insufficient_validation','data_anomaly','budget_exceeded','stop_condition_met'];
- const blockers=[...new Set(issues.filter(i=>blocking.includes(i.kind)).map(i=>i.kind))];
+ const blockers=[...new Set(issues.filter(i=>BLOCKING_KINDS.includes(i.kind)).map(i=>i.kind))];
  const pauseBlocked=!['research','execution','promotion','review'].includes(projectStatus);
  const stopBlocked=['stopped','archived'].includes(projectStatus);
  return [
@@ -172,6 +174,8 @@ export function createOpportunityReview(store,projectId,data){
  if(windowFrom&&windowTo&&windowFrom>windowTo)throw fail('BAD_REQUEST','开始日期不能晚于结束日期');
  const overall=String(data.overallAssessment??'').trim();
  if(overall.length<16||overall.length>2000)throw fail('BAD_REQUEST','复盘结论需要 16–2000 字，请写明对照最初假设的判断依据');
+ if(data.stopConditionAssessment!=null&&data.stopConditionAssessment!==''&&!STOP_ASSESSMENTS.includes(data.stopConditionAssessment))
+  throw fail('BAD_REQUEST','无效的停止条件判断，必须是：'+STOP_ASSESSMENTS.join('、'));
  const assessment=STOP_ASSESSMENTS.includes(data.stopConditionAssessment)?data.stopConditionAssessment:'unassessed';
  const findings=parseFindings(data.findings);
  return store.transaction(()=>{
@@ -198,7 +202,10 @@ export function createOpportunityReview(store,projectId,data){
 }
 
 /** Apply the owner's decision to a stored review. pause/stop/resume-on-continue
- * change project state ONLY here, and only after data.confirm===true. */
+ * change project state ONLY here, and only after data.confirm===true. The
+ * open-risk gate re-aggregates CURRENT data and takes the union with the
+ * blockers snapshotted at review creation, so issues that appeared after the
+ * review was written can never be silently bypassed. */
 export function decideOpportunityReview(store,projectId,reviewId,data){
  requireProject(store,projectId);
  const choice=data.choice;
@@ -210,17 +217,26 @@ export function decideOpportunityReview(store,projectId,reviewId,data){
   const review=store.get('opportunity_reviews',reviewId);
   if(!review||review.projectId!==projectId)throw fail('NOT_FOUND','复盘记录不存在',404);
   if(review.decision)throw fail('BAD_STATE','该复盘已有决定；如需新的决定，请再创建一次周期复盘',409);
-  const option=(review.recommendationOptions||[]).find(o=>o.choice===choice);
-  const blockers=option?.blockers||[];
-  if(blockers.includes('project_not_active'))
-   throw fail('BAD_STATE','项目已暂停或结束，该状态变更在当前复盘下不可用',409);
-  if(blockers.length&&data.acceptOpenRisks!==true)
-   throw fail('OPEN_RISKS_ACK_REQUIRED','该选项存在未解决问题（'+blockers.join('、')+'）；先处理问题，或确认已知风险后再记录该决定',409);
+  const storedBlockers=((review.recommendationOptions||[]).find(o=>o.choice===choice)||{}).blockers||[];
   const project=store.get('projects',projectId);
+  const stateBlocked=(choice==='pause'&&!isActive(project))||(choice==='stop'&&['stopped','archived'].includes(project.status));
+  if(stateBlocked||storedBlockers.includes('project_not_active'))
+   throw fail('BAD_STATE','项目已暂停或结束，该状态变更在当前复盘下不可用',409);
+  let openRiskKinds=[...storedBlockers];
+  if(choice==='continue'){
+   // Re-aggregate with the review's own window against CURRENT data; union with
+   // the stored blockers (conservative in both directions: nothing expires).
+   const fresh=buildReviewDraft(store,projectId,{windowFrom:review.window?.from,windowTo:review.window?.to});
+   const current=collectIssues(fresh.decision,fresh.market.validation,fresh.market.growth,review.stopConditionAssessment)
+    .filter(i=>BLOCKING_KINDS.includes(i.kind)).map(i=>i.kind);
+   openRiskKinds=[...new Set([...openRiskKinds,...current])];
+  }
+  if(openRiskKinds.length&&data.acceptOpenRisks!==true)
+   throw fail('OPEN_RISKS_ACK_REQUIRED','该选项存在未解决问题（'+openRiskKinds.join('、')+'）；先处理问题，或确认已知风险后再记录该决定',409);
   const applied=applyStateChange(store,project,choice);
   const decision={choice,reason,decidedAt:now(),decidedBy:'owner',confirmed:true,
    baselineRevisionAtDecision:project.baselines.at(-1)?.revision??null,
-   openRiskKinds:blockers,acknowledgedOpenRisks:blockers.length>0,
+   openRiskKinds,acknowledgedOpenRisks:openRiskKinds.length>0,
    appliedStateChange:applied,
    note:choice==='adjust'?'调整须经单独的基线修订并由你批准后生效；本决定未修改基线':null};
   const saved=store.put('opportunity_reviews',{...review,decision},review.revision);

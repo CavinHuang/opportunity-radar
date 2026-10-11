@@ -355,7 +355,7 @@ const en = {
  '仍有待处理的验收提交':'pending acceptance submissions exist','记录缺失：':'Missing records: ','无':'none','未记录的数据不当作零。':'Unrecorded data is never treated as zero.',
  '实际收益与成本':'Actual returns and costs','仅统计明确标记实际发生的登记数据':'Only entries explicitly marked as actual are counted',
  '实收（未知≠零）':'Revenue (unknown ≠ zero)','已知净现金':'Known net cash','已登记个人时间 (h)':'Recorded personal hours','已登记现金支出 (¥)':'Recorded cash spent (¥)',
- '预算对照：批准每周':'Budget check: approved','基线批准已过':'weeks since baseline approval','按周折算批准额度':'approved pace to date','时间超支':'time over budget','现金超支':'cash over budget',
+ '预算对照：批准每周':'Budget check: approved','实验已进行':'weeks since experiment start','按周折算批准额度':'approved pace to date','时间超支':'time over budget','现金超支':'cash over budget',
  '缺失指标保持未知，不按零处理。':'Missing metrics stay unknown, never zero.','试用/访问：':'Trial/visit: ','数据不足或口径不一致':'insufficient data or inconsistent caliber',
  '市场反馈与不确定性':'Market feedback and uncertainty','用户观察、反证与不确定性分开汇总':'Observations, counter-evidence and uncertainty are kept separate',
  '验证观察：':'Validation observations: ','支持':'supporting','反驳':'contradicting','不确定':'unclear','位':'distinct','未经独立核验':'not independently verified',
@@ -434,7 +434,7 @@ const dynamic = [
  [/^(.+?)（存在未解决问题）$/,(_m,x)=>(en[x]||x)+' (open issues)'],
  [/^窗口\s*(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})$/,(_m,a,b)=>`Window ${a} ~ ${b}`],
  [/^复盘周期\s*(\d+)\s*天$/,(_m,n)=>`Review cycle: ${n} days`],
- [/^基线批准已过\s*([\d.]+)\s*周$/,(_m,n)=>`${n} weeks since baseline approval`],
+ [/^实验已进行\s*([\d.]+)\s*周$/,(_m,n)=>`${n} weeks since experiment start`],
  [/^(\d+)\s*条未说明异常，请先到增长数据页补充异常说明$/,(_m,n)=>`${n} unexplained anomalies; add anomaly notes on the growth page first`],
  [/^基线 r(\d+)$/,(_m,n)=>`baseline r${n}`],
  [/^复盘 · 基线 r(\d+) · (.*)$/,(_m,n,rest)=>`Review · baseline r${n} · ${rest}`]

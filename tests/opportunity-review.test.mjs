@@ -183,6 +183,48 @@ test('budget consumption flags real overruns and keeps unrecorded legs unknown',
  }finally{db.close();}
 });
 
+test('invalid stop-condition judgment is rejected instead of silently stored as unassessed',()=>{
+ const {db,p}=setup();try{
+  assert.throws(()=>createOpportunityReview(db,p.id,{overallAssessment:'结论足够长，可以用来复盘判断',stopConditionAssessment:'banana'}),{code:'BAD_REQUEST'});
+  // absent value still defaults to unassessed (missing ≠ invalid)
+  const review=createOpportunityReview(db,p.id,{overallAssessment:'结论足够长，可以用来做出复盘判断'});
+  assert.equal(review.stopConditionAssessment,'unassessed');
+ }finally{db.close();}
+});
+test('baseline revision never re-judges hours consumed under the previous baseline',()=>{
+ const {db,s,p}=setup();try{
+  const backdated=new Date(Date.now()-28*86400000).toISOString();
+  const proj=db.get('projects',p.id);
+  db.put('projects',{...proj,baselines:[{...proj.baselines[0],approvedAt:backdated},...proj.baselines.slice(1)]},proj.revision);
+  s.addLedger(p.id,{type:'user_hours',value:2,actual:true,source:'手动记录'});
+  s.ownerDecision(p.id,{action:'revise_baseline',goal:'validate willingness to pay',criteria:['one paid order'],stopCondition:'两个月无付费则停止',reason:'需求观察成立，进入付费验证'});
+  const after=createOpportunityReview(db,p.id,{overallAssessment:'修订后立即复盘：旧基线内的消耗不得判为超支'});
+  assert.equal(after.decisionReview.budget.startedAt,backdated);
+  assert.equal(after.decisionReview.budget.weeksElapsed,4);
+  assert.equal(after.decisionReview.budget.approvedHoursToNow,8);
+  assert.equal(after.decisionReview.budget.paceExceeded,false);
+  assert.ok(!kindsOf(after).includes('budget_exceeded'));
+  // consumption beyond the accumulated allowance is still flagged
+  s.addLedger(p.id,{type:'user_hours',value:10,actual:true,source:'追加投入（未走预算审批）'});
+  const later=buildReviewDraft(db,p.id);
+  assert.equal(later.decision.budget.paceExceeded,true);
+  assert.ok(kindsOf(later).includes('budget_exceeded'));
+ }finally{db.close();}
+});
+test('decide re-aggregates current data and unions blockers beyond the stored snapshot',()=>{
+ const {db,s,p}=setup();try{
+  const review=createOpportunityReview(db,p.id,{overallAssessment:'创建时只有证据缺失问题，尚无预算超支记录'});
+  const storedContinue=review.recommendationOptions.find(o=>o.choice==='continue');
+  assert.ok(!storedContinue.blockers.includes('budget_exceeded'));
+  // a budget overrun appears AFTER the review was written
+  s.addLedger(p.id,{type:'user_hours',value:50,actual:true,source:'超出批准预算的投入'});
+  assert.throws(()=>decideOpportunityReview(db,p.id,review.id,{choice:'continue',reason:'试图不确认新增的预算超支风险就直接继续',confirm:true}),{code:'OPEN_RISKS_ACK_REQUIRED'});
+  const decided=decideOpportunityReview(db,p.id,review.id,{choice:'continue',reason:'确认新增的预算超支风险后继续推进实验',confirm:true,acceptOpenRisks:true});
+  assert.ok(decided.decision.openRiskKinds.includes('budget_exceeded')); // union with freshly aggregated issues
+  assert.ok(decided.decision.openRiskKinds.includes('insufficient_validation')); // stored blockers retained
+ }finally{db.close();}
+});
+
 test('periodic reminder reaches the pipeline only with an explicit due review summary',()=>{
  const base=()=>({status:'research',baselines:[{revision:1}],tasks:[],milestones:[{acceptanceState:'pending'}],submissions:[],decisions:[],contents:[]});
  const without=projectPipeline(base());

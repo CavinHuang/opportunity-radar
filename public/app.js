@@ -187,9 +187,12 @@ function renderReviewPanel(p){
  const rs=p.reviewSummary||{};
  const ob=draft.originalBaseline,cb=draft.currentBaseline,d=draft.decision,b=d.budget||{};
  const cycleLine=rs.count?`${esc(t('上次复盘：'))+fmtTime(rs.latestAt)}${rs.latestDecision?` · ${esc(t('最近决定：'))+esc(reviewChoiceLabel(rs.latestDecision.choice))}`:''}`:esc(t('尚未创建过复盘'));
+ const w=S.reviewWindow||{from:new Date(Date.now()-29*86400000).toISOString().slice(0,10),to:new Date().toISOString().slice(0,10)};
+ const windowForm=`<form id="review-window-form" class="source-controls"><label class="subtext" for="review-from">开始日期</label><input id="review-from" name="from" type="date" value="${esc(w.from)}"/><label class="subtext" for="review-to">结束日期</label><input id="review-to" name="to" type="date" value="${esc(w.to)}"/><button type="submit" class="btn btn-sm">应用窗口</button></form>`;
  const cycle=`<div class="flex between"><div class="small-title">${icon('refresh',16)}&nbsp; 周期复盘与决策</div><div class="flex"><button class="btn btn-sm" data-action="review-refresh">${icon('refresh',13)} ${esc(t('刷新'))}</button><button class="btn btn-sm btn-primary" data-action="create-review">${icon('plus',13)} ${esc(t('创建周期复盘'))}</button></div></div>
  <div class="card card-pad"><p class="subtext">${esc(t('复盘周期'))} ${Number(rs.cycleDays||7)} ${esc(t('天'))} · ${cycleLine}${rs.due?` · <span class="tag tag-warn">${esc(t('本轮复盘已到期'))}</span>`:''}</p>
- <p class="subtext">${esc(t('系统只汇总证据与备选方案；继续、调整、暂停或停止由你确认后才执行，且不会自动宣布机会已被验证。'))}</p></div>`;
+ <p class="subtext">${esc(t('系统只汇总证据与备选方案；继续、调整、暂停或停止由你确认后才执行，且不会自动宣布机会已被验证。'))}</p></div>
+ <div class="mt">${windowForm}</div>`;
  const hypothesis=`<div class="section-heading"><h2>${esc(t('对照最初假设'))}</h2><span>${esc(t('最初基线'))} r${Number(ob?.revision||1)} · ${esc(t('当前基线'))} r${Number(cb?.revision||1)}</span></div>
  <div class="card card-pad"><div class="fact-list">
   <div class="fact-row"><div class="fact-icon">${icon('search',14)}</div><div><strong>${esc(t('最初目标 / 假设'))}</strong><p data-i18n-skip>${esc(ob?.goal||'')} · ${esc(ob?.hypothesis||'')}</p></div></div>
@@ -204,7 +207,7 @@ function renderReviewPanel(p){
  <p class="subtext">${esc(t('记录缺失：'))}${esc(d.evidenceCoverage.missingMetrics.join('、')||t('无'))}。${esc(t('未记录的数据不当作零。'))}</p></div>`;
  const economics=`<div class="section-heading"><h2>${esc(t('实际收益与成本'))}</h2><span>${esc(t('仅统计明确标记实际发生的登记数据'))}</span></div>
  <div class="card card-pad"><div class="source-quality-stats"><div><strong>${esc(fmtMetricValue(d.outcomes.income))}</strong><small>${esc(t('实收（未知≠零）'))}</small></div><div><strong>¥${Number(d.outcomes.netKnownCash||0).toFixed(2)}</strong><small>${esc(t('已知净现金'))}</small></div><div><strong>${esc(fmtMetricValue(b.recordedUserHours))}</strong><small>${esc(t('已登记个人时间 (h)'))}</small></div><div><strong>${esc(fmtMetricValue(b.recordedCashCost))}</strong><small>${esc(t('已登记现金支出 (¥)'))}</small></div></div>
- <p class="subtext">${esc(t('预算对照：批准每周'))} ${esc(fmtMetricValue(b.weeklyUserHours))} h · ¥${esc(fmtMetricValue(b.cashBudget))}${b.weeksElapsed!=null?` · ${esc(t('基线批准已过'))} ${Number(b.weeksElapsed)} ${esc(t('周'))} · ${esc(t('按周折算批准额度'))} ${esc(fmtMetricValue(b.approvedHoursToNow))} h`:''}${b.paceExceeded===true?` · <span class="tag tag-warn">${esc(t('时间超支'))}</span>`:''}${b.cashExceeded===true?` · <span class="tag tag-warn">${esc(t('现金超支'))}</span>`:''}</p>
+ <p class="subtext">${esc(t('预算对照：批准每周'))} ${esc(fmtMetricValue(b.weeklyUserHours))} h · ¥${esc(fmtMetricValue(b.cashBudget))}${b.weeksElapsed!=null?` · ${esc(t('实验已进行'))} ${Number(b.weeksElapsed)} ${esc(t('周'))} · ${esc(t('按周折算批准额度'))} ${esc(fmtMetricValue(b.approvedHoursToNow))} h`:''}${b.paceExceeded===true?` · <span class="tag tag-warn">${esc(t('时间超支'))}</span>`:''}${b.cashExceeded===true?` · <span class="tag tag-warn">${esc(t('现金超支'))}</span>`:''}</p>
  <p class="subtext" data-i18n-skip>${esc(b.note||'')}</p>
  <p class="subtext">${esc(t('试用/访问：'))}${d.outcomes.trialRate==null?esc(t('数据不足或口径不一致')):(d.outcomes.trialRate*100).toFixed(1)+'%'} · ${esc(t('缺失指标保持未知，不按零处理。'))}</p></div>`;
  const mv=draft.market.validation,mf=draft.market.feedback;

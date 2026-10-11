@@ -40,3 +40,18 @@ test('phase D: recorded hours and cash are compared against the approved baselin
  assert.equal(experimentDecisionReview(p).budget.recordedUserHours,10.5);
  assert.equal(experimentDecisionReview(p).budget.paceExceeded,false);
 });
+test('phase D: hours spent under a previous baseline are not re-judged after a revision',()=>{
+ const p=project();p.baselines=[
+  {revision:1,approvedAt:new Date(Date.now()-28*86400000).toISOString(),stopCondition:'stop when idle',budget:{weeklyUserHours:2,cash:0}},
+  {revision:2,approvedAt:new Date().toISOString(),stopCondition:'stop on no paid order',budget:{weeklyUserHours:2,cash:0}}];
+ p.ledger=[{type:'user_hours',value:2,actual:true}];
+ const r=experimentDecisionReview(p);
+ assert.equal(r.baselineRevision,2);
+ assert.equal(r.budget.startedAt,p.baselines[0].approvedAt);
+ assert.equal(r.budget.weeksElapsed,4);          // since the FIRST baseline, not the revision
+ assert.equal(r.budget.approvedHoursToNow,8);    // baseline r1 allowance (4 weeks × 2h) survives the revision
+ assert.equal(r.budget.paceExceeded,false);      // without this caliber fix: 2h > 0h → false overrun
+ // a genuinely larger consumption still exceeds the accumulated allowance
+ p.ledger=[{type:'user_hours',value:30,actual:true}];
+ assert.equal(experimentDecisionReview(p).budget.paceExceeded,true);
+});
