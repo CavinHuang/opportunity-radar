@@ -5,7 +5,7 @@ import { LEDGER_METRIC_MAP, mirrorLedgerMetric } from './growth.mjs';
 
 const txDepth=new WeakMap();
 
-const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews','campaigns'];
+const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews','campaigns','mute_rules'];
 /** Highest schema version this build understands, stamped via PRAGMA user_version.
  * Version 0 means "written before versioning existed" — every migration below is
  * incremental and idempotent, so old databases upgrade in place without losing rows. */

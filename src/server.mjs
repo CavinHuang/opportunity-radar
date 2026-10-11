@@ -14,6 +14,7 @@ import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
 import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
 import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,sourceDiagnostics,retryFailedFeed,addManualSignal,triageSignal,bulkTriageSignals,querySignals} from './source-hub.mjs';
+import {createMuteRule,deleteMuteRule,muteRules} from './mute-rules.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
 import {catalogList,installCatalogFeed} from './source-catalog.mjs';
@@ -131,6 +132,10 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const triage=/^\/api\/signals\/([^/]+)\/triage$/.exec(pathname);
     if(triage&&req.method==='POST')return send(res,200,{item:triageSignal(store,triage[1],await body(req))});
     if(pathname==='/api/signals/bulk-triage'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>bulkTriageSignals(store,d)));
+    if(pathname==='/api/mute-rules'&&req.method==='GET')return send(res,200,{items:muteRules(store)});
+    if(pathname==='/api/mute-rules'&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>createMuteRule(store,d))});
+    const muteDel=/^\/api\/mute-rules\/([^/]+)$/.exec(pathname);
+    if(muteDel&&req.method==='DELETE')return send(res,200,{item:deleteMuteRule(store,muteDel[1])});
     const importing=/^\/api\/signals\/([^/]+)\/import$/.exec(pathname);
     if(importing&&req.method==='POST'){
       const signal=store.get('sources',importing[1]);if(!signal)return send(res,404,{error:'NOT_FOUND'});

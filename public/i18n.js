@@ -336,7 +336,7 @@ const en = {
  '登记发布':'Record publication',
  '需先完成事实与隐私审核，才能登记发布':'Review facts & privacy first to record publication',
  '已发布并登记':'Published & registered',
- '已选':'Selected','收藏所选':'Save selected','忽略所选':'Dismiss selected','取消选择':'Clear selection','全选本页':'Select page','待研判':'Awaiting triage','批量分诊':'Bulk triage','批量分诊完成':'Bulk triage done','条已更新':'updated','条跳过':'skipped','选择该信号':'Select this signal',
+ '已选':'Selected','收藏所选':'Save selected','忽略所选':'Dismiss selected','取消选择':'Clear selection','全选本页':'Select page','待研判':'Awaiting triage','批量分诊':'Bulk triage','批量分诊完成':'Bulk triage done','条已更新':'updated','条跳过':'skipped','选择该信号':'Select this signal',"静音规则":'Mute rules',"添加静音规则":'Add mute rule',"静音关键词":'Mute keyword',"命中静音规则":'Matched mute rule',"新进信号命中即自动忽略，可恢复；手动录入不受影响":'New scan signals matching a rule are auto-dismissed and restorable; manual entries are never muted',"还没有静音规则":'No mute rules yet',"给出关键词后，扫描新进的信号标题或摘要命中即自动忽略，并记录命中的规则。":'Add a keyword and new scan signals whose title or summary matches are auto-dismissed with the rule recorded.',"删除后，后续扫描不再自动忽略该关键词；已忽略的信号保持不变。确定删除？":'Deleting stops auto-dismissing future scans; already muted signals stay unchanged. Delete?',"创建于":'Created',"删除":'Delete',"备注（可选）":'Notes (optional)',
  '还没有宣发活动。活动只用于组织内容、记录预算与排期；系统绝不代发到外部平台。':'No campaigns yet. Campaigns organize content, budget and schedules; the system never posts to external platforms.',
  '暂无排期中的内容。先起草内容，再用“设置排期”安排发布时间。':'Nothing scheduled yet. Draft content first, then use “Set Schedule” to plan a publish time.',
  '到期提醒基于内容排期与本机日历日；缺失或已取消的活动不再提醒，但条目保留可见。':'Due hints come from content schedules and the local calendar day; cancelled campaigns stop reminding, but entries stay visible.',

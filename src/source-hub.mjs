@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import {evaluateMuteRules} from './mute-rules.mjs';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { configuredFeeds, parseFeed } from './signals.mjs';
@@ -150,7 +151,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
   scansInProgress.add(store);
   try{
     for(const feed of feeds){
-      let received=0,added=0,filtered=0,duplicates=0,notModified=false;
+      let received=0,added=0,filtered=0,duplicates=0,muted=0,notModified=false;
       const normal=intervalMinutes(feed.intervalMinutes);
       try{
         const response=await fetchFeed(feed.url,{fetchImpl,dnsLookup,etag:feed.etag,lastModified:feed.lastModified});
@@ -173,12 +174,15 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
               if(!existing.feedIds?.includes(feed.id))store.put('sources',{...existing,feedIds:[...(existing.feedIds||[]),feed.id]},existing.revision);
               continue;
             }
-            store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:candidate.publishedAt||null,createdAt:time(),status:'new',linkedOpportunityId:null});added++;
+            const mute=evaluateMuteRules(store.list('mute_rules'),candidate);
+            store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:candidate.publishedAt||null,createdAt:time(),
+              status:mute?'dismissed':'new',muteRule:mute?{id:mute.id,keyword:mute.keyword}:null,triagedAt:mute?time():null,linkedOpportunityId:null});
+            if(mute){muted++;store.event('signal.muted',id,'owner',{ruleId:mute.id,keyword:mute.keyword});}else added++;
           }
           scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
             nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
             itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
-          store.event('source.scan_succeeded',feed.id,'system',{received,added,filtered,duplicates,notModified,checkedAt:new Date(nowMs).toISOString()});
+          store.event('source.scan_succeeded',feed.id,'system',{received,added,filtered,duplicates,muted,notModified,checkedAt:new Date(nowMs).toISOString()});
         });
       }catch(e){
         // A concurrent edit/delete invalidates the in-flight snapshot. Never
@@ -187,7 +191,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         if(!current||current.revision!==feed.revision){
           result.skipped++;
           store.event('source.scan_skipped',feed.id,'system',{reason:current?'source_changed':'source_deleted',checkedAt:new Date(nowMs).toISOString()});
-          result.details.push({feedId:feed.id,title:feed.title,received:0,added:0,filtered:0,duplicates:0,notModified:false,skipped:true,error:null});
+          result.details.push({feedId:feed.id,title:feed.title,received:0,added:0,filtered:0,duplicates:0,muted:0,notModified:false,skipped:true,error:null});
           continue;
         }
         // A failed feed transaction has rolled back all candidate writes.
