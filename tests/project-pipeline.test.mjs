@@ -47,3 +47,30 @@ test('archived owner tasks stop counting and overdue ones surface first (v2.9)',
  assert.equal(r.nextActions[0].kind,'owner_overdue');
  assert.equal(r.nextActions[0].tab,'tasks');
 });
+test('scheduled publications surface due and overdue reminders; cancelled campaigns stop reminding (v2.9 Phase B)',()=>{
+ const nowMs=Date.now();
+ // keep the due-today probe on the same local calendar day even near midnight
+ while(new Date(nowMs+60000).getDate()!==new Date(nowMs).getDate())nowMs+=60000;
+ const at=ms=>new Date(ms).toISOString();
+ const p=base();
+ p.campaigns=[{id:'c1',name:'已取消',status:'cancelled'},{id:'c2',name:'进行中',status:'active'}];
+ p.contents=[
+  {id:'a',title:'逾期',plannedAt:at(nowMs-2*3600000),reviewState:'approved',campaignId:'c2'},
+  {id:'b',title:'已取消活动的逾期内容',plannedAt:at(nowMs-3*3600000),reviewState:'approved',campaignId:'c1'},
+  {id:'c',title:'已登记发布',plannedAt:at(nowMs-5*3600000),reviewState:'published',campaignId:'c2'}
+ ];
+ const r=projectPipeline(p,{now:new Date(nowMs)});
+ assert.deepEqual(r.publicationReminders,{dueToday:0,overdue:1,campaignOverEnd:0}); // cancelled campaign excluded, published excluded
+ assert.ok(r.nextActions.some(x=>x.kind==='publish_overdue'&&x.tab==='launch'));
+ // launch-gated project: the due reminder takes precedence over the generic publish hint
+ const p2=base();p2.milestones.forEach(m=>m.acceptanceState='accepted');
+ p2.contents=[{id:'d',title:'今日',plannedAt:at(nowMs+60000),reviewState:'approved',campaignId:null}];
+ const r2=projectPipeline(p2,{now:new Date(nowMs)});
+ assert.equal(r2.publicationReminders.dueToday,1);
+ assert.equal(r2.nextActions[0].kind,'publish_due');
+ // a campaign past its planned end date is called out for review
+ const p3=base();p3.campaigns=[{id:'c9',name:'过期活动',status:'active',endAt:'2020-01-01'}];
+ const r3=projectPipeline(p3,{now:new Date(nowMs)});
+ assert.equal(r3.publicationReminders.campaignOverEnd,1);
+ assert.ok(r3.nextActions.some(x=>x.kind==='campaign_over_end'&&x.tab==='launch'));
+});

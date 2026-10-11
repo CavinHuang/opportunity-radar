@@ -121,7 +121,7 @@ export function createService(store, options={}){
       return {task,alreadyPrepared:false};
     });
   }
-  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id)};}
+  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id),campaigns:store.list('campaigns').filter(x=>x.projectId===id)};}
   function ownerDecision(id,data){const p=getProject(id);const action=required(data.action,'action');
     if(action==='pause'||action==='stop'||action==='resume'){
       if(action==='resume' && p.status!=='paused')throw err('BAD_STATE','只有暂停项目才能恢复',409);
@@ -198,8 +198,18 @@ export function createService(store, options={}){
     }
     throw err('BAD_REQUEST','unknown decision action');
   }
-  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,plannedAt:null,scheduledRevision:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
-    const c=store.put('contents',{id:randomUUID(),projectId:id,title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),materialRefs:data.materialRefs||[],claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,createdAt:now()});event('content.created',c.id,owner,{},id);return c;}
+  // v2.9 Phase B: contents can belong to a campaign of the same project. The campaign
+  // layer never rewrites content state; approval fencing below stays authoritative.
+  const resolveCampaignId=(projectId,currentCampaignId,nextCampaignId)=>{
+    if(nextCampaignId===currentCampaignId)return currentCampaignId||null;
+    if(!nextCampaignId)return null;
+    const campaign=store.get('campaigns',nextCampaignId);
+    if(!campaign||campaign.projectId!==projectId)throw err('NOT_FOUND','宣发活动不存在',404);
+    if(campaign.status!=='active')throw err('CAMPAIGN_CLOSED','只能把内容归入进行中的宣发活动',409);
+    return campaign.id;
+  };
+  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],campaignId:resolveCampaignId(id,old.campaignId||null,data.campaignId===undefined?(old.campaignId||null):data.campaignId),reviewState:'draft',approvedRevision:null,publication:null,plannedAt:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
+    const c=store.put('contents',{id:randomUUID(),projectId:id,title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),materialRefs:data.materialRefs||[],claims:data.claims||[],campaignId:resolveCampaignId(id,null,data.campaignId||null),reviewState:'draft',approvedRevision:null,publication:null,createdAt:now()});event('content.created',c.id,owner,{},id);return c;}
   function scheduleContent(id,contentId,data){
     const p=assertActive(id),c=get('contents',contentId);
     if(c.projectId!==p.id)throw err('NOT_FOUND','内容不属于当前项目',404);
@@ -210,7 +220,10 @@ export function createService(store, options={}){
     if(!Number.isFinite(parsed)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(plannedAt))throw err('BAD_REQUEST','排期应包含具体日期、时间和时区');
     if(!/(Z|[+-]\d{2}:\d{2})$/.test(plannedAt))throw err('BAD_REQUEST','排期必须指定时区');
     if(parsed<Date.now()-60000)throw err('BAD_REQUEST','不能将宣发计划排到过去');
-    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),scheduledRevision:c.revision+1,approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
+    // G07: the write-only scheduledRevision field is gone. Schedule→publish safety
+    // stays enforced by the approvedRevision fence (schedule carries approval forward,
+    // edit clears it, publication requires approvedRevision===revision).
+    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
     event('content.scheduled',c.id,owner,{plannedAt:updated.plannedAt,revision:updated.revision},id);
     return updated;
   }

@@ -326,6 +326,35 @@ const en = {
  '实验已结束 · 可重新分诊':'Experiment ended · re-triage available',
  '任务看板尚未加载，请刷新页面。':'Task board not loaded yet; refresh the page.',
  '处理已逾期的人工任务':'Handle overdue human tasks',
+ // v2.9 Phase B: promotion campaigns, calendar and retrospective
+ '宣发活动':'Promotion campaigns','组织内容与预算 · 支持取消与复盘':'Organize content and budget · cancel and retrospective supported',
+ '新建活动':'New campaign','调整活动':'Adjust campaign','完成活动':'Complete campaign','取消活动':'Cancel campaign',
+ '撰写复盘':'Write retrospective','查看复盘':'View retrospective','查看 / 更新复盘':'View / update retrospective',
+ '活动已完成，可撰写复盘':'Campaign completed; you can write the retrospective',
+ '宣发日历':'Promotion calendar','今日计划':'Due today','即将到来':'Upcoming','已发布':'Published',
+ '未归属活动':'Not assigned to a campaign','活动已取消，不再提醒':'Campaign cancelled; reminders stopped','活动已完成':'Campaign completed',
+ '登记发布':'Record publication',
+ '还没有宣发活动。活动只用于组织内容、记录预算与排期；系统绝不代发到外部平台。':'No campaigns yet. Campaigns organize content, budget and schedules; the system never posts to external platforms.',
+ '暂无排期中的内容。先起草内容，再用“设置排期”安排发布时间。':'Nothing scheduled yet. Draft content first, then use “Set Schedule” to plan a publish time.',
+ '到期提醒基于内容排期与本机日历日；缺失或已取消的活动不再提醒，但条目保留可见。':'Due hints come from content schedules and the local calendar day; cancelled campaigns stop reminding, but entries stay visible.',
+ '草稿 → 事实与隐私审核 → 排期 → 手动发布并登记':'Draft → Facts & privacy review → Schedule → Publish manually and record',
+ '内容':'Content pieces','所属宣发活动':'Campaign',
+ '内容已修改 · 审批失效':'Edited · approval invalidated','需要重新审核':'Re-review required',
+ '时间范围：':'Period: ','未设定':'Not set','预算：':'Budget: ',
+ '取消原因：':'Cancelled because: ','复盘：':'Retrospective: ',
+ '取消后活动停止调整与到期提醒；内容记录与排期原样保留，不会被删除或改写。':'Cancelling stops adjustments and due reminders; content records and schedules are preserved untouched.',
+ '取消原因（至少 8 个字）':'Cancellation reason (at least 8 characters)',
+ '完成后活动不能再调整，之后仍可撰写复盘。确定完成？':'Completing locks the campaign from adjustments; a retrospective can still be written later. Complete it?',
+ '复盘只记录你自己确认的结论；系统不会替你推算完成度，也不会把相关数据说成因果归因。':'The retrospective records only conclusions you confirm; the system does not compute completion or present correlation as causation.',
+ '实际结果与结论（至少 20 个字）':'Actual outcomes and conclusions (at least 20 characters)',
+ '经验与下次调整（可选）':'Lessons and next adjustments (optional)',
+ '宣发活动不存在，请刷新':'Campaign not found; refresh the page.',
+ '新建宣发活动':'New promotion campaign','调整宣发活动':'Adjust promotion campaign',
+ '活动名称':'Campaign name','活动目标（例如收集多少真实试用）':'Campaign goal (e.g. how many real trials to gather)',
+ '渠道（多个用英文逗号分隔）':'Channels (comma-separated)','开始日期':'Start date','结束日期':'End date',
+ '现金预算（元）':'Cash budget (CNY)','时间预算（小时）':'Time budget (hours)','备注（可选）':'Notes (optional)',
+ '活动只用于组织内容与记录计划，系统绝不代发到外部平台。预算是计划值，不代表任何实际支出或市场结果。':'Campaigns only organize content and record plans; the system never posts externally. Budgets are plan values, not actual spending or market results.',
+ '系统不会编造你的经历或未经实现的功能。本版先提供可审核的内容管理，不会自动发布到第三方平台。内容一经修改，已有审批即失效，需要重新审核。':'Never invent experience or unbuilt features. Drafts stay reviewable; nothing auto-posts. Any edit invalidates an existing approval and requires re-review.',
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
@@ -373,6 +402,14 @@ const dynamic = [
  [/^已归档人工任务 · (\d+) 项（历史保留，可恢复）$/,(_m,n)=>`Archived human tasks · ${n} (history kept, restorable)`],
  [/^看板基于本机记录生成于 (.+)；缺失的历史记为未知，不当作零，也不表示研发完成度。$/,(_m,x)=>`Board generated from local records at ${x}; missing history stays unknown, never zero, and is not a completion measure.`],
  [/^(\d+) 天$/,(_m,n)=>`${n} days`],[/^(\d+) 小时$/,(_m,n)=>`${n} hours`],[/^(\d+) 分钟$/,(_m,n)=>`${n} minutes`],
+ // v2.9 Phase B: campaign cards, calendar and retrospective titles
+ [/^逾期 (\d+) · 今日 (\d+)$/,(_m,a,b)=>`${a} overdue · ${b} due today`],
+ [/^内容 (\d+) 篇：草稿 (\d+) · 待发布 (\d+) · 排期 (\d+) · 已发布 (\d+)$/,(_m,t,d,a,s,p)=>`${t} content pieces: ${d} drafts · ${a} ready to publish · ${s} scheduled · ${p} published`],
+ [/^已登记实际（按内容归因）：访问 (.*) · 试用 (.*) · 实收 ¥(.*)$/,(_m,v,t,i)=>`Recorded actuals (per-content attribution): visits ${en[v]||v} · trials ${en[t]||t} · income ¥${en[i]||i}`],
+ [/^时间范围：(.*) ~ (.*) · 预算：¥(.*) · (.*) 小时$/,(_m,a,b,c,h)=>`Period: ${en[a]||a} ~ ${en[b]||b} · Budget: ¥${c} · ${h} hours`],
+ [/^取消宣发活动 · (.+)$/,(_m,x)=>`Cancel campaign · ${x}`],
+ [/^撰写复盘 · (.+)$/,(_m,x)=>`Write retrospective · ${x}`],
+ [/^查看 \/ 更新复盘 · (.+)$/,(_m,x)=>`View / update retrospective · ${x}`],
 ];
 export function normalizeLanguage(locale){return Object.hasOwn(LANGUAGES,locale)?locale:'zh-CN';}
 export function initialLanguage(storageValue,browserLanguage='zh-CN'){
