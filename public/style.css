@@ -91,3 +91,8 @@
 .loading-panel .empty-icon{animation:radar-pulse 1.4s ease-in-out infinite}
 @keyframes radar-pulse{0%,100%{opacity:.55}50%{opacity:1}}
 @media(max-width:700px){.load-error{flex-direction:column;gap:10px}}
+
+/* Signal bulk triage: selection checkboxes and the floating action bar. */
+.signal-check{width:16px;height:16px;flex:none;margin-top:4px;cursor:pointer}
+.bulk-bar{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--pale);border:1px solid #d5e4d8;border-radius:10px;margin-bottom:14px;flex-wrap:wrap}
+.bulk-bar strong{font-size:12px;color:var(--green)}

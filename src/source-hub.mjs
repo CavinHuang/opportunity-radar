@@ -230,6 +230,28 @@ export function triageSignal(store,id,{status,expected_revision}){
   const item=store.put('sources',{...signal,status,triagedAt:time()},expected_revision);
   store.event('signal.triaged',id,'owner',{status});return item;
 }
+/** Owner bulk triage in one transaction: per-signal outcomes are reported
+ * individually — missing ids, converted signals and rows already in the target
+ * status are skipped with reasons, never silently mixed into the changed count.
+ * One stale row never blocks the rest of the batch. */
+export function bulkTriageSignals(store,{ids,status}={}){
+ if(!Array.isArray(ids)||!ids.length||ids.length>100)throw error('BAD_REQUEST','ids 必须是 1–100 条信号的数组');
+ if(!['new','saved','dismissed'].includes(status))throw error('BAD_SIGNAL_STATUS','状态只能是 new / saved / dismissed');
+ const unique=[...new Set(ids.map(String))];
+ return store.transaction(()=>{
+  const changed=[],skipped=[];
+  for(const id of unique){
+   try{
+    const signal=store.get('sources',id);
+    if(!signal)throw error('NOT_FOUND','信号不存在',404);
+    if(signal.status===status){skipped.push({id,code:'ALREADY_IN_STATUS',message:'已处于目标状态'});continue;}
+    const item=triageSignal(store,id,{status,expected_revision:signal.revision});
+    changed.push({id:item.id,status:item.status,revision:item.revision});
+   }catch(e){skipped.push({id,code:e.code||'ERROR',message:e.message});}
+  }
+  return {status,changed,skipped,note:'已关联机会与不存在的 ID 逐条跳过并说明，不会静默混入成功数。'};
+ });
+}
 export function querySignals(store,{status='all',sourceId,keyword='',offset=0,limit=30}={}){
   const statuses=new Set(['all','new','saved','dismissed','converted']);
   if(!statuses.has(status))throw error('BAD_SIGNAL_STATUS','无效信号状态');
