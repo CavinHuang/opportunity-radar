@@ -175,6 +175,9 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
             itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
         });
       }catch(e){
+        // A failed feed transaction has rolled back all candidate writes.
+        // Never report rolled-back rows as successfully imported signals.
+        received=0;added=0;filtered=0;duplicates=0;notModified=false;
         const failures=(feed.consecutiveFailures||0)+1;
         const backoff=Math.min(MAX_BACKOFF_MINUTES,normal*Math.pow(2,Math.min(failures-1,8)));
         const retryMs=Number.isFinite(e.retryAfterMs)?Math.min(24*60*60_000,e.retryAfterMs):0;
