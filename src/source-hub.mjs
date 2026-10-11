@@ -265,3 +265,16 @@ export function sourceDiagnostics(store,{limit=8}={}){
     recent:recent.get(f.id)||[]
   })).sort((a,b)=>a.title.localeCompare(b.title)),limit:n};
 }
+
+/** Owner-triggered retry for an enabled, failing source only.
+ * The revision precondition rejects stale browser actions, and scanSources
+ * retains its global in-flight guard and transactional revision fence. */
+export async function retryFailedFeed(store,id,{expected_revision}={},options={}){
+  const feed=store.get('feeds',id);
+  if(!feed)throw error('NOT_FOUND','信息源不存在',404);
+  if(!Number.isInteger(expected_revision)||feed.revision!==expected_revision)
+    throw error('REVISION_CONFLICT','来源设置已变化，请刷新后再试',409);
+  if(!feed.enabled)throw error('SOURCE_PAUSED','暂停的信息源不能重试，请先启用',409);
+  if(!(feed.consecutiveFailures>0))throw error('SOURCE_NOT_FAILING','此来源当前没有待恢复的采集异常',409);
+  return scanSources(store,{...options,ids:[id]});
+}
