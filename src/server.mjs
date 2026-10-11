@@ -5,7 +5,7 @@ import {projectPipeline} from './project-pipeline.mjs';
 import {buildReviewDraft,createOpportunityReview,decideOpportunityReview,opportunityReviews,reviewSummary} from './opportunity-review.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
@@ -49,12 +49,39 @@ function authorize(req,role){
   if(process.env.RADAR_OWNER_TOKEN&&!tokenMatches(req.headers['x-radar-owner-key'],process.env.RADAR_OWNER_TOKEN))throw Object.assign(new Error('Owner token missing or invalid'),{code:'UNAUTHORIZED',status:401});
 }
 async function body(req){let buff='';for await(const chunk of req){buff+=chunk;if(buff.length>300000)throw Object.assign(new Error('Request too large'),{status:413,code:'PAYLOAD_TOO_LARGE'});}try{return buff?JSON.parse(buff):{};}catch{throw Object.assign(new Error('Invalid JSON'),{status:400,code:'BAD_JSON'});}}
+/** Optional owner-side idempotency: when the client supplies an Idempotency-Key
+ * header, the write is deduplicated per (key, method, path, body). Without the
+ * header behavior is unchanged, so deliberately recording the same metric twice
+ * stays possible. */
+async function ownerWrite(req,pathname,handler){
+  const key=req.headers['idempotency-key'];
+  if(typeof key!=='string'||!key)return handler(await body(req));
+  if(key.length>200)throw Object.assign(new Error('Idempotency-Key 过长'),{status:400,code:'BAD_REQUEST'});
+  const args=await body(req);
+  const signature=createHash('sha256').update(`${req.method} ${pathname}\n${JSON.stringify(args)}`).digest('hex');
+  return store.idempotent('owner',key,()=>handler(args),signature);
+}
+const LOOPBACK_HOSTNAMES=new Set(['127.0.0.1','localhost','::1']);
+/** Hostname part of a Host header value ("[::1]:4177" → "::1"). */
+function hostNameOf(header){const h=String(header||'').trim().toLowerCase();if(h.startsWith('[')){const end=h.indexOf(']');return end>0?h.slice(1,end):h;}const i=h.lastIndexOf(':');return i>0?h.slice(0,i):h;}
+/** DNS-rebinding guard: without an owner token, only loopback (or explicitly
+ * allow-listed) Host values may reach this server. A rebound domain that
+ * resolves to 127.0.0.1 still sends its own hostname in Host/Origin, so both
+ * matching would otherwise pass the Origin check and expose the local API. */
+function guardHost(req){
+  if(process.env.RADAR_OWNER_TOKEN)return;
+  const name=hostNameOf(req.headers.host);
+  const allowed=(process.env.RADAR_ALLOWED_HOSTS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  if(LOOPBACK_HOSTNAMES.has(name)||allowed.includes(name))return;
+  throw Object.assign(new Error('Host 不是 loopback 且未配置 RADAR_OWNER_TOKEN，已拒绝该请求（DNS rebinding 防护；如确需其他主机名请设置 RADAR_ALLOWED_HOSTS）'),{status:403,code:'HOST_DENIED'});
+}
 function protectOrigin(req){if(!['POST','PUT','PATCH','DELETE'].includes(req.method))return;
   const origin=req.headers.origin; if(!origin)return; const url=new URL(origin);const target=req.headers.host;
   if(url.host!==target)throw Object.assign(new Error('Origin mismatch'),{status:403,code:'ORIGIN_DENIED'});
 }
 export function createServer(){return http.createServer(async(req,res)=>{
   try{
+    guardHost(req);
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(files[pathname]&&req.method==='GET'){const filename=path.join(root,'public',files[pathname]);const content=await readFile(filename);res.writeHead(200,{'Content-Type':mime[path.extname(filename)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(content);}
     if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,sourceHealth:sourceHealth(store),llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
@@ -139,14 +166,14 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const validationClose=/^\/api\/opportunities\/([^/]+)\/validation\/([^/]+)\/close$/.exec(pathname);
     if(validationClose&&req.method==='POST')return send(res,200,{item:closeValidationPlan(store,validationClose[1],validationClose[2],await body(req))});
     if(pathname==='/api/opportunities'&&req.method==='GET')return send(res,200,{items:store.list('opportunities')});
-    if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:service.createOpportunity(await body(req))});
+    if(pathname==='/api/opportunities'&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>service.createOpportunity(d))});
     const oppStatus=/^\/api\/opportunities\/([^/]+)\/status$/.exec(pathname);
     if(oppStatus&&req.method==='POST')return send(res,200,{item:service.changeOpportunityStatus(oppStatus[1],await body(req))});
     const linkSignal=/^\/api\/signals\/([^/]+)\/link$/.exec(pathname);
     if(linkSignal&&req.method==='POST'){
       const data=await body(req);return send(res,200,{item:service.attachSignalToOpportunity(linkSignal[1],data.opportunity_id)});
     }
-    if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:service.startExperiment(await body(req))});
+    if(pathname==='/api/experiments'&&req.method==='POST')return send(res,201,{project:await ownerWrite(req,pathname,d=>service.startExperiment(d))});
     if(pathname==='/api/history'&&req.method==='GET')return send(res,200,{projects:store.list('projects'),ledger:store.list('ledger')});
     const kickoff=/^\/api\/projects\/([^/]+)\/kickoff$/.exec(pathname);
     if(kickoff&&req.method==='POST')return send(res,200,service.prepareKickoff(kickoff[1]));
@@ -186,7 +213,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     // v2.9 Phase B: promotion campaigns (owner-only, manual publication only).
     const campaignsList=/^\/api\/projects\/([^/]+)\/campaigns$/.exec(pathname);
     if(campaignsList&&req.method==='GET')return send(res,200,campaignOverview(store,service.getFullProject(campaignsList[1])));
-    if(campaignsList&&req.method==='POST')return send(res,201,{item:createCampaign(store,campaignsList[1],await body(req))});
+    if(campaignsList&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>createCampaign(store,campaignsList[1],d))});
     const campaignAction=/^\/api\/projects\/([^/]+)\/campaigns\/([^/]+)\/(adjust|cancel|complete|retrospective)$/.exec(pathname);
     if(campaignAction&&req.method==='POST'){
       const data=await body(req);
@@ -194,7 +221,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{item:fn(store,campaignAction[1],campaignAction[2],data)});
     }
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
-    if(ledger&&req.method==='POST')return send(res,201,{item:service.addLedger(ledger[1],await body(req))});
+    if(ledger&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>service.addLedger(ledger[1],d))});
     const growth=/^\/api\/projects\/([^/]+)\/growth$/.exec(pathname);
     if(growth&&req.method==='GET')return send(res,200,growthOverview(store,growth[1]));
     const growthReportRoute=/^\/api\/projects\/([^/]+)\/growth\/report$/.exec(pathname);

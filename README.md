@@ -235,6 +235,8 @@ npm start
 
 默认仅监听本机。需要给其他设备访问时，先配置高强度的 `RADAR_OWNER_TOKEN`，使用 HTTPS 反向代理和可靠的网络访问控制；不要把本地 HTTP 服务直接暴露到互联网。
 
+未配置 `RADAR_OWNER_TOKEN` 时，服务器只接受 Host 为本机回环地址（`127.0.0.1` / `localhost` / `[::1]`）的请求（DNS rebinding 防护）；确需以其他主机名访问时，用 `RADAR_ALLOWED_HOSTS=host1,host2` 显式豁免。所有创建类接口（机会、实验、宣发活动、账本）支持可选的 `Idempotency-Key` 请求头：带上该头时，同键同内容的重复提交只会写入一条记录，同键不同内容返回 409；不带该头行为不变。
+
 ### 可选配置
 
 编辑 `.env`：
