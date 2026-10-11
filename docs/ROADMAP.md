@@ -91,3 +91,8 @@
 - Hash routing: the URL now mirrors the visible view (`#/brief/sources`, `#/project/<id>/<tab>`, `#/history`). Reload and pasted deep links restore the exact view instead of resetting to the brief page; explicit navigation pushes history entries so browser back works, while render-time sync uses replaceState to avoid history spam. A stale project id in a deep link degrades to the friendly empty state instead of an error banner.
 - The project tab strip wraps instead of clipping: at 1280px the last two tabs (增长数据 / Agent 接入) were hidden behind a horizontal micro-scrollbar; all eight tabs are now always reachable.
 - `npm run data -- prune-events --before 90d` (dry run by default, `--confirm` to delete): explicit, user-initiated audit-trail housekeeping. Only event rows older than the cutoff are deleted; records and idem tables are never touched; future or unparsable cutoffs are rejected.
+
+## v2.17 · Signal triage at scale
+
+- Bulk triage: multi-select checkboxes on the signal workbench with a bulk bar (收藏所选 / 忽略所选 / 全选本页 / 取消选择). `POST /api/signals/bulk-triage` runs in one transaction and reports per-signal outcomes — converted signals, missing ids and rows already in the target status are skipped with reasons, never silently mixed into the changed count; duplicate ids in one request deduplicate.
+- The per-source quality panel now shows the 待研判 (new) count next to 收藏/忽略, so noisy sources are visible at a glance.
