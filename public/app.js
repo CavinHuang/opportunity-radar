@@ -91,6 +91,17 @@ npm run agent:pilot -- recover --project ${esc(p.id)} --task &lt;TASK_ID&gt; --r
         return `<div class="source-row"><div class="grow"><strong>${esc(c.title)}</strong><p class="subtext">${esc(c.channel)} · 曝光 ${total('impressions')} · 访问 ${total('visits')} · 试用 ${total('trials')} · 实收 ${total('income')}</p><a class="external" href="${esc(c.publication?.url||'#')}" target="_blank" rel="noopener noreferrer">打开发布记录</a></div></div>`;
       }).join(''):'<p class="subtext">暂无已登记的宣发内容；发布完成后，可将实际效果关联到对应内容。</p>'}`;
     detail+=campaignReport;
+    const byChannel=new Map();
+    for(const c of campaigns){
+      const key=c.publication?.platform||c.channel||'未指定';
+      const row=byChannel.get(key)||{name:key,posts:0,impressions:0,visits:0,trials:0,income:0};
+      row.posts++;
+      for(const x of p.ledger.filter(x=>x.actual&&x.contentId===c.id&&['impressions','visits','trials','income'].includes(x.type)))row[x.type]+=Number(x.value||0);
+      byChannel.set(key,row);
+    }
+    detail+=`<div class="section-heading"><h2>宣发渠道对比</h2><span>按已发布内容关联的实际记录汇总，无记录不能视为零效果</span></div>
+      ${[...byChannel.values()].map(r=>`<div class="source-row"><div class="grow"><strong>${esc(r.name)} · ${r.posts} 篇已发布</strong><p class="subtext">登记曝光 ${r.impressions} · 访问 ${r.visits} · 试用 ${r.trials} · 实收 ¥${r.income}</p></div></div>`).join('')||'<p class="subtext">暂无可对比的已发布渠道。</p>'}`;
+
     const feedback=S.productFeedback||{feedback:[],counts:{},productMilestoneAccepted:false};
     detail+=`<div class="section-heading"><h2>产品真实使用反馈</h2><span>与收入、访问数据分开记录</span></div>
       <div class="flex between"><p class="subtext">已记录 ${feedback.totalRecords||0} 条 · ${feedback.distinctAnonymousRefs||0} 个匿名代号 · 未经独立核验</p>
