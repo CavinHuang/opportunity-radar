@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { LEDGER_METRIC_MAP, mirrorLedgerMetric } from './growth.mjs';
+
+const txDepth=new WeakMap();
 
 const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews','campaigns'];
 /** Highest schema version this build understands, stamped via PRAGMA user_version.
@@ -50,12 +53,39 @@ export function openDatabase(path=':memory:') {
     },
     event(db,kind,entityId,actor,detail,projectId=null){const at=new Date().toISOString(); const result=db.prepare('INSERT INTO events(project_id,kind,entity_id,actor,detail,created_at) VALUES(?,?,?,?,?,?)').run(projectId,kind,entityId,actor,JSON.stringify(detail),at); return Number(result.lastInsertRowid);},
     events(db,after=0,projectId){const rows=projectId?db.prepare('SELECT * FROM events WHERE seq>? AND (project_id=? OR project_id IS NULL) ORDER BY seq LIMIT 100').all(after,projectId):db.prepare('SELECT * FROM events WHERE seq>? ORDER BY seq LIMIT 100').all(after);return rows.map(r=>({...r,detail:JSON.parse(r.detail)}));},
-    transaction(db,fn){db.exec('BEGIN IMMEDIATE');try {const result=fn();db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}},
+    transaction(db,fn){// Re-entrant: writes that open their own transaction (e.g. addLedger)
+     // must keep working when a caller already opened one (idempotency wrapper).
+     const outer=txDepth.get(db)||0;
+     if(outer>0)return fn();
+     txDepth.set(db,1);
+     try{db.exec('BEGIN IMMEDIATE');const result=fn();db.exec('COMMIT');return result;}
+     catch(e){db.exec('ROLLBACK');throw e;}
+     finally{txDepth.set(db,0);}},
     idempotent(db,actor,key,fn,signature){if(!key || typeof key!=='string') throw Object.assign(new Error('idempotency_key is required'),{code:'BAD_REQUEST',status:400});return q.transaction(db,()=>{
       const old=db.prepare('SELECT response,signature FROM idem WHERE actor=? AND key=?').get(actor,key);
       if(old){if(!signature||old.signature!==signature)throw Object.assign(new Error('同一幂等键不能用于不同的请求'),{code:'IDEMPOTENCY_CONFLICT',status:409});return JSON.parse(old.response);}
       const value=fn();db.prepare('INSERT INTO idem(actor,key,response,signature) VALUES(?,?,?,?)').run(actor,key,JSON.stringify(value),signature||null);return value;
     });}
   };
-  return {db,schema,sqliteVersion:String(db.prepare('select sqlite_version() as v').get().v),...Object.fromEntries(Object.entries(q).map(([k,v])=>[k,(...args)=>v(db,...args)])),close:()=>db.close()};
+  const store={db,schema,sqliteVersion:String(db.prepare('select sqlite_version() as v').get().v),...Object.fromEntries(Object.entries(q).map(([k,v])=>[k,(...args)=>v(db,...args)])),close:()=>db.close()};
+  // One-time-per-row backfill: actual ledger entries recorded before the
+  // ledger→growth mirror existed become growth metrics here. The `ledger:<id>`
+  // dedupKey keeps this idempotent on every open; rows that fail validation
+  // (legacy data shapes) are recorded as events, never silently dropped and
+  // never allowed to break opening the database.
+  try{
+   const mirrored=new Set(store.list('growth_metrics').map(x=>x.dedupKey));
+   const pending=store.list('ledger').filter(x=>x.actual===true&&LEDGER_METRIC_MAP[x.type]&&!mirrored.has('ledger:'+x.id));
+   if(pending.length){
+    store.transaction(()=>{
+     for(const entry of pending){
+      try{mirrorLedgerMetric(store,entry.projectId,entry);}
+      catch(e){
+       if(e.code!=='GROWTH_DUPLICATE')store.event('growth.mirror.backfill_skipped',entry.id,'system',{reason:e.code||'ERROR',message:e.message,type:entry.type},entry.projectId);
+      }
+     }
+    });
+   }
+  }catch{/* a backfill scan must never block opening the database */}
+  return store;
 }

@@ -162,6 +162,45 @@ export function recordGrowthMetric(store,projectId,data){
  });
 }
 
+/** The owner ledger (结果账本) and growth_metrics are different objects with
+ * different provenance models, so growth reports never read the ledger
+ * directly. Instead every ACTUAL ledger entry whose metric has an equivalent
+ * caliber here is mirrored exactly once: provenance manual_entry, dedupKey
+ * `ledger:<id>` makes re-runs and backfills idempotent. Deliberately unmapped
+ * calibers: reuse（再次使用 ≠ retention 留存）, transaction_fee / service_cost
+ * （≠ cost 的 cash_cost 口径）, user_hours / agent_hours / brand / learning
+ * （增长模型无对应层级）。Missing caliber equivalents stay Unknown upstream. */
+export const LEDGER_METRIC_MAP={impressions:'impressions',visits:'visits',interest:'interest',
+ trials:'trials',activation:'activation',retention:'retention',income:'income',refund:'refund',cash_cost:'cost'};
+export const hasLedgerMirror=ledgerEntry=>ledgerEntry.actual===true&&Boolean(LEDGER_METRIC_MAP[ledgerEntry.type]);
+const LEDGER_CHANNEL_NAME='结果账本';
+/** Growth metrics are channel-scoped by design; ledger mirrors share one
+ * per-project bucket channel so the owner ledger stays a distinct, honestly
+ * labeled source instead of being attributed to a real promotion channel. */
+function ledgerChannelId(store,projectId){
+ const existing=store.list('growth_channels').find(c=>c.projectId===projectId&&c.name===LEDGER_CHANNEL_NAME);
+ if(existing)return existing.id;
+ return store.put('growth_channels',{id:randomUUID(),projectId,name:LEDGER_CHANNEL_NAME,
+  notes:'由结果账本实际记录自动镜像（manual_entry 口径）',createdAt:now()}).id;
+}
+/** Mirror one actual ledger entry into growth_metrics. Must run inside the
+ * caller's transaction (no nested BEGIN); validation errors propagate. */
+export function mirrorLedgerMetric(store,projectId,ledgerEntry){
+ const metric=LEDGER_METRIC_MAP[ledgerEntry.type];
+ if(!metric)return null;
+ const base=buildMetric(store,projectId,{metric,value:ledgerEntry.value,occurredAt:ledgerEntry.at,
+  provenance:'manual_entry',channelId:ledgerChannelId(store,projectId),contentId:ledgerEntry.contentId||null,
+  dedupKey:'ledger:'+ledgerEntry.id,
+  notes:ledgerEntry.notes?('账本记录：'+ledgerEntry.notes):'来自结果账本的实际记录'});
+ const entry={id:randomUUID(),...base,fingerprint:null,status:'active',supersedesId:null,supersededById:null,
+  supersededAt:null,retractedAt:null,retractReason:null,verifiedAt:null,verifyNote:null,
+  originalProvenance:base.provenance,revisionNumber:1,recordedBy:'owner',createdAt:now()};
+ entry.fingerprint=assertNoDuplicate(store,entry);
+ const saved=store.put('growth_metrics',entry);
+ store.event('growth.metric.mirrored',saved.id,'owner',{ledgerId:ledgerEntry.id,metric:saved.metric,value:saved.value},projectId);
+ return saved;
+}
+
 /** Paste-style import of externally exported rows. Each row is validated
  * individually; duplicates and invalid rows are rejected with reasons, never merged silently. */
 export function importGrowthMetrics(store,projectId,{items}={}){
