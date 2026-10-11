@@ -1,3 +1,4 @@
+import {projectPipeline} from './project-pipeline.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -133,7 +134,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(projectFeedback&&req.method==='GET')return send(res,200,{result:feedbackOverview(store,projectFeedback[1])});
     if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
-    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),events:store.events(0,proj[1]).slice(-50)});}
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),pipeline:projectPipeline(result),events:store.events(0,proj[1]).slice(-50)});}
     const decision=/^\/api\/projects\/([^/]+)\/decide$/.exec(pathname);
     if(decision&&req.method==='POST')return send(res,200,{result:service.ownerDecision(decision[1],await body(req))});
     const generate=/^\/api\/projects\/([^/]+)\/contents\/generate$/.exec(pathname);
