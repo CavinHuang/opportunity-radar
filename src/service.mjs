@@ -186,7 +186,7 @@ export function createService(store, options={}){
     if(!Number.isFinite(parsed)||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/.test(plannedAt))throw err('BAD_REQUEST','排期应包含具体日期、时间和时区');
     if(!/(Z|[+-]\\d{2}:\\d{2})$/.test(plannedAt))throw err('BAD_REQUEST','排期必须指定时区');
     if(parsed<Date.now()-60000)throw err('BAD_REQUEST','不能将宣发计划排到过去');
-    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),scheduledRevision:c.revision+1},c.revision);
+    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),scheduledRevision:c.revision+1,approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
     event('content.scheduled',c.id,owner,{plannedAt:updated.plannedAt,revision:updated.revision},id);
     return updated;
   }
