@@ -104,7 +104,9 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
   let current=validateFeedUrl(url);
   for(let i=0;i<=2;i++){
     const addresses=await checkPublicHost(current,dnsLookup);
-    const response=await fetchImpl(current,{addresses,redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'User-Agent':'NorthstarRadar/0.6 (+personal RSS reader)','Accept':'application/rss+xml,application/atom+xml,application/xml,text/xml',...(new URL(current).origin===origin&&etag?{'If-None-Match':etag}:{}),...(new URL(current).origin===origin&&lastModified?{'If-Modified-Since':lastModified}:{})}});
+    const sameOrigin=new URL(current).origin===origin;
+    const sentEtag=sameOrigin?etag:null,sentLastModified=sameOrigin?lastModified:null;
+    const response=await fetchImpl(current,{addresses,redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'User-Agent':'NorthstarRadar/1.9 (+personal RSS reader)','Accept':'application/rss+xml,application/atom+xml,application/xml,text/xml',...(sentEtag?{'If-None-Match':sentEtag}:{}),...(sentLastModified?{'If-Modified-Since':sentLastModified}:{})}});
     if([301,302,303,307,308].includes(response.status)){
       if(i>=2)throw error('SOURCE_REDIRECT','来源重定向次数超限');
       const location=response.headers.get('location');if(!location)throw error('SOURCE_REDIRECT','来源的重定向缺少目标地址');
@@ -112,8 +114,8 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
     }
     if(response.status===304){
       await response.body?.cancel();
-      if(!etag&&!lastModified)throw error('SOURCE_HTTP','服务器错误地返回了 304');
-      return {notModified:true,etag,lastModified};
+      if(!sentEtag&&!sentLastModified)throw error('SOURCE_HTTP','来源未提供条件请求却返回了 304');
+      return {notModified:true,etag:sentEtag,lastModified:sentLastModified};
     }
     if(!response.ok){
       const failure=error('SOURCE_HTTP',`HTTP ${response.status}`);
@@ -132,7 +134,7 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
     }finally{await reader.cancel().catch(()=>{});}
     const xml=new TextDecoder().decode(Buffer.concat(chunks));
     if(!/<(?:rss|feed|rdf:RDF)\b/i.test(xml))throw error('SOURCE_NOT_RSS','来源不是有效的 RSS 或 Atom 文档');
-    return {xml,notModified:false,etag:response.headers.get('etag')||null,lastModified:response.headers.get('last-modified')||null};
+    return {xml,notModified:false,etag:sameOrigin?response.headers.get('etag')||null:null,lastModified:sameOrigin?response.headers.get('last-modified')||null:null};
   }
   throw error('SOURCE_REDIRECT','无法获取 RSS');
 }
