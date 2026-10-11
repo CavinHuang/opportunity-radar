@@ -1,4 +1,4 @@
-# Curated sources · v0.10
+# Curated sources · v0.11
 
 Updated: 2026-10-11. **A documented feed address is not proof it is reachable in your network. Feed posts are not proof of consumer demand.**
 
@@ -32,10 +32,19 @@ Updated: 2026-10-11. **A documented feed address is not proof it is reachable in
 | se-cooking | Seasoned Advice | https://cooking.stackexchange.com/feeds | International | Concrete kitchen-scene questions; weak link to software opportunities |
 | se-interpersonal | Interpersonal Skills | https://interpersonal.stackexchange.com/feeds | International | Real communication and collaboration dilemmas; soft problems with indirect product paths |
 | habr-best | Хабр (best daily) | https://habr.com/ru/rss/best/daily/ | International (ru-RU) | Russian-language tech community write-ups; editorially aggregated, not a consumer Q&A |
+| softwarerecs | Software Recommendations | https://softwarerecs.stackexchange.com/feeds | International | The most direct tool-gap signal: every post is "I need a tool that does X"; asking is not paying |
+| hardwarerecs | Hardware Recommendations | https://hardwarerecs.stackexchange.com/feeds | International | Hardware selection confusion exposes product gaps; individual opportunity usually sits in companion software |
+| se-photo | Photography | https://photo.stackexchange.com/feeds | International | Camera gear and post-processing are strong consumer domains; gear-talk does not equal unmet needs |
+| se-bicycles | Bicycles | https://bicycles.stackexchange.com/feeds | International | Riding gear, maintenance and training questions; local repair scenes limit software angles |
+| se-outdoors | The Great Outdoors | https://outdoors.stackexchange.com/feeds | International | Camping/hiking gear and safety decisions; safety topics demand restraint, never marketing |
+| se-gardening | Gardening & Landscaping | https://gardening.stackexchange.com/feeds | International | Home-gardening scenes and tool friction; seasonal and climate differences are large |
+| se-workplace | Workplace | https://workplace.stackexchange.com/feeds | International | Collaboration and process friction, a major source of tool opportunities; employee perspective |
+| sspai | 少数派 | https://sspai.com/feed | CN | Rare high-quality Chinese product-experience writing; editorial author view, not Q&A testimony |
+| es-stackoverflow | Stack Overflow en Español | https://es.stackoverflow.com/feeds | International (es) | Spanish-language developer Q&A; developer skew, overlaps with English SO topics |
 
 See V2EX official feed pattern: https://blog.v2ex.com/rss/ and Stack Exchange RSS endpoints above.
 
-**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Indie Hackers discontinued its public RSS (`/feed.rss` and alternatives return 404 as of 2026-10-11). Ask MetaFilter returns 403 to non-browser agents, so server-side fetching is not durable. Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
+**Excluded:** Reddit RSS is being retired on Nov 13, 2026, so it is not a durable automatic channel. Indie Hackers discontinued its public RSS (`/feed.rss` and alternatives return 404 as of 2026-10-11). Ask MetaFilter returns 403 to non-browser agents, so server-side fetching is not durable. 小众软件 (appinn.com) timed out on repeated fetch attempts from this network (2026-10-11). Product Hunt or general media may be used for competitive monitoring, not as firsthand evidence.
 
 ## Verified public availability — GitHub runner, 2026-10-10
 
