@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/source-catalog.mjs'
       - 'src/source-hub.mjs'
+      - 'src/pinned-https.mjs'
       - 'src/signals.mjs'
       - 'scripts/probe-source-catalog.mjs'
       - '.github/workflows/catalog-probe.yml'
