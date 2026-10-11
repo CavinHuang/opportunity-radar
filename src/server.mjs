@@ -2,8 +2,10 @@ import {experimentDecisionReview} from './experiment-decision.mjs';
 import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
 import {createCampaign,adjustCampaign,cancelCampaign,completeCampaign,recordRetrospective,campaignOverview} from './campaign.mjs';
 import {projectPipeline} from './project-pipeline.mjs';
+import {buildReviewDraft,createOpportunityReview,decideOpportunityReview,opportunityReviews,reviewSummary} from './opportunity-review.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
@@ -21,21 +23,30 @@ import {feedbackOverview,recordProductFeedback} from './delivery-trace.mjs';
 import {sourceQualityReport} from './source-quality.mjs';
 import {discoveryClusters,reviewDiscoveryCluster,discoveryQualityReport} from './discovery.mjs';
 import {readinessSummary} from './data-safety.mjs';
+import {growthOverview,growthReport,createGrowthChannel,createGrowthCampaign,recordGrowthMetric,importGrowthMetrics,reviseGrowthMetric,retractGrowthMetric,verifyGrowthMetric,growthHistory} from './growth.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
 if(!['127.0.0.1','localhost','::1'].includes(host)&&!process.env.RADAR_OWNER_TOKEN)throw new Error('RADAR_OWNER_TOKEN is required when binding to a non-loopback host');
 const store=openDatabase(dbPath);seedConfiguredSources(store);const service=createService(store);
-// Test and supervision hooks may release the SQLite handle before removing temp dirs
-// (Windows cannot delete files that are still open).
-let databaseClosed=false;
-export function closeDatabase(){if(!databaseClosed){databaseClosed=true;store.close();}}
+let storeClosed=false;
+/** Release the module-level SQLite handle. Windows cannot delete files that are
+ * still open, so test teardown calls this before removing its temporary directory. */
+export function closeStore(){if(storeClosed)return;storeClosed=true;store.close();}
 const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/i18n.js':'i18n.js'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8'};
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
+/** Length-safe constant-time comparison so token checks do not leak the secret
+ * byte by byte through early-exit string comparison. */
+function tokenMatches(received,expected){
+  const a=Buffer.from(String(received??''),'utf8'),b=Buffer.from(String(expected??''),'utf8');
+  if(a.length!==b.length){ // compare against a dummy of the same length to keep timing flat
+    timingSafeEqual(b,b);return false;}
+  return timingSafeEqual(a,b);
+}
 function authorize(req,role){
-  if(role==='agent'){const expected=process.env.RADAR_AGENT_TOKEN;if(!expected||req.headers.authorization!==`Bearer ${expected}`)throw Object.assign(new Error('Agent token missing or invalid'),{code:'UNAUTHORIZED',status:401});return;}
-  if(process.env.RADAR_OWNER_TOKEN&&req.headers['x-radar-owner-key']!==process.env.RADAR_OWNER_TOKEN)throw Object.assign(new Error('Owner token missing or invalid'),{code:'UNAUTHORIZED',status:401});
+  if(role==='agent'){const expected=process.env.RADAR_AGENT_TOKEN;if(!expected||!tokenMatches(req.headers.authorization,`Bearer ${expected}`))throw Object.assign(new Error('Agent token missing or invalid'),{code:'UNAUTHORIZED',status:401});return;}
+  if(process.env.RADAR_OWNER_TOKEN&&!tokenMatches(req.headers['x-radar-owner-key'],process.env.RADAR_OWNER_TOKEN))throw Object.assign(new Error('Owner token missing or invalid'),{code:'UNAUTHORIZED',status:401});
 }
 async function body(req){let buff='';for await(const chunk of req){buff+=chunk;if(buff.length>300000)throw Object.assign(new Error('Request too large'),{status:413,code:'PAYLOAD_TOO_LARGE'});}try{return buff?JSON.parse(buff):{};}catch{throw Object.assign(new Error('Invalid JSON'),{status:400,code:'BAD_JSON'});}}
 function protectOrigin(req){if(!['POST','PUT','PATCH','DELETE'].includes(req.method))return;
@@ -86,7 +97,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/signals/scan'&&req.method==='POST'){
-      const data=await body(req);return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
+      const data=await body(req);
+      if(data.source_id!==undefined&&typeof data.source_id!=='string')throw Object.assign(new Error('source_id 必须是来源 ID 字符串'),{code:'BAD_REQUEST',status:400});
+      return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
     }
     const triage=/^\/api\/signals\/([^/]+)\/triage$/.exec(pathname);
     if(triage&&req.method==='POST')return send(res,200,{item:triageSignal(store,triage[1],await body(req))});
@@ -152,7 +165,14 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
-    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.events(0,proj[1]).slice(-50)});}
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.events(0,proj[1]).slice(-50)});}
+    const reviewDecide=/^\/api\/projects\/([^/]+)\/reviews\/([^/]+)\/decide$/.exec(pathname);
+    if(reviewDecide&&req.method==='POST')return send(res,200,{item:decideOpportunityReview(store,reviewDecide[1],reviewDecide[2],await body(req))});
+    const reviewDraft=/^\/api\/projects\/([^/]+)\/reviews\/draft$/.exec(pathname);
+    if(reviewDraft&&req.method==='GET')return send(res,200,buildReviewDraft(store,reviewDraft[1],{windowFrom:u.searchParams.get('from')||undefined,windowTo:u.searchParams.get('to')||undefined}));
+    const reviews=/^\/api\/projects\/([^/]+)\/reviews$/.exec(pathname);
+    if(reviews&&req.method==='GET')return send(res,200,{items:opportunityReviews(store,reviews[1])});
+    if(reviews&&req.method==='POST')return send(res,201,{item:createOpportunityReview(store,reviews[1],await body(req))});
     const decision=/^\/api\/projects\/([^/]+)\/decide$/.exec(pathname);
     if(decision&&req.method==='POST')return send(res,200,{result:service.ownerDecision(decision[1],await body(req))});
     const generate=/^\/api\/projects\/([^/]+)\/contents\/generate$/.exec(pathname);
@@ -175,6 +195,26 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
     if(ledger&&req.method==='POST')return send(res,201,{item:service.addLedger(ledger[1],await body(req))});
+    const growth=/^\/api\/projects\/([^/]+)\/growth$/.exec(pathname);
+    if(growth&&req.method==='GET')return send(res,200,growthOverview(store,growth[1]));
+    const growthReportRoute=/^\/api\/projects\/([^/]+)\/growth\/report$/.exec(pathname);
+    if(growthReportRoute&&req.method==='GET')return send(res,200,growthReport(store,growthReportRoute[1],{from:u.searchParams.get('from')||undefined,to:u.searchParams.get('to')||undefined,granularity:u.searchParams.get('granularity')||'day'}));
+    const growthHistoryRoute=/^\/api\/projects\/([^/]+)\/growth\/history$/.exec(pathname);
+    if(growthHistoryRoute&&req.method==='GET')return send(res,200,{items:growthHistory(store,growthHistoryRoute[1],{metricId:u.searchParams.get('metric_id')||'',limit:Number(u.searchParams.get('limit')||50)})});
+    const growthChannel=/^\/api\/projects\/([^/]+)\/growth\/channels$/.exec(pathname);
+    if(growthChannel&&req.method==='POST')return send(res,201,{item:createGrowthChannel(store,growthChannel[1],await body(req))});
+    const growthCampaign=/^\/api\/projects\/([^/]+)\/growth\/campaigns$/.exec(pathname);
+    if(growthCampaign&&req.method==='POST')return send(res,201,{item:createGrowthCampaign(store,growthCampaign[1],await body(req))});
+    const growthMetricImport=/^\/api\/projects\/([^/]+)\/growth\/metrics\/import$/.exec(pathname);
+    if(growthMetricImport&&req.method==='POST')return send(res,200,importGrowthMetrics(store,growthMetricImport[1],await body(req)));
+    const growthMetric=/^\/api\/projects\/([^/]+)\/growth\/metrics$/.exec(pathname);
+    if(growthMetric&&req.method==='POST')return send(res,201,{item:recordGrowthMetric(store,growthMetric[1],await body(req))});
+    const growthMetricAction=/^\/api\/projects\/([^/]+)\/growth\/metrics\/([^/]+)\/(revise|retract|verify)$/.exec(pathname);
+    if(growthMetricAction&&req.method==='POST'){
+      const [,projectId,metricId,action]=growthMetricAction;const data=await body(req);
+      const item=action==='revise'?reviseGrowthMetric(store,projectId,metricId,data):action==='retract'?retractGrowthMetric(store,projectId,metricId,data):verifyGrowthMetric(store,projectId,metricId,data);
+      return send(res,200,{item});
+    }
     const attest=/^\/api\/projects\/([^/]+)\/evidence\/([^/]+)\/attest$/.exec(pathname);
     if(attest&&req.method==='POST'){
       const e=store.get('evidence',attest[2]);if(!e||e.projectId!==attest[1])return send(res,404,{error:'NOT_FOUND'});

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 const dir=mkdtempSync(join(tmpdir(),'radar-mcp-http-'));
 process.env.RADAR_DB=join(dir,'db.sqlite');
 process.env.RADAR_AGENT_TOKEN='mcp-test-agent';
-const {createServer,closeDatabase}=await import('../src/server.mjs');
+const {createServer,closeStore}=await import('../src/server.mjs');
 test('MCP HTTP requires agent auth and modern request metadata',async()=>{
  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const url=`http://127.0.0.1:${server.address().port}/mcp`;
@@ -20,5 +20,9 @@ test('MCP HTTP requires agent auth and modern request metadata',async()=>{
   assert.equal(good.status,200);assert.equal((await good.json()).result.tools.length,12);
   const mismatch=await fetch(url,{method:'POST',headers:{...withAuth,'Mcp-Method':'ping'},body:JSON.stringify(payload)});
   assert.equal(mismatch.status,400);assert.equal((await mismatch.json()).error.code,-32020);
- }finally{await new Promise(r=>server.close(r));closeDatabase();rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{
+  await new Promise(r=>server.close(r));
+  // Close the module-level SQLite handle first; Windows cannot delete open files.
+  closeStore();rmSync(dir,{recursive:true,force:true});
+ }
 });

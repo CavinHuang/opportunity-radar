@@ -9,7 +9,7 @@ const folder=mkdtempSync(join(tmpdir(),'radar-pilot-http-'));
 process.env.RADAR_DB=join(folder,'app.sqlite');
 process.env.RADAR_AGENT_TOKEN='pilot-transport-secret';
 process.env.RADAR_OWNER_TOKEN='pilot-owner-secret';
-const {createServer,closeDatabase}=await import('../src/server.mjs');
+const {createServer,closeStore}=await import('../src/server.mjs');
 const {agentApi,submitPilot,statusPilot}=await import('../src/agent-pilot.mjs');
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
 
@@ -72,7 +72,7 @@ test('real HTTP Agent transport: owner approval → kickoff → exact PR handoff
    assert.ok(['EVIDENCE_NOT_VERIFIED','GITHUB_G1_REQUIRED'].includes(denied.data.error));
  }finally{
    await new Promise(resolve=>server.close(resolve));
-   closeDatabase(); // release the SQLite handle so Windows allows deleting the temp dir
-   rmSync(folder,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+   // Close the module-level SQLite handle first; Windows cannot delete open files.
+   closeStore();rmSync(folder,{recursive:true,force:true});
  }
 });

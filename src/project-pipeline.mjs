@@ -51,6 +51,10 @@ export function projectPipeline(project,{now:nowOverride}={}){
   }else if(drafts||approvals)nextActions.push({kind:'launch_blocked',label:'继续准备内容，产品交付尚未全部验收',tab:'launch'});
  }
  if(publications)nextActions.push({kind:'measure',label:'记录真实曝光、访问、试用与收入数据',tab:'ledger'});
+ // Phase D: periodic review reminder. Only shown when the caller explicitly
+ // provides a reviewSummary and a new review cycle is due; omitted otherwise.
+ const review=project.reviewSummary||null;
+ if(review?.due)nextActions.push({kind:'review',label:'对照最初假设做周期复盘，再决定继续、调整、暂停或停止',tab:'review'});
  return {baselineRevision:baseline?.revision||null,taskCounts,totalTasks:tasks.length,
   ownerTaskCounts,ownerTaskTotal:ownerTasks.length,ownerOverdue,milestoneCounts:{total:milestones.length,accepted,pending:count(milestones,m=>m.acceptanceState==='pending'),rejected:count(milestones,m=>m.acceptanceState==='rejected')},
   pendingAcceptance,pendingDecisions,contentCounts:{drafts,approved:approvals,published:publications},
@@ -58,5 +62,6 @@ export function projectPipeline(project,{now:nowOverride}={}){
   // A work-in-progress count is not a credible percent-complete measure.
   progressLabel:`${accepted}/${milestones.length} 里程碑已人工验收`,
   launchReady:accepted===milestones.length&&milestones.length>0,
+  reviewDue:review?Boolean(review.due):null,
   nextActions:nextActions.slice(0,6)};
 }

@@ -7,7 +7,7 @@ const dir=mkdtempSync(join(tmpdir(),'radar-campaigns-'));
 process.env.RADAR_DB=join(dir,'db.sqlite');
 process.env.RADAR_OWNER_TOKEN='campaign-owner-secret';
 process.env.RADAR_AGENT_TOKEN='campaign-agent-secret';
-const {createServer,closeDatabase}=await import('../src/server.mjs');
+const {createServer,closeStore}=await import('../src/server.mjs');
 
 test('campaign routes enforce owner auth, revision fences and the manual-publication-only workflow',async()=>{
  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -70,7 +70,7 @@ test('campaign routes enforce owner auth, revision fences and the manual-publica
   assert.equal(JSON.stringify(context.data).includes('campaign'),false);
  }finally{
   await new Promise(r=>server.close(r));
-  closeDatabase(); // release the SQLite handle so Windows can delete the temp dir
+  closeStore(); // release the SQLite handle so Windows can delete the temp dir
   rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }
 });

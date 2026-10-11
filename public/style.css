@@ -79,3 +79,15 @@
 .archived-tasks summary{cursor:pointer;font-weight:700;font-size:12px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.kanban{grid-template-columns:1fr}}
+
+/* Phase E: recoverable load/error states. The banner names the next action and
+   states that local SQLite data is safe; it never invents a server status. */
+.load-error{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:0 0 20px;padding:17px 20px;background:#fdf6ee;border:1px solid #ecd9bd;border-radius:12px}
+.load-error strong{font-size:13px;color:#8a5f31}
+.load-error.offline{background:#f2f5f3;border-color:#dbe4de}
+.load-error.offline strong{color:#41584a}
+.load-error .subtext{margin-top:6px;max-width:720px}
+.loading-panel{padding:60px 25px;text-align:center}
+.loading-panel .empty-icon{animation:radar-pulse 1.4s ease-in-out infinite}
+@keyframes radar-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media(max-width:700px){.load-error{flex-direction:column;gap:10px}}

@@ -241,7 +241,7 @@ export function createService(store, options={}){
       event('content.published_recorded',c.id,owner,{url:u,manual:true},id);return next;
     }
     throw err('BAD_REQUEST','unknown content action');}
-  function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
+  function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
     const contentId=data.contentId||null;let campaignId=null;
     // Review fix: the campaign attribution is snapshotted at recording time, so moving
     // a content between campaigns later cannot rewrite a closed campaign's actuals.

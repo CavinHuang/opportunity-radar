@@ -23,11 +23,15 @@ test('private journal allows only safe metadata and restricts permissions',()=>{
   const raw=readFileSync(path,'utf8');
   assert.ok(!raw.includes('PRIVATE'));
   assert.ok(!raw.includes('SECRET'));
-  // POSIX mode bits are not enforced by Windows filesystems (0o600 reads back as 0o666);
-  // the chmod-0600 security requirement itself stays in force and is asserted on POSIX.
-  if(process.platform!=='win32'){
-    assert.equal((lstatSync(path).mode&0o777),0o600);
-    assert.equal((lstatSync(dir).mode&0o777),0o700);
+  // src/pilot-journal.mjs applies 0o600/0o700 via chmodSync. Windows has no POSIX
+  // permission bits (chmod only toggles the read-only flag and stat.mode reports
+  // 0o666/0o777), so the strict mode check is meaningful on POSIX only.
+  if(process.platform==='win32'){
+   assert.ok(lstatSync(path).isFile());
+   assert.ok(lstatSync(dir).isDirectory());
+  }else{
+   assert.equal((lstatSync(path).mode&0o777),0o600);
+   assert.equal((lstatSync(dir).mode&0o777),0o700);
   }
   const records=listRunReceipts({projectId:'project-001',dir});
   assert.equal(records.length,1);
