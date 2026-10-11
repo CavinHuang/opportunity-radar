@@ -204,7 +204,7 @@ export function createService(store, options={}){
       event('content.published_recorded',c.id,owner,{url:u,manual:true},id);return next;
     }
     throw err('BAD_REQUEST','unknown content action');}
-  function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
+  function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
     const contentId=data.contentId||null;
     if(contentId){const content=get('contents',contentId);if(content.projectId!==id||content.reviewState!=='published')throw err('BAD_CAMPAIGN_REF','只能关联当前项目已经登记发布的内容',409);}
     const entry=store.put('ledger',{id:randomUUID(),projectId:id,contentId,type:data.type,value:nonNegative(data.value,'value'),unit:data.unit||(['user_hours','agent_hours'].includes(data.type)?'h':['income','refund','transaction_fee','service_cost','cash_cost'].includes(data.type)?'CNY':'count'),source:data.source||'manual_unverified',actual:data.actual===true,notes:data.notes||'',at:now(),createdAt:now()});event('ledger.recorded',entry.id,owner,{type:entry.type,value:entry.value,actual:entry.actual},id);return entry;}

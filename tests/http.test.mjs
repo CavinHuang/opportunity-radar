@@ -4,11 +4,13 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const directory=mkdtempSync(join(tmpdir(),'radar-http-test-'));
-after(()=>rmSync(directory,{recursive:true,force:true}));
 process.env.RADAR_DB=join(directory,'test.sqlite');
 process.env.RADAR_AGENT_TOKEN='test-agent-token';
 process.env.RADAR_OWNER_TOKEN='test-owner-token';
-const {createServer}=await import('../src/server.mjs');
+const {createServer,closeStore}=await import('../src/server.mjs');
+// Close the module-level SQLite handle before deleting the temp directory;
+// Windows refuses to unlink files that are still open.
+after(()=>{closeStore();rmSync(directory,{recursive:true,force:true});});
 test('HTTP contract enforces role separation and end-to-end workflow',async()=>{
  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const base=`http://127.0.0.1:${server.address().port}`;
