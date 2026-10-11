@@ -132,3 +132,21 @@ test('onboarding and offline backup copy is available in both languages',()=>{
  assert.equal(translate('已启用 2 个来源 · 成功扫描过 1 个 · 当前异常 0 个 · 已保存 7 条公开信号。','en-US'),
   '2 enabled sources · 1 previously fetched · 0 errors · 7 public signals saved.');
 });
+
+test('Phase E recoverable load/error/offline copy translates into English',()=>{
+ assert.equal(translate('页面数据加载失败','en-US'),'Page data failed to load');
+ assert.equal(translate('未知错误','en-US'),'Unknown error');
+ assert.equal(translate('重试加载','en-US'),'Retry');
+ assert.equal(translate('网络连接已断开','en-US'),'Network connection lost');
+ assert.equal(translate('正在加载数据','en-US'),'Loading data');
+ assert.equal(translate('加载失败','en-US'),'Load failed');
+ assert.equal(translate('数据尚未加载','en-US'),'Data not loaded yet');
+ assert.equal(translate('你的研究数据保存在本机 SQLite，不会因此丢失。可以点击重试；若服务刚重启，请等待几秒后重试。','en-US'),
+  'Your research data lives in local SQLite and is not lost by a failed page load. Retry now; if the service just restarted, wait a few seconds first.');
+ assert.equal(translate('这是本地优先应用：数据保存在本机 SQLite。恢复连接后页面会自动重新加载；期间不要重复提交表单。','en-US'),
+  'This is a local-first app: data lives in local SQLite. The page reloads automatically when the connection returns; avoid resubmitting forms until then.');
+ assert.equal(translate('正在从本机 SQLite 读取机会、来源与实验状态；首次加载完成后这里会显示真实数据，不填充演示内容。','en-US'),
+  'Reading opportunities, sources and experiment state from local SQLite. Real data appears after the first load — demo content is never filled in.');
+ assert.equal(translate('服务或网络不可用时，不显示任何统计，也不会把未加载的数据当作零或空库。确认服务正在运行后，点击上方「重试加载」。','en-US'),
+  'While the service or network is unavailable, no statistics are shown; unloaded data is never treated as zero or an empty library. Confirm the service is running, then use “Retry” above.');
+});

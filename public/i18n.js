@@ -380,6 +380,19 @@ const en = {
  '决定':'Decision','决定理由（至少16字，将留档）':'Decision rationale (at least 16 characters, archived)',
  '我确认执行该决定':'I confirm applying this decision','我已知晓上述未解决问题，仍要记录该决定':'I acknowledge the open issues and still want this decision recorded',
  '存在未解决问题的选项：':'Options with open issues: ',
+
+ // Phase E · recoverable load/error/offline states
+ '页面数据加载失败':'Page data failed to load',
+ '未知错误':'Unknown error',
+ '你的研究数据保存在本机 SQLite，不会因此丢失。可以点击重试；若服务刚重启，请等待几秒后重试。':'Your research data lives in local SQLite and is not lost by a failed page load. Retry now; if the service just restarted, wait a few seconds first.',
+ '重试加载':'Retry',
+ '网络连接已断开':'Network connection lost',
+ '这是本地优先应用：数据保存在本机 SQLite。恢复连接后页面会自动重新加载；期间不要重复提交表单。':'This is a local-first app: data lives in local SQLite. The page reloads automatically when the connection returns; avoid resubmitting forms until then.',
+ '正在加载数据':'Loading data',
+ '正在从本机 SQLite 读取机会、来源与实验状态；首次加载完成后这里会显示真实数据，不填充演示内容。':'Reading opportunities, sources and experiment state from local SQLite. Real data appears after the first load — demo content is never filled in.',
+ '加载失败':'Load failed',
+ '数据尚未加载':'Data not loaded yet',
+ '服务或网络不可用时，不显示任何统计，也不会把未加载的数据当作零或空库。确认服务正在运行后，点击上方「重试加载」。':'While the service or network is unavailable, no statistics are shown; unloaded data is never treated as zero or an empty library. Confirm the service is running, then use “Retry” above.',
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [

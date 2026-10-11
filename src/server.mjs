@@ -4,6 +4,7 @@ import {projectPipeline} from './project-pipeline.mjs';
 import {buildReviewDraft,createOpportunityReview,decideOpportunityReview,opportunityReviews,reviewSummary} from './opportunity-review.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
@@ -34,9 +35,17 @@ export function closeStore(){if(storeClosed)return;storeClosed=true;store.close(
 const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/i18n.js':'i18n.js'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8'};
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
+/** Length-safe constant-time comparison so token checks do not leak the secret
+ * byte by byte through early-exit string comparison. */
+function tokenMatches(received,expected){
+  const a=Buffer.from(String(received??''),'utf8'),b=Buffer.from(String(expected??''),'utf8');
+  if(a.length!==b.length){ // compare against a dummy of the same length to keep timing flat
+    timingSafeEqual(b,b);return false;}
+  return timingSafeEqual(a,b);
+}
 function authorize(req,role){
-  if(role==='agent'){const expected=process.env.RADAR_AGENT_TOKEN;if(!expected||req.headers.authorization!==`Bearer ${expected}`)throw Object.assign(new Error('Agent token missing or invalid'),{code:'UNAUTHORIZED',status:401});return;}
-  if(process.env.RADAR_OWNER_TOKEN&&req.headers['x-radar-owner-key']!==process.env.RADAR_OWNER_TOKEN)throw Object.assign(new Error('Owner token missing or invalid'),{code:'UNAUTHORIZED',status:401});
+  if(role==='agent'){const expected=process.env.RADAR_AGENT_TOKEN;if(!expected||!tokenMatches(req.headers.authorization,`Bearer ${expected}`))throw Object.assign(new Error('Agent token missing or invalid'),{code:'UNAUTHORIZED',status:401});return;}
+  if(process.env.RADAR_OWNER_TOKEN&&!tokenMatches(req.headers['x-radar-owner-key'],process.env.RADAR_OWNER_TOKEN))throw Object.assign(new Error('Owner token missing or invalid'),{code:'UNAUTHORIZED',status:401});
 }
 async function body(req){let buff='';for await(const chunk of req){buff+=chunk;if(buff.length>300000)throw Object.assign(new Error('Request too large'),{status:413,code:'PAYLOAD_TOO_LARGE'});}try{return buff?JSON.parse(buff):{};}catch{throw Object.assign(new Error('Invalid JSON'),{status:400,code:'BAD_JSON'});}}
 function protectOrigin(req){if(!['POST','PUT','PATCH','DELETE'].includes(req.method))return;
@@ -87,7 +96,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/signals/scan'&&req.method==='POST'){
-      const data=await body(req);return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
+      const data=await body(req);
+      if(data.source_id!==undefined&&typeof data.source_id!=='string')throw Object.assign(new Error('source_id 必须是来源 ID 字符串'),{code:'BAD_REQUEST',status:400});
+      return send(res,200,{result:await scanSources(store,{ids:data.source_id?[data.source_id]:undefined})});
     }
     const triage=/^\/api\/signals\/([^/]+)\/triage$/.exec(pathname);
     if(triage&&req.method==='POST')return send(res,200,{item:triageSignal(store,triage[1],await body(req))});

@@ -3,6 +3,31 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews'];
+/** Highest schema version this build understands, stamped via PRAGMA user_version.
+ * Version 0 means "written before versioning existed" — every migration below is
+ * incremental and idempotent, so old databases upgrade in place without losing rows. */
+export const SCHEMA_VERSION=1;
+const migrations=[
+ // v1 · baseline versioned schema. Older files already have these tables; the
+ // signature column and the project event index are added only when missing.
+ {version:1,run(db){
+   if(!db.prepare('PRAGMA table_info(idem)').all().some(col=>col.name==='signature')) db.exec('ALTER TABLE idem ADD COLUMN signature TEXT');
+   db.exec('CREATE INDEX IF NOT EXISTS events_project_seq ON events(project_id,seq)');
+ }}];
+function runMigrations(db){
+  const from=Number(db.prepare('PRAGMA user_version').get().user_version||0);
+  if(from>SCHEMA_VERSION)throw Object.assign(
+    new Error(`数据库 schema 版本 v${from} 比当前应用支持的 v${SCHEMA_VERSION} 更新；请先升级应用，再用它打开这份只识别到 v${SCHEMA_VERSION} 的数据库`),
+    {code:'SCHEMA_TOO_NEW',status:500});
+  const applied=[];
+  for(const migration of migrations){
+    if(migration.version<=from)continue;
+    migration.run(db);
+    db.exec(`PRAGMA user_version=${Number(migration.version)}`);
+    applied.push(migration.version);
+  }
+  return {from,to:from>SCHEMA_VERSION?from:Math.max(from,SCHEMA_VERSION),applied};
+}
 export function openDatabase(path=':memory:') {
   if(path!==':memory:') mkdirSync(dirname(path), {recursive:true});
   const db = new DatabaseSync(path);
@@ -10,7 +35,9 @@ export function openDatabase(path=':memory:') {
   db.exec(`CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL, id TEXT NOT NULL, json TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(kind,id));
   CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, kind TEXT NOT NULL, entity_id TEXT, actor TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS idem (actor TEXT NOT NULL, key TEXT NOT NULL, response TEXT NOT NULL, signature TEXT, PRIMARY KEY(actor,key));`);
-  if(!db.prepare('PRAGMA table_info(idem)').all().some(col=>col.name==='signature')) db.exec('ALTER TABLE idem ADD COLUMN signature TEXT');
+  // A refused open (e.g. SCHEMA_TOO_NEW) must not leak the handle: Windows
+  // cannot delete or replace a file that is still open.
+  const schema=(()=>{try{return runMigrations(db)}catch(e){try{db.close()}catch{/* report the original error */}throw e}})();
   function ensureKind(kind){ if(!entities.includes(kind)) throw Object.assign(new Error('invalid collection'),{code:'BAD_REQUEST'}); }
   const q = {
     get(db,kind,id){ensureKind(kind);const r=db.prepare('SELECT json FROM records WHERE kind=? AND id=?').get(kind,id); return r?JSON.parse(r.json):null;},
@@ -30,5 +57,5 @@ export function openDatabase(path=':memory:') {
       const value=fn();db.prepare('INSERT INTO idem(actor,key,response,signature) VALUES(?,?,?,?)').run(actor,key,JSON.stringify(value),signature||null);return value;
     });}
   };
-  return {db,...Object.fromEntries(Object.entries(q).map(([k,v])=>[k,(...args)=>v(db,...args)])),close:()=>db.close()};
+  return {db,schema,sqliteVersion:String(db.prepare('select sqlite_version() as v').get().v),...Object.fromEntries(Object.entries(q).map(([k,v])=>[k,(...args)=>v(db,...args)])),close:()=>db.close()};
 }
