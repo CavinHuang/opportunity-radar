@@ -240,3 +240,28 @@ export function querySignals(store,{status='all',sourceId,keyword='',offset=0,li
   const matched=all.filter(s=>(status==='all'||s.status===status)&&(!sourceId||s.feedIds?.includes(sourceId))&&(!keyword||(`${s.title} ${s.description}`).toLocaleLowerCase().includes(String(keyword).toLocaleLowerCase())));
   return {items:matched.slice(Number(offset),Number(offset)+n),total:matched.length,counts,limit:n,offset:Number(offset)};
 }
+
+/** Read-only, bounded diagnostics from the durable event cursor; no network calls. */
+export function sourceDiagnostics(store,{limit=8}={}){
+  const n=Number(limit);
+  if(!Number.isInteger(n)||n<1||n>30)throw error('BAD_REQUEST','诊断记录数量必须为 1–30');
+  const feeds=store.list('feeds');
+  const ids=new Set(feeds.map(f=>f.id));
+  const logs=store.db.prepare("SELECT seq,kind,entity_id,detail,created_at FROM events WHERE kind IN ('source.scan_succeeded','source.scan_failed','source.scan_skipped') ORDER BY seq DESC LIMIT 3000").all();
+  const recent=new Map();
+  for(const log of logs){
+    if(!ids.has(log.entity_id))continue;
+    const entries=recent.get(log.entity_id)||[];
+    if(entries.length>=n)continue;
+    entries.push({seq:log.seq,kind:log.kind,at:log.created_at,...JSON.parse(log.detail)});
+    recent.set(log.entity_id,entries);
+  }
+  return {items:feeds.map(f=>({
+    feedId:f.id,title:f.title,enabled:f.enabled,
+    state:!f.enabled?'paused':f.consecutiveFailures>0?'degraded':!f.lastSuccessAt?'pending':'healthy',
+    consecutiveFailures:f.consecutiveFailures||0,
+    lastCheckedAt:f.lastCheckedAt||null,lastSuccessAt:f.lastSuccessAt||null,
+    nextScanAt:f.nextScanAt||null,lastError:f.lastError||null,
+    recent:recent.get(f.id)||[]
+  })).sort((a,b)=>a.title.localeCompare(b.title)),limit:n};
+}

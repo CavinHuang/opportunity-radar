@@ -7,7 +7,7 @@ import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
 import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
-import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
+import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,sourceDiagnostics,addManualSignal,triageSignal,querySignals} from './source-hub.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
 import {catalogList,installCatalogFeed} from './source-catalog.mjs';
@@ -65,6 +65,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(discoveryLink&&req.method==='POST')return send(res,200,service.linkDiscoveryCluster(discoveryLink[1],await body(req)));
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
+    if(pathname==='/api/sources/diagnostics'&&req.method==='GET')return send(res,200,sourceDiagnostics(store,{limit:u.searchParams.get('limit')??8}));
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
     if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
     const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
