@@ -1,5 +1,6 @@
 import {experimentDecisionReview} from './experiment-decision.mjs';
-import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory} from './owner-tasks.mjs';
+import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
+import {createCampaign,adjustCampaign,cancelCampaign,completeCampaign,recordRetrospective,campaignOverview} from './campaign.mjs';
 import {projectPipeline} from './project-pipeline.mjs';
 import {buildReviewDraft,createOpportunityReview,decideOpportunityReview,opportunityReviews,reviewSummary} from './opportunity-review.mjs';
 import http from 'node:http';
@@ -154,11 +155,17 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
     const taskHistory=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/history$/.exec(pathname);
     if(taskHistory&&req.method==='GET')return send(res,200,{items:ownerTaskHistory(store,taskHistory[1],taskHistory[2],{limit:u.searchParams.get('limit')??30})});
+    const taskTimeline=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/timeline$/.exec(pathname);
+    if(taskTimeline&&req.method==='GET')return send(res,200,ownerTaskTimeline(store,taskTimeline[1],taskTimeline[2]));
+    const taskArchive=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/(archive|unarchive)$/.exec(pathname);
+    if(taskArchive&&req.method==='POST')return send(res,200,{item:(taskArchive[3]==='archive'?archiveOwnerTask:unarchiveOwnerTask)(store,taskArchive[1],taskArchive[2],await body(req))});
+    const taskBoard=/^\/api\/projects\/([^/]+)\/owner-tasks\/board$/.exec(pathname);
+    if(taskBoard&&req.method==='GET')return send(res,200,ownerTaskBoard(store,taskBoard[1]));
     const planning=/^\/api\/projects\/([^/]+)\/owner-tasks$/.exec(pathname);
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
-    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1]),events:store.events(0,proj[1]).slice(-50)});}
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.events(0,proj[1]).slice(-50)});}
     const reviewDecide=/^\/api\/projects\/([^/]+)\/reviews\/([^/]+)\/decide$/.exec(pathname);
     if(reviewDecide&&req.method==='POST')return send(res,200,{item:decideOpportunityReview(store,reviewDecide[1],reviewDecide[2],await body(req))});
     const reviewDraft=/^\/api\/projects\/([^/]+)\/reviews\/draft$/.exec(pathname);
@@ -176,6 +183,16 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(schedule&&req.method==='POST')return send(res,200,{item:service.scheduleContent(schedule[1],schedule[2],await body(req))});
     const review=/^\/api\/projects\/([^/]+)\/contents\/([^/]+)\/review$/.exec(pathname);
     if(review&&req.method==='POST')return send(res,200,{item:service.reviewContent(review[1],review[2],await body(req))});
+    // v2.9 Phase B: promotion campaigns (owner-only, manual publication only).
+    const campaignsList=/^\/api\/projects\/([^/]+)\/campaigns$/.exec(pathname);
+    if(campaignsList&&req.method==='GET')return send(res,200,campaignOverview(store,service.getFullProject(campaignsList[1])));
+    if(campaignsList&&req.method==='POST')return send(res,201,{item:createCampaign(store,campaignsList[1],await body(req))});
+    const campaignAction=/^\/api\/projects\/([^/]+)\/campaigns\/([^/]+)\/(adjust|cancel|complete|retrospective)$/.exec(pathname);
+    if(campaignAction&&req.method==='POST'){
+      const data=await body(req);
+      const fn={adjust:adjustCampaign,cancel:cancelCampaign,complete:completeCampaign,retrospective:recordRetrospective}[campaignAction[3]];
+      return send(res,200,{item:fn(store,campaignAction[1],campaignAction[2],data)});
+    }
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
     if(ledger&&req.method==='POST')return send(res,201,{item:service.addLedger(ledger[1],await body(req))});
     const growth=/^\/api\/projects\/([^/]+)\/growth$/.exec(pathname);

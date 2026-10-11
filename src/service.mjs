@@ -29,7 +29,12 @@ export function createService(store, options={}){
   }
   function changeOpportunityStatus(id,data){
     const item=get('opportunities',id);
-    if(item.status==='experiment')throw err('PROJECT_IN_PROGRESS','正在实验的机会不能直接隐藏',409);
+    if(item.status==='experiment'){
+      // G01 exit path: once every linked project is stopped or archived, the owner may
+      // re-triage the opportunity. Paused projects still block (the experiment may resume).
+      const active=store.list('projects').some(x=>x.opportunityId===id&&!['stopped','archived'].includes(x.status));
+      if(active)throw err('PROJECT_IN_PROGRESS','实验尚未结束：先停止或归档项目，才能重新分诊该机会',409);
+    }
     if(!['candidate','watching','dismissed'].includes(data.status))throw err('BAD_REQUEST','无效机会状态');
     const next=store.put('opportunities',{...item,status:data.status},data.expected_revision);
     event('opportunity.triaged',id,owner,{status:next.status});return next;
@@ -116,14 +121,33 @@ export function createService(store, options={}){
       return {task,alreadyPrepared:false};
     });
   }
-  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id)};}
+  function getFullProject(id){const p=getProject(id);return {...p,opportunity:store.get('opportunities',p.opportunityId),milestones:store.list('milestones').filter(m=>m.projectId===id).sort((a,b)=>a.order-b.order),tasks:store.list('tasks').filter(t=>t.projectId===id),evidence:store.list('evidence').filter(x=>x.projectId===id),submissions:store.list('submissions').filter(x=>x.projectId===id),decisions:store.list('decisions').filter(x=>x.projectId===id),contents:store.list('contents').filter(x=>x.projectId===id),ledger:store.list('ledger').filter(x=>x.projectId===id),productFeedback:store.list('product_feedback').filter(x=>x.projectId===id),campaigns:store.list('campaigns').filter(x=>x.projectId===id)};}
   function ownerDecision(id,data){const p=getProject(id);const action=required(data.action,'action');
     if(action==='pause'||action==='stop'||action==='resume'){
       if(action==='resume' && p.status!=='paused')throw err('BAD_STATE','只有暂停项目才能恢复',409);
       if(action==='resume'&&store.list('projects').some(x=>x.id!==id&&!['paused','stopped','archived'].includes(x.status)))throw err('ACTIVE_EXPERIMENT_EXISTS','已有其他主实验',409);
       const status=action==='pause'?'paused':action==='stop'?'stopped':'research';
-      const updated=store.put('projects',{...p,status,externalProcessState:'unknown',lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
+      // Resume previously left stage behind (e.g. 'promotion' with status 'research');
+      // stage now follows status so the read model stays consistent.
+      const stage=action==='resume'?'research':p.stage;
+      const updated=store.put('projects',{...p,status,stage,externalProcessState:'unknown',lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
       event(`project.${action}`,id,owner,{reason:data.reason||'',externalExecutionConfirmed:false},id);return updated;
+    }
+    if(action==='archive'){
+      // G01: an explicit, owner-approved close-out. Archived projects keep all history;
+      // the linked opportunity returns to 'candidate' so it can be re-triaged honestly.
+      if(p.status==='archived')throw err('BAD_STATE','项目已归档',409);
+      return store.transaction(()=>{
+        const updated=store.put('projects',{...p,status:'archived',externalProcessState:'unknown',lastDecision:'已归档：本轮实验闭环结束，历史记录保留'},p.revision);
+        event('project.archived',id,owner,{reason:data.reason||'',previousStatus:p.status},id);
+        const o=store.get('opportunities',p.opportunityId);
+        if(o&&o.status==='experiment'){
+          const reopened=store.put('opportunities',{...o,status:'candidate'},o.revision);
+          event('opportunity.reopened',o.id,owner,{reason:'project_archived',projectId:id});
+          return {project:updated,opportunity:reopened};
+        }
+        return {project:updated,opportunity:null};
+      });
     }
     if(action==='revise_baseline'){
       const b=baseline(id);
@@ -174,8 +198,18 @@ export function createService(store, options={}){
     }
     throw err('BAD_REQUEST','unknown decision action');
   }
-  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,plannedAt:null,scheduledRevision:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
-    const c=store.put('contents',{id:randomUUID(),projectId:id,title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),materialRefs:data.materialRefs||[],claims:data.claims||[],reviewState:'draft',approvedRevision:null,publication:null,createdAt:now()});event('content.created',c.id,owner,{},id);return c;}
+  // v2.9 Phase B: contents can belong to a campaign of the same project. The campaign
+  // layer never rewrites content state; approval fencing below stays authoritative.
+  const resolveCampaignId=(projectId,currentCampaignId,nextCampaignId)=>{
+    if(nextCampaignId===currentCampaignId)return currentCampaignId||null;
+    if(!nextCampaignId)return null;
+    const campaign=store.get('campaigns',nextCampaignId);
+    if(!campaign||campaign.projectId!==projectId)throw err('NOT_FOUND','宣发活动不存在',404);
+    if(campaign.status!=='active')throw err('CAMPAIGN_CLOSED','只能把内容归入进行中的宣发活动',409);
+    return campaign.id;
+  };
+  function saveContent(id,data){assertActive(id);if(data.id){const old=get('contents',data.id);if(old.projectId!==id)throw err('FORBIDDEN','outside project',403);const updated=store.put('contents',{...old,versions:[...(old.versions||[]),{revision:old.revision,title:old.title,body:old.body,reviewState:old.reviewState,publication:old.publication||null,archivedAt:now()}],title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),claims:data.claims||[],campaignId:resolveCampaignId(id,old.campaignId||null,data.campaignId===undefined?(old.campaignId||null):data.campaignId),reviewState:'draft',approvedRevision:null,publication:null,plannedAt:null},ensureRevision(data.expected_revision));event('content.updated',updated.id,owner,{revision:updated.revision},id);return updated;}
+    const c=store.put('contents',{id:randomUUID(),projectId:id,title:required(data.title,'title'),body:required(data.body,'body'),objective:required(data.objective,'objective'),channel:required(data.channel,'channel'),materialRefs:data.materialRefs||[],claims:data.claims||[],campaignId:resolveCampaignId(id,null,data.campaignId||null),reviewState:'draft',approvedRevision:null,publication:null,createdAt:now()});event('content.created',c.id,owner,{},id);return c;}
   function scheduleContent(id,contentId,data){
     const p=assertActive(id),c=get('contents',contentId);
     if(c.projectId!==p.id)throw err('NOT_FOUND','内容不属于当前项目',404);
@@ -186,7 +220,10 @@ export function createService(store, options={}){
     if(!Number.isFinite(parsed)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(plannedAt))throw err('BAD_REQUEST','排期应包含具体日期、时间和时区');
     if(!/(Z|[+-]\d{2}:\d{2})$/.test(plannedAt))throw err('BAD_REQUEST','排期必须指定时区');
     if(parsed<Date.now()-60000)throw err('BAD_REQUEST','不能将宣发计划排到过去');
-    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),scheduledRevision:c.revision+1,approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
+    // G07: the write-only scheduledRevision field is gone. Schedule→publish safety
+    // stays enforced by the approvedRevision fence (schedule carries approval forward,
+    // edit clears it, publication requires approvedRevision===revision).
+    const updated=store.put('contents',{...c,plannedAt:new Date(parsed).toISOString(),approvedRevision:c.reviewState==='approved'?c.revision+1:c.approvedRevision},c.revision);
     event('content.scheduled',c.id,owner,{plannedAt:updated.plannedAt,revision:updated.revision},id);
     return updated;
   }
@@ -205,9 +242,11 @@ export function createService(store, options={}){
     }
     throw err('BAD_REQUEST','unknown content action');}
   function addLedger(id,data){getProject(id);const allowed=['impressions','visits','interest','trials','activation','reuse','retention','income','refund','transaction_fee','service_cost','cash_cost','user_hours','agent_hours','brand','learning'];if(!allowed.includes(data.type))throw err('BAD_REQUEST','invalid ledger metric');
-    const contentId=data.contentId||null;
-    if(contentId){const content=get('contents',contentId);if(content.projectId!==id||content.reviewState!=='published')throw err('BAD_CAMPAIGN_REF','只能关联当前项目已经登记发布的内容',409);}
-    const entry=store.put('ledger',{id:randomUUID(),projectId:id,contentId,type:data.type,value:nonNegative(data.value,'value'),unit:data.unit||(['user_hours','agent_hours'].includes(data.type)?'h':['income','refund','transaction_fee','service_cost','cash_cost'].includes(data.type)?'CNY':'count'),source:data.source||'manual_unverified',actual:data.actual===true,notes:data.notes||'',at:now(),createdAt:now()});event('ledger.recorded',entry.id,owner,{type:entry.type,value:entry.value,actual:entry.actual},id);return entry;}
+    const contentId=data.contentId||null;let campaignId=null;
+    // Review fix: the campaign attribution is snapshotted at recording time, so moving
+    // a content between campaigns later cannot rewrite a closed campaign's actuals.
+    if(contentId){const content=get('contents',contentId);if(content.projectId!==id||content.reviewState!=='published')throw err('BAD_CAMPAIGN_REF','只能关联当前项目已经登记发布的内容',409);campaignId=content.campaignId||null;}
+    const entry=store.put('ledger',{id:randomUUID(),projectId:id,contentId,campaignId,type:data.type,value:nonNegative(data.value,'value'),unit:data.unit||(['user_hours','agent_hours'].includes(data.type)?'h':['income','refund','transaction_fee','service_cost','cash_cost'].includes(data.type)?'CNY':'count'),source:data.source||'manual_unverified',actual:data.actual===true,notes:data.notes||'',at:now(),createdAt:now()});event('ledger.recorded',entry.id,owner,{type:entry.type,value:entry.value,actual:entry.actual,campaignId},id);return entry;}
   function summaryLedger(entries){const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
 
   function tool(name,p={}){
@@ -243,7 +282,31 @@ export function createService(store, options={}){
     if(name==='task.transition')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));assertActive(t.projectId);if(t.baselineRevision&&t.baselineRevision!==baseline(t.projectId).revision)throw err('BASELINE_STALE','不能在已过期基线下改变任务',409);leaseCheck(t,p.lease_token);if(!['in_progress','blocked','submitted','rework'].includes(p.status))throw err('BAD_REQUEST','invalid task status');
       const x=store.put('tasks',{...t,status:p.status},ensureRevision(p.expected_revision));event('task.transitioned',t.id,agent,{status:p.status},t.projectId);return x;});
     if(name==='task.release')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));leaseCheck(t,p.lease_token);const next=store.put('tasks',{...t,lease:null,status:t.status==='in_progress'?'open':t.status},ensureRevision(p.expected_revision));event('task.released',t.id,agent,{externalProcessStopped:false},t.projectId);return next;});
-    if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{const pr=assertActive(p.project_id);const updated=store.put('projects',{...pr,latestAgentReport:required(p.summary,'summary'),agentLastSync:now()},pr.revision);event('agent.reported',pr.id,agent,{summary:p.summary,limitations:p.limitations||[]},pr.id);return {lastSync:updated.agentLastSync,projectRevision:updated.revision};});
+    if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{
+      const pr=assertActive(p.project_id);
+      const summary=required(p.summary,'summary');
+      // Task-level progress report (v2.9): requires the agent to hold the task lease.
+      // A self-reported progress note never changes task status and never counts as acceptance.
+      if(p.task_id){
+        const t=get('tasks',p.task_id);
+        if(t.projectId!==p.project_id)throw err('FORBIDDEN','wrong project',403);
+        if(t.baselineRevision&&t.baselineRevision!==baseline(p.project_id).revision)throw err('BASELINE_STALE','不能在已过期基线下报告任务进度',409);
+        leaseCheck(t,p.lease_token);
+        if(!['in_progress','blocked'].includes(t.status))throw err('BAD_STATE','只能为执行中或已阻塞的任务报告进度',409);
+        const rawRisks=p.risks??[];
+        if(!Array.isArray(rawRisks))throw err('BAD_REQUEST','risks must be an array');
+        if(rawRisks.length>10)throw err('BAD_REQUEST','risks 最多 10 条');
+        const risks=rawRisks.map(x=>required(x,'risk').slice(0,300));
+        const at=now();
+        store.put('tasks',{...t,latestProgress:{summary,risks,at}},t.revision);
+        store.put('projects',{...pr,agentLastSync:at},pr.revision);
+        event('task.progress_reported',t.id,agent,{summary,risks},p.project_id);
+        return {taskId:t.id,taskStatus:t.status,recordedAt:at,note:'进度报告不改变任务状态，也不能替代人工验收。'};
+      }
+      const updated=store.put('projects',{...pr,latestAgentReport:summary,agentLastSync:now()},pr.revision);
+      event('agent.reported',pr.id,agent,{summary:p.summary,limitations:p.limitations||[]},pr.id);
+      return {lastSync:updated.agentLastSync,projectRevision:updated.revision};
+    });
     if(name==='evidence.attach')return withIdem(name,p.idempotency_key,p,()=>{assertActive(p.project_id);const m=get('milestones',required(p.milestone_id,'milestone_id'));if(m.projectId!==p.project_id)throw err('FORBIDDEN','milestone outside project',403);
       const criteriaIds=p.criteria_ids||[];if(!Array.isArray(criteriaIds)||criteriaIds.some(id=>!m.acceptanceIds.includes(id)))throw err('BAD_REQUEST','验收条件必须属于该里程碑');
       const task=p.task_id?get('tasks',p.task_id):null;
