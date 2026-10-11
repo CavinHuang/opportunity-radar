@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {openDatabase} from '../src/db.mjs';
 import {createService} from '../src/service.mjs';
-import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,readinessSummary} from '../src/data-safety.mjs';
+import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,readinessSummary,pruneEvents} from '../src/data-safety.mjs';
 
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'radar-data-v18-'));
@@ -117,5 +117,26 @@ test('separate Node CLI validates on-disk records, takes snapshot and restores a
   assert.ok(existsSync(recovery));
   const stored=openDatabase(recovery);
   try{assert.equal(stored.get('opportunities',x.opp.id).title,x.opp.title);}finally{stored.close();}
+ }finally{x.close();}
+});
+
+test('prune-events reports first, deletes only old audit events on confirm, and never touches records',()=>{
+ const x=fixture();
+ try{
+  x.store.db.exec("INSERT INTO events(project_id,kind,entity_id,actor,detail,created_at) VALUES('p','test.old','e-old','test','{}','2020-01-01T00:00:00.000Z')");
+  x.store.event('test.recent','e-new','test',{},null);
+  assert.throws(()=>pruneEvents({database:x.dbfile}),{code:'BEFORE_REQUIRED'});
+  assert.throws(()=>pruneEvents({database:x.dbfile,before:'not-a-date'}),{code:'BAD_BEFORE'});
+  assert.throws(()=>pruneEvents({database:x.dbfile,before:'2099-01-01'}),{code:'BAD_BEFORE'});
+  const dry=pruneEvents({database:x.dbfile,before:'90d'});
+  assert.equal(dry.confirmed,false);
+  assert.equal(dry.wouldDelete,1);
+  const recordsBefore=inspectRadarDatabase(x.dbfile).totalRecords;
+  const done=pruneEvents({database:x.dbfile,before:'90d',confirmed:true});
+  assert.equal(done.confirmed,true);
+  assert.equal(done.deleted,1);
+  assert.equal(inspectRadarDatabase(x.dbfile).totalRecords,recordsBefore,'records and idem are never pruned');
+  const oldLeft=x.store.db.prepare("SELECT COUNT(*) AS n FROM events WHERE created_at<'2021-01-01'").get().n;
+  assert.equal(oldLeft,0);
  }finally{x.close();}
 });
