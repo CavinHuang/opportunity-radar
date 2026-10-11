@@ -96,3 +96,9 @@
 
 - Bulk triage: multi-select checkboxes on the signal workbench with a bulk bar (收藏所选 / 忽略所选 / 全选本页 / 取消选择). `POST /api/signals/bulk-triage` runs in one transaction and reports per-signal outcomes — converted signals, missing ids and rows already in the target status are skipped with reasons, never silently mixed into the changed count; duplicate ids in one request deduplicate.
 - The per-source quality panel now shows the 待研判 (new) count next to 收藏/忽略, so noisy sources are visible at a glance.
+
+## v2.18 · Mute rules
+
+- Owner-defined mute keywords (up to 50, deduplicated case-insensitively): new signals entering via scans whose title or summary matches a rule are auto-dismissed with the matched rule recorded on the signal and an audit event — the exclude-list complement to per-feed keyword include-filters.
+- Scope is deliberately narrow: manual entries are never muted (they are explicit owner actions), existing signals are never retroactively touched, and restoring a muted signal keeps the matched rule visible. Matching is documented case-insensitive substring, not AI classification.
+- CRUD over HTTP (owner-gated) with a 静音规则 card in the source workbench; deletion stops future muting but leaves already-muted signals unchanged.
