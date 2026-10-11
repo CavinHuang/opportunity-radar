@@ -178,6 +178,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
           scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
             nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
             itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
+          store.event('source.scan_succeeded',feed.id,'system',{received,added,filtered,duplicates,notModified,checkedAt:new Date(nowMs).toISOString()});
         });
       }catch(e){
         // A concurrent edit/delete invalidates the in-flight snapshot. Never
@@ -185,6 +186,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         const current=store.get('feeds',feed.id);
         if(!current||current.revision!==feed.revision){
           result.skipped++;
+          store.event('source.scan_skipped',feed.id,'system',{reason:current?'source_changed':'source_deleted',checkedAt:new Date(nowMs).toISOString()});
           result.details.push({feedId:feed.id,title:feed.title,received:0,added:0,filtered:0,duplicates:0,notModified:false,skipped:true,error:null});
           continue;
         }
@@ -195,7 +197,13 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         const backoff=Math.min(MAX_BACKOFF_MINUTES,normal*Math.pow(2,Math.min(failures-1,8)));
         const retryMs=Number.isFinite(e.retryAfterMs)?Math.min(24*60*60_000,e.retryAfterMs):0;
         const errMsg=clean(e.message,300);
-        scanResultStore(store,feed,{lastError:errMsg,consecutiveFailures:failures,nextScanAt:new Date(nowMs+Math.max(backoff*60_000,retryMs)).toISOString()},nowMs);
+        store.transaction(()=>{
+          const latest=store.get('feeds',feed.id);
+          if(!latest||latest.revision!==feed.revision)throw error('SOURCE_CHANGED','来源设置在失败处理时已改变',409);
+          const backoffUntil=new Date(nowMs+Math.max(backoff*60_000,retryMs)).toISOString();
+          scanResultStore(store,feed,{lastError:errMsg,consecutiveFailures:failures,nextScanAt:backoffUntil},nowMs);
+          store.event('source.scan_failed',feed.id,'system',{code:clean(e.code||'SOURCE_ERROR',80),consecutiveFailures:failures,nextScanAt:backoffUntil,checkedAt:new Date(nowMs).toISOString()});
+        });
         result.errors.push({feedId:feed.id,feed:feed.url,error:errMsg});
       }
       result.received+=received;result.added+=added;result.filtered+=filtered;result.duplicates+=duplicates;
