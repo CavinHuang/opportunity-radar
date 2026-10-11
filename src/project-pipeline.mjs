@@ -19,7 +19,7 @@ export function projectPipeline(project){
   if(pendingAcceptance)nextActions.push({kind:'acceptance',label:'审核最新交付与证据后决定验收',tab:'evidence'});
   if(taskCounts.rework)nextActions.push({kind:'rework',label:'跟进被退回的任务',tab:'overview'});
   if(taskCounts.blocked)nextActions.push({kind:'blocked',label:'排查被阻塞任务及依赖',tab:'overview'});
-  if(!tasks.length)nextActions.push({kind:'kickoff',label:'准备首个研发任务',tab:'overview'});
+  if(!tasks.length&&accepted<milestones.length)nextActions.push({kind:'kickoff',label:'准备首个研发任务',tab:'overview'});
   else if(taskCounts.open)nextActions.push({kind:'agent',label:'将待领取任务交给外部 Coding Agent',tab:'agent'});
   if(accepted===milestones.length&&milestones.length>0){
    if(approvals)nextActions.push({kind:'publish',label:'人工发布已批准内容并登记真实链接',tab:'launch'});
