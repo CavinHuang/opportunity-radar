@@ -111,3 +111,40 @@ test('cache validators are not forwarded across redirect to another domain',asyn
   assert.equal(result.errors.length,0);assert.equal(calls,2);
  }finally{db.close();}
 });
+
+test('scan audit emits durable success, failure, and skip events with no stale signal imports',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://example.org/rss'});
+  await scanSources(db,{fetchImpl:async()=>response(200,xml),dnsLookup:publicDNS,nowMs:now});
+  let audit=db.events().filter(x=>x.kind.startsWith('source.scan_'));
+  assert.equal(audit.length,1);
+  assert.equal(audit[0].kind,'source.scan_succeeded');
+  assert.equal(audit[0].entity_id,feed.id);
+  assert.equal(audit[0].detail.added,1);
+  await scanSources(db,{fetchImpl:async()=>response(503,null),dnsLookup:publicDNS,nowMs:now+1000});
+  audit=db.events().filter(x=>x.kind.startsWith('source.scan_'));
+  assert.equal(audit[1].kind,'source.scan_failed');
+  assert.equal(audit[1].detail.consecutiveFailures,1);
+  assert.ok(audit[1].detail.nextScanAt);
+  assert.equal(db.list('sources').length,1);
+ }finally{db.close();}
+});
+test('stale scan audit distinguishes dropped network response from scan failure',async()=>{
+ const db=openDatabase();try{
+  const feed=addFeed(db,{url:'https://example.org/rss'});
+  let release,entered;
+  const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+  const pending=scanSources(db,{dnsLookup:publicDNS,fetchImpl:async()=>{entered();await gate;return response(200,xml);}});
+  await started;
+  const current=db.get('feeds',feed.id);
+  editFeed(db,feed.id,{expected_revision:current.revision,keywords:'other'});
+  release();
+  const result=await pending;
+  assert.equal(result.skipped,1);
+  const audit=db.events().filter(x=>x.kind.startsWith('source.scan_'));
+  assert.equal(audit.length,1);
+  assert.equal(audit[0].kind,'source.scan_skipped');
+  assert.equal(audit[0].detail.reason,'source_changed');
+  assert.equal(db.list('sources').length,0);
+ }finally{db.close();}
+});
