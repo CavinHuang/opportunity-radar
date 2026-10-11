@@ -213,7 +213,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[name="title"]').fill('Browser smoke human task')
             page.locator('#dialog-form button[type="submit"]').click()
             page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
-            assert page.get_by_text('Browser smoke human task').count()>=1
+            page.get_by_text('Browser smoke human task').first.wait_for(timeout=10000)
             # v2.9 Phase B: campaign → content → owner review → manual publish registration.
             page.locator('[data-tab="launch"]').click()
             page.locator('[data-action="new-campaign"]').first.click()
@@ -222,7 +222,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[name="channels"]').fill('example-channel')
             page.locator('#dialog-form button[type="submit"]').click()
             page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
-            assert page.get_by_text('Browser smoke campaign').count()>=1
+            page.get_by_text('Browser smoke campaign').first.wait_for(timeout=10000)
             page.locator('[data-action="new-content"]').first.click()
             page.locator('[name="title"]').fill('Browser smoke published note')
             page.locator('[name="channel"]').fill('example-channel')
@@ -236,7 +236,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[name="url"]').fill('https://example.org/smoke/publication')
             page.locator('#dialog-form button[type="submit"]').click()
             page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
-            assert page.get_by_text('已发布并登记').count()>=1
+            page.get_by_text('已发布并登记').first.wait_for(timeout=10000)
             # v2.9 Phase C/D surfaces render (growth window totals + review entry point).
             page.locator('[data-tab="growth"]').click()
             page.get_by_text('窗口内合计').first.wait_for(timeout=10000)
