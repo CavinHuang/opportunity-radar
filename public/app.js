@@ -83,6 +83,12 @@ npm run agent:pilot -- recover --project ${esc(p.id)} --task &lt;TASK_ID&gt; --r
   }
   else if(S.tab==='ledger')detail=`<div class="flex between"><div class="small-title">${icon('chart',16)}&nbsp; 真实结果账本</div><button class="btn btn-sm" data-action="add-ledger">${icon('plus',13)} 记录结果</button></div><div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="card stat"><div class="stat-head">${icon('dollar',14)} 贡献金额</div><strong>¥${Number(p.ledgerSummary.contribution).toFixed(0)}</strong><div class="stat-foot">不含人工与固定成本</div></div><div class="card stat"><div class="stat-head">${icon('clock',14)} 你的时间</div><strong>${p.ledgerSummary.userHours}h</strong><div class="stat-foot">与 Agent 运行分开</div></div><div class="card stat"><div class="stat-head">${icon('bot',14)} Agent 运行</div><strong>${p.ledgerSummary.agentHours}h</strong><div class="stat-foot">单独统计</div></div></div><div class="section-heading"><h2>实际记录</h2><span>预测数据不会计入实际收益</span></div>${p.ledger.length?p.ledger.slice(0,12).map(x=>`<div class="milestone"><div class="info-icon">${icon('file',15)}</div><div class="grow"><strong style="font-size:12px">${esc(x.type)} · ${esc(x.value)} ${esc(x.unit)}</strong><p class="subtext">${esc(x.source)} · ${x.actual?'实际记录':'未核实/估计'} · ${fmtTime(x.at)}</p></div></div>`).join(''):'<p class="subtext">暂无真实消费者反馈或收支记录。</p>'}`;
   if(S.tab==='ledger'){
+    const review=p.decisionReview;
+    detail+=`<div class="section-heading"><h2>继续投入决策依据</h2><span>真实数据审查 · 最终决定仍由你做出</span></div>
+    <div class="card card-pad"><strong>${review?.status==='ready_for_owner_review'?'数据项齐备，可供人工复盘':review?.status==='delivery_unverified'?'交付未完成正式验收':'记录不完整，暂不建议基于转化做结论'}</strong>
+    <p class="subtext">已登记访问：${review?.outcomes?.visits??'未知'} · 试用：${review?.outcomes?.trials??'未知'} · 实收：${review?.outcomes?.income??'未知'} · 已知净现金：¥${Number(review?.outcomes?.netKnownCash||0).toFixed(2)}</p>
+    <p class="subtext">记录缺失：${esc(review?.evidenceCoverage?.missingMetrics?.join('、')||'无')}。未记录的数据不当作零；已知净现金不等于真实利润。</p>
+    <p class="subtext">试用/访问：${review?.outcomes?.trialRate==null?'数据不足或口径不一致':(review.outcomes.trialRate*100).toFixed(1)+'%'}。不依据单次流量推断长期需求。</p></div>`;
     const campaigns=p.contents.filter(c=>c.reviewState==='published');
     const campaignReport=`<div class="section-heading"><h2>宣发效果按内容归因</h2><span>仅依据手动登记的实际数据，不代表平台自动统计</span></div>
       ${campaigns.length?campaigns.map(c=>{
