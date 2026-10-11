@@ -1,5 +1,5 @@
 import {experimentDecisionReview} from './experiment-decision.mjs';
-import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory} from './owner-tasks.mjs';
+import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
 import {projectPipeline} from './project-pipeline.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -25,6 +25,10 @@ const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
 const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
 if(!['127.0.0.1','localhost','::1'].includes(host)&&!process.env.RADAR_OWNER_TOKEN)throw new Error('RADAR_OWNER_TOKEN is required when binding to a non-loopback host');
 const store=openDatabase(dbPath);seedConfiguredSources(store);const service=createService(store);
+// Test and supervision hooks may release the SQLite handle before removing temp dirs
+// (Windows cannot delete files that are still open).
+let databaseClosed=false;
+export function closeDatabase(){if(!databaseClosed){databaseClosed=true;store.close();}}
 const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/i18n.js':'i18n.js'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8'};
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
@@ -137,6 +141,12 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(projectFeedback&&req.method==='POST')return send(res,201,{item:recordProductFeedback(store,projectFeedback[1],await body(req))});
     const taskHistory=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/history$/.exec(pathname);
     if(taskHistory&&req.method==='GET')return send(res,200,{items:ownerTaskHistory(store,taskHistory[1],taskHistory[2],{limit:u.searchParams.get('limit')??30})});
+    const taskTimeline=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/timeline$/.exec(pathname);
+    if(taskTimeline&&req.method==='GET')return send(res,200,ownerTaskTimeline(store,taskTimeline[1],taskTimeline[2]));
+    const taskArchive=/^\/api\/projects\/([^/]+)\/owner-tasks\/([^/]+)\/(archive|unarchive)$/.exec(pathname);
+    if(taskArchive&&req.method==='POST')return send(res,200,{item:(taskArchive[3]==='archive'?archiveOwnerTask:unarchiveOwnerTask)(store,taskArchive[1],taskArchive[2],await body(req))});
+    const taskBoard=/^\/api\/projects\/([^/]+)\/owner-tasks\/board$/.exec(pathname);
+    if(taskBoard&&req.method==='GET')return send(res,200,ownerTaskBoard(store,taskBoard[1]));
     const planning=/^\/api\/projects\/([^/]+)\/owner-tasks$/.exec(pathname);
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});

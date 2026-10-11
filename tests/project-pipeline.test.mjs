@@ -31,3 +31,19 @@ test('paused project does not suggest starting external work',()=>{
  const r=projectPipeline(p);
  assert.deepEqual(r.nextActions.map(x=>x.kind),['project_state']);
 });
+test('archived owner tasks stop counting and overdue ones surface first (v2.9)',()=>{
+ const p=base();
+ p.ownerTasks=[
+  {state:'todo',dueDate:'2020-01-01',archivedAt:null},
+  {state:'todo',dueDate:'2099-01-01',archivedAt:null},
+  {state:'doing',dueDate:null,archivedAt:null},
+  {state:'blocked',dueDate:'2020-01-01',archivedAt:'2026-10-01T00:00:00.000Z'},
+  {state:'done',dueDate:'2020-01-01',archivedAt:null}
+ ];
+ const r=projectPipeline(p);
+ assert.equal(r.ownerTaskTotal,4); // archived task excluded
+ assert.deepEqual(Object.values(r.ownerTaskCounts),[2,1,0,1]);
+ assert.equal(r.ownerOverdue,1);
+ assert.equal(r.nextActions[0].kind,'owner_overdue');
+ assert.equal(r.nextActions[0].tab,'tasks');
+});

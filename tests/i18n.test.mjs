@@ -110,6 +110,26 @@ test('candidate review classifications and repost warnings are translated',()=>{
  assert.equal(translate('组内最低标题相似度：0.72','en-US'),'Minimum within-group title similarity: 0.72');
 });
 
+test('task board, timeline and archive labels are translated (v2.9 Phase A)',()=>{
+ assert.equal(translate('人工任务看板','en-US'),'Human task board');
+ assert.equal(translate('Agent 执行任务','en-US'),'Agent-executed tasks');
+ assert.equal(translate('已逾期','en-US'),'Overdue');
+ assert.equal(translate('状态已持续：','en-US'),'State held for: ');
+ assert.equal(translate('未知（缺少历史记录）','en-US'),'Unknown (no history)');
+ assert.equal(translate('3 天','en-US'),'3 days');
+ assert.equal(translate('归档','en-US'),'Archive');
+ assert.equal(translate('恢复任务','en-US'),'Restore task');
+ assert.equal(translate('逾期 2 项','en-US'),'2 overdue');
+ assert.equal(translate('已归档人工任务 · 4 项（历史保留，可恢复）','en-US'),'Archived human tasks · 4 (history kept, restorable)');
+ assert.equal(translate('处理已逾期的人工任务','en-US'),'Handle overdue human tasks');
+ // review fixes: project archive entry, ended-experiment pool label, archived-dependency hints
+ assert.equal(translate('归档项目','en-US'),'Archive project');
+ assert.equal(translate('实验已结束 · 可重新分诊','en-US'),'Experiment ended · re-triage available');
+ assert.equal(translate('前置含已归档任务，已不再约束完成条件。','en-US'),'Includes archived prerequisites; they no longer gate completion.');
+ assert.equal(translate('（已归档，不再约束）','en-US'),' (archived, no longer gating)');
+ assert.equal(translate('项目已归档，机会已回到候选池','en-US'),'Project archived; opportunity returned to candidates');
+});
+
 test('onboarding and offline backup copy is available in both languages',()=>{
  assert.equal(translate('首次使用与数据安全','en-US'),'Getting started and data safety');
  assert.equal(translate('先配置信息源','en-US'),'Configure sources first');

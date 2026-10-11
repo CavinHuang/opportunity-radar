@@ -61,3 +61,21 @@
 .readiness-backup>strong{display:block;font-size:13px;color:#263c2d;margin-bottom:6px}
 .readiness-backup .agent-code{white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:680px){.readiness-grid{grid-template-columns:1fr}}
+/* v2.9 Phase A: human task board (kanban), archived list and Agent task badges */
+.kanban{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;margin-top:6px}
+.kanban-col{background:#f7faf7;border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;min-height:110px}
+.kanban-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kanban-head strong{font-size:12px}
+.kanban-empty{text-align:center;margin:10px 0}
+.task-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px;display:flex;flex-direction:column;gap:6px}
+.task-card strong{font-size:12px}
+.task-card .subtext{margin:0}
+.task-actions{gap:6px}
+.task-actions .btn{padding:5px 8px;font-size:10px}
+.prio-high{background:var(--warm);color:#9a6b33}
+.prio-low{background:#f1f4f1;color:#8b968e}
+.tag-agent{background:#edf1fa;color:#4d5c96}
+.archived-tasks{margin-top:14px}
+.archived-tasks summary{cursor:pointer;font-weight:700;font-size:12px}
+@media(max-width:1100px){.kanban{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.kanban{grid-template-columns:1fr}}

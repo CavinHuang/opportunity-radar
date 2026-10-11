@@ -29,7 +29,12 @@ export function createService(store, options={}){
   }
   function changeOpportunityStatus(id,data){
     const item=get('opportunities',id);
-    if(item.status==='experiment')throw err('PROJECT_IN_PROGRESS','正在实验的机会不能直接隐藏',409);
+    if(item.status==='experiment'){
+      // G01 exit path: once every linked project is stopped or archived, the owner may
+      // re-triage the opportunity. Paused projects still block (the experiment may resume).
+      const active=store.list('projects').some(x=>x.opportunityId===id&&!['stopped','archived'].includes(x.status));
+      if(active)throw err('PROJECT_IN_PROGRESS','实验尚未结束：先停止或归档项目，才能重新分诊该机会',409);
+    }
     if(!['candidate','watching','dismissed'].includes(data.status))throw err('BAD_REQUEST','无效机会状态');
     const next=store.put('opportunities',{...item,status:data.status},data.expected_revision);
     event('opportunity.triaged',id,owner,{status:next.status});return next;
@@ -122,8 +127,27 @@ export function createService(store, options={}){
       if(action==='resume' && p.status!=='paused')throw err('BAD_STATE','只有暂停项目才能恢复',409);
       if(action==='resume'&&store.list('projects').some(x=>x.id!==id&&!['paused','stopped','archived'].includes(x.status)))throw err('ACTIVE_EXPERIMENT_EXISTS','已有其他主实验',409);
       const status=action==='pause'?'paused':action==='stop'?'stopped':'research';
-      const updated=store.put('projects',{...p,status,externalProcessState:'unknown',lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
+      // Resume previously left stage behind (e.g. 'promotion' with status 'research');
+      // stage now follows status so the read model stays consistent.
+      const stage=action==='resume'?'research':p.stage;
+      const updated=store.put('projects',{...p,status,stage,externalProcessState:'unknown',lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
       event(`project.${action}`,id,owner,{reason:data.reason||'',externalExecutionConfirmed:false},id);return updated;
+    }
+    if(action==='archive'){
+      // G01: an explicit, owner-approved close-out. Archived projects keep all history;
+      // the linked opportunity returns to 'candidate' so it can be re-triaged honestly.
+      if(p.status==='archived')throw err('BAD_STATE','项目已归档',409);
+      return store.transaction(()=>{
+        const updated=store.put('projects',{...p,status:'archived',externalProcessState:'unknown',lastDecision:'已归档：本轮实验闭环结束，历史记录保留'},p.revision);
+        event('project.archived',id,owner,{reason:data.reason||'',previousStatus:p.status},id);
+        const o=store.get('opportunities',p.opportunityId);
+        if(o&&o.status==='experiment'){
+          const reopened=store.put('opportunities',{...o,status:'candidate'},o.revision);
+          event('opportunity.reopened',o.id,owner,{reason:'project_archived',projectId:id});
+          return {project:updated,opportunity:reopened};
+        }
+        return {project:updated,opportunity:null};
+      });
     }
     if(action==='revise_baseline'){
       const b=baseline(id);
@@ -243,7 +267,31 @@ export function createService(store, options={}){
     if(name==='task.transition')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));assertActive(t.projectId);if(t.baselineRevision&&t.baselineRevision!==baseline(t.projectId).revision)throw err('BASELINE_STALE','不能在已过期基线下改变任务',409);leaseCheck(t,p.lease_token);if(!['in_progress','blocked','submitted','rework'].includes(p.status))throw err('BAD_REQUEST','invalid task status');
       const x=store.put('tasks',{...t,status:p.status},ensureRevision(p.expected_revision));event('task.transitioned',t.id,agent,{status:p.status},t.projectId);return x;});
     if(name==='task.release')return withIdem(name,p.idempotency_key,p,()=>{const t=get('tasks',required(p.task_id,'task_id'));leaseCheck(t,p.lease_token);const next=store.put('tasks',{...t,lease:null,status:t.status==='in_progress'?'open':t.status},ensureRevision(p.expected_revision));event('task.released',t.id,agent,{externalProcessStopped:false},t.projectId);return next;});
-    if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{const pr=assertActive(p.project_id);const updated=store.put('projects',{...pr,latestAgentReport:required(p.summary,'summary'),agentLastSync:now()},pr.revision);event('agent.reported',pr.id,agent,{summary:p.summary,limitations:p.limitations||[]},pr.id);return {lastSync:updated.agentLastSync,projectRevision:updated.revision};});
+    if(name==='progress.report')return withIdem(name,p.idempotency_key,p,()=>{
+      const pr=assertActive(p.project_id);
+      const summary=required(p.summary,'summary');
+      // Task-level progress report (v2.9): requires the agent to hold the task lease.
+      // A self-reported progress note never changes task status and never counts as acceptance.
+      if(p.task_id){
+        const t=get('tasks',p.task_id);
+        if(t.projectId!==p.project_id)throw err('FORBIDDEN','wrong project',403);
+        if(t.baselineRevision&&t.baselineRevision!==baseline(p.project_id).revision)throw err('BASELINE_STALE','不能在已过期基线下报告任务进度',409);
+        leaseCheck(t,p.lease_token);
+        if(!['in_progress','blocked'].includes(t.status))throw err('BAD_STATE','只能为执行中或已阻塞的任务报告进度',409);
+        const rawRisks=p.risks??[];
+        if(!Array.isArray(rawRisks))throw err('BAD_REQUEST','risks must be an array');
+        if(rawRisks.length>10)throw err('BAD_REQUEST','risks 最多 10 条');
+        const risks=rawRisks.map(x=>required(x,'risk').slice(0,300));
+        const at=now();
+        store.put('tasks',{...t,latestProgress:{summary,risks,at}},t.revision);
+        store.put('projects',{...pr,agentLastSync:at},pr.revision);
+        event('task.progress_reported',t.id,agent,{summary,risks},p.project_id);
+        return {taskId:t.id,taskStatus:t.status,recordedAt:at,note:'进度报告不改变任务状态，也不能替代人工验收。'};
+      }
+      const updated=store.put('projects',{...pr,latestAgentReport:summary,agentLastSync:now()},pr.revision);
+      event('agent.reported',pr.id,agent,{summary:p.summary,limitations:p.limitations||[]},pr.id);
+      return {lastSync:updated.agentLastSync,projectRevision:updated.revision};
+    });
     if(name==='evidence.attach')return withIdem(name,p.idempotency_key,p,()=>{assertActive(p.project_id);const m=get('milestones',required(p.milestone_id,'milestone_id'));if(m.projectId!==p.project_id)throw err('FORBIDDEN','milestone outside project',403);
       const criteriaIds=p.criteria_ids||[];if(!Array.isArray(criteriaIds)||criteriaIds.some(id=>!m.acceptanceIds.includes(id)))throw err('BAD_REQUEST','验收条件必须属于该里程碑');
       const task=p.task_id?get('tasks',p.task_id):null;

@@ -60,3 +60,99 @@ test('manual publication scheduling fences revisions, validates timezone and pre
   assert.throws(()=>s.scheduleContent(p.id,c.id,{plannedAt:'2028-04-20T12:00:00+08:00',expected_revision:publication.revision}),{code:'CONTENT_ALREADY_PUBLISHED'});
  }finally{db.close();}
 });
+
+test('task-level progress reports need the lease, record risks, and never change status or acceptance',()=>{
+ const {db,s,o}=setup();try{
+  const p=experiment(s,o);
+  const m=s.getFullProject(p.id).milestones[1];
+  const task=s.tool('task.upsert',{project_id:p.id,milestone_id:m.id,title:'Prototype work',idempotency_key:'tp-1'});
+  const claim=s.tool('task.claim',{project_id:p.id,task_id:task.id,idempotency_key:'tp-claim'});
+  // negative: no lease token
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'self service',idempotency_key:'tp-neg1'}),e=>e.code==='LEASE_INVALID');
+  // negative: wrong lease token
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'self service',lease_token:'wrong',idempotency_key:'tp-neg2'}),e=>e.code==='LEASE_INVALID');
+  // negative: empty summary
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'  ',lease_token:claim.lease_token,idempotency_key:'tp-neg3'}),e=>e.code==='BAD_REQUEST');
+  // negative: risks not an array / too many
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'ok',risks:'flat',lease_token:claim.lease_token,idempotency_key:'tp-neg4'}),e=>e.code==='BAD_REQUEST');
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'ok',risks:['1','2','3','4','5','6','7','8','9','10','11'],lease_token:claim.lease_token,idempotency_key:'tp-neg5'}),e=>e.code==='BAD_REQUEST');
+  // negative: empty risk entry
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'ok',risks:['   '],lease_token:claim.lease_token,idempotency_key:'tp-neg6'}),e=>e.code==='BAD_REQUEST');
+  // negative: task outside project / missing task
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:'missing-task',summary:'ok',lease_token:claim.lease_token,idempotency_key:'tp-neg7'}),e=>e.code==='NOT_FOUND');
+  const report=s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'核心流程已能跑通，尚未覆盖导出',risks:['导出功能可能超时','尚未做真实用户验证'],lease_token:claim.lease_token,idempotency_key:'tp-report'});
+  assert.equal(report.taskId,task.id);
+  assert.equal(report.taskStatus,'in_progress');
+  assert.equal(report.note.includes('不能替代人工验收'),true);
+  const replay=s.tool('progress.report',{project_id:p.id,task_id:task.id,summary:'核心流程已能跑通，尚未覆盖导出',risks:['导出功能可能超时','尚未做真实用户验证'],lease_token:claim.lease_token,idempotency_key:'tp-report'});
+  assert.deepEqual(replay,report);
+  const stored=s.getFullProject(p.id).tasks.find(x=>x.id===task.id);
+  assert.equal(stored.status,'in_progress');
+  assert.equal(stored.latestProgress.summary,'核心流程已能跑通，尚未覆盖导出');
+  assert.deepEqual(stored.latestProgress.risks,['导出功能可能超时','尚未做真实用户验证']);
+  assert.equal(stored.latestProgress.at,report.recordedAt);
+  // project-level summary is not overwritten by a task-level report; sync time is.
+  assert.equal(s.getFullProject(p.id).latestAgentReport,null);
+  assert.ok(s.getFullProject(p.id).agentLastSync);
+  // project-level report still works as before
+  const projectReport=s.tool('progress.report',{project_id:p.id,summary:'overall status',idempotency_key:'tp-project'});
+  assert.equal(projectReport.lastSync,s.getFullProject(p.id).agentLastSync);
+  assert.equal(s.getFullProject(p.id).latestAgentReport,'overall status');
+  // reporting on a task that was never claimed is refused
+  const openTask=s.tool('task.upsert',{project_id:p.id,milestone_id:m.id,title:'Open only',idempotency_key:'tp-2'});
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,task_id:openTask.id,summary:'no lease held',idempotency_key:'tp-neg8'}),e=>e.code==='LEASE_INVALID');
+  // task status transitions still require the explicit transition tool: report ≠ acceptance
+  const events=s.store.events(0,p.id);
+  assert.ok(events.some(x=>x.kind==='task.progress_reported'));
+  assert.ok(!events.some(x=>x.kind.startsWith('acceptance.')&&x.actor==='agent:external'));
+ }finally{db.close();}
+});
+
+test('archived projects keep history and reopen the opportunity for re-triage (G01 exit path)',()=>{
+ const {db,s,o}=setup();try{
+  const p=experiment(s,o);
+  const archived=s.ownerDecision(p.id,{action:'archive',reason:'结论已复盘，不再继续投入'});
+  assert.equal(archived.project.status,'archived');
+  assert.equal(archived.opportunity.status,'candidate');
+  assert.throws(()=>s.ownerDecision(p.id,{action:'archive',reason:'again'}),e=>e.code==='BAD_STATE');
+  // agent write paths are fenced after archiving
+  assert.throws(()=>s.tool('progress.report',{project_id:p.id,summary:'late report',idempotency_key:'arch-1'}),e=>e.code==='PROJECT_NOT_ACTIVE');
+  // the freed candidate re-enters the weekly brief
+  assert.ok(s.brief().candidates.some(x=>x.id===o.id));
+  // audit trail records the exit explicitly
+  const events=s.store.events(0,p.id);
+  assert.ok(events.some(x=>x.kind==='project.archived'));
+  assert.ok(events.some(x=>x.kind==='opportunity.reopened'));
+ }finally{db.close();}
+});
+
+test('opportunity re-triage stays blocked while paused but unlocks after stop or archive (G01)',()=>{
+ const {db,s,o}=setup();try{
+  const p=experiment(s,o);
+  const opp=()=>s.store.get('opportunities',o.id);
+  // paused: experiment may resume, so re-triage stays blocked
+  s.ownerDecision(p.id,{action:'pause',reason:'budget pause'});
+  assert.throws(()=>s.changeOpportunityStatus(o.id,{status:'dismissed',expected_revision:opp().revision}),e=>e.code==='PROJECT_IN_PROGRESS');
+  s.ownerDecision(p.id,{action:'resume'});
+  // resume keeps status and stage consistent (previously stage drifted behind status)
+  const resumed=s.getFullProject(p.id);
+  assert.equal(resumed.status,'research');
+  assert.equal(resumed.stage,'research');
+  // stop: authorization ended, owner may re-triage the opportunity
+  s.ownerDecision(p.id,{action:'stop',reason:'stop after review'});
+  const triaged=s.changeOpportunityStatus(o.id,{status:'watching',expected_revision:opp().revision});
+  assert.equal(triaged.status,'watching');
+ }finally{db.close();}
+});
+
+test('resume restores a consistent read model when a promotion-stage project is paused',()=>{
+ const {db,s,o}=setup();try{
+  const p=experiment(s,o);
+  const prj=s.store.get('projects',p.id);
+  s.store.put('projects',{...prj,status:'paused',stage:'promotion'},prj.revision);
+  const resumed=s.ownerDecision(p.id,{action:'resume'});
+  assert.equal(resumed.status,'research');
+  assert.equal(resumed.stage,'research');
+ }finally{db.close();}
+});
+

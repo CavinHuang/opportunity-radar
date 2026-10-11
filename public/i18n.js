@@ -300,6 +300,32 @@ const en = {
  '审批 Agent 的变更申请':'Review Agent change request','处理结果':'Resolution','拒绝':'Reject',
  '同意申请（实际基线仍须单独批准）':'Approve request (baseline requires separate approval)','审批理由':'Decision rationale',
  '状态':'Status','记录':'records','小时 · 现金 ¥':'hours · cash ¥',
+ // v2.9 Phase A: task board, timeline, archive and Agent distinction
+ '人工任务看板':'Human task board','添加任务':'Add task','待办':'To do','阻塞':'Blocked','完成':'Done',
+ '高优先级':'High priority','普通':'Normal','低优先级':'Low priority',
+ '已逾期':'Overdue','未逾期':'On schedule','无截止日期':'No due date','截止：':'Due: ',
+ '状态已持续：':'State held for: ','未知（缺少历史记录）':'Unknown (no history)','不足 1 分钟':'Under a minute',
+ '阻塞原因：':'Blocker reason: ','前置任务均已完成，可以解除阻塞。':'All prerequisites are done; this task can be unblocked.',
+ '前置：':'Depends on: ','里程碑：':'Milestone: ','已移除任务':'Removed task','本人':'Me',
+ '历史':'History','时间线':'Timeline','归档':'Archive','恢复任务':'Restore task','暂无任务':'No tasks',
+ '优先级':'Priority','关联里程碑':'Related milestone','不关联里程碑':'No milestone',
+ '阻塞原因（状态为阻塞时必填）':'Blocker reason (required when state is blocked)',
+ '任务变更历史':'Task change history','任务状态时间线':'Task state timeline','至今':'now','持续':'held for','暂无状态记录':'No state records yet',
+ 'Agent 执行任务':'Agent-executed tasks','Agent 执行':'Agent-run','创建方：':'Created by: ',
+ '人工（批准基线时生成）':'Human (generated on baseline approval)',
+ '任务提交并不代表人工验收 · 旧基线任务不可领取':'Task submission is not owner acceptance · tasks on old baselines cannot be claimed',
+ '项目级 Agent 汇报':'Project-level Agent report','尚未收到项目级进度汇报。':'No project-level progress report yet.',
+ '任务已归档':'Task archived','任务已恢复':'Task restored',
+ '归档会把任务从看板移除并保留完整历史；已归档任务不再作为前置约束其他任务。确定归档该人工任务？':'Archiving removes the task from the board and keeps its full history; archived tasks no longer gate their dependants. Archive this human task?',
+ '前置含已归档任务，已不再约束完成条件。':'Includes archived prerequisites; they no longer gate completion.',
+ '（已归档，不再约束）':' (archived, no longer gating)',
+ '按 Ctrl / Command 多选，完成前置任务后才能标记完成；已归档前置不再约束':'Ctrl/Command multi-select; prerequisites must finish before this task can complete. Archived prerequisites no longer gate.',
+ '归档项目':'Archive project','项目已归档，历史记录保留':'Project archived; history preserved','项目已停止':'Project stopped',
+ '归档将结束本轮实验授权并保留全部历史；关联机会会回到候选池，可重新分诊。外部进程不会被自动停止。确定归档？':'Archiving ends this experiment authorization and keeps all history; the linked opportunity returns to the candidate pool for re-triage. External processes are not stopped automatically. Archive?',
+ '项目已归档，机会已回到候选池':'Project archived; opportunity returned to candidates',
+ '实验已结束 · 可重新分诊':'Experiment ended · re-triage available',
+ '任务看板尚未加载，请刷新页面。':'Task board not loaded yet; refresh the page.',
+ '处理已逾期的人工任务':'Handle overdue human tasks',
 };
 export const COPY = Object.freeze({'en-US': Object.freeze(en)});
 const dynamic = [
@@ -341,7 +367,12 @@ const dynamic = [
  [/^最近同步\s*(.+)$/,(_m,t)=>`Last sync: ${t}`],
  [/^最近报告\s*(.+)$/,(_m,t)=>`Latest report: ${t}`],
  [/^验证「(.+)」是否为真实消费者提供价值$/,(_m,title)=>`Validate whether “${title}” provides value to consumers`],
- [/^(\d+)\s*条（尚未核验）$/,(_m,n)=>`${n} unverified sources`]
+ [/^(\d+)\s*条（尚未核验）$/,(_m,n)=>`${n} unverified sources`],
+ // v2.9 Phase A: task board dynamic copy
+ [/^逾期 (\d+) 项$/,(_m,n)=>`${n} overdue`],
+ [/^已归档人工任务 · (\d+) 项（历史保留，可恢复）$/,(_m,n)=>`Archived human tasks · ${n} (history kept, restorable)`],
+ [/^看板基于本机记录生成于 (.+)；缺失的历史记为未知，不当作零，也不表示研发完成度。$/,(_m,x)=>`Board generated from local records at ${x}; missing history stays unknown, never zero, and is not a completion measure.`],
+ [/^(\d+) 天$/,(_m,n)=>`${n} days`],[/^(\d+) 小时$/,(_m,n)=>`${n} hours`],[/^(\d+) 分钟$/,(_m,n)=>`${n} minutes`],
 ];
 export function normalizeLanguage(locale){return Object.hasOwn(LANGUAGES,locale)?locale:'zh-CN';}
 export function initialLanguage(storageValue,browserLanguage='zh-CN'){
