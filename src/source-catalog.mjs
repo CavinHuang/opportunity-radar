@@ -15,7 +15,16 @@ export const CATALOG=Object.freeze([
 {id:'se-money',title:'Money · 个人理财问题',url:'https://money.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'真实个人财务与支付场景的具体困惑',caution:'理财建议受监管敏感；问题多为一次性咨询'},
 {id:'se-parenting',title:'Parenting · 育儿问题',url:'https://parenting.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'育儿与家庭场景的高摩擦日常问题',caution:'涉及儿童隐私话题需更严格的脱敏与克制'},
 {id:'se-diy',title:'Home Improvement · 家居修缮问题',url:'https://diy.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'家居与维修场景的具体痛点描述',caution:'硬件类问题软件化机会有限'},
-{id:'lobsters',title:'Lobsters · 技术社区精选',url:'https://lobste.rs/rss',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'高信噪比的技术讨论与工具摩擦',caution:'链接聚合为主，偏技术人群；需读评论区辨真伪'}
+{id:'lobsters',title:'Lobsters · 技术社区精选',url:'https://lobste.rs/rss',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'高信噪比的技术讨论与工具摩擦',caution:'链接聚合为主，偏技术人群；需读评论区辨真伪'},
+// Global wave 2 (v2.15): Stack Exchange consumer domains + one Russian-language
+// community. Same bar — firsthand questions and experience, durable HTTPS feeds.
+{id:'se-travel',title:'Travel · 旅行问题',url:'https://travel.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'签证、装备与行程中的真实摩擦，消费者购买域清晰',caution:'旅行偏好高度个人化；偶有极端个案'},
+{id:'se-pets',title:'Pets · 宠物养护问题',url:'https://pets.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'宠物主人是明确的消费群体，养护问题具体',caution:'健康问题应导向兽医，不能当作产品需求证据'},
+{id:'se-fitness',title:'Fitness · 健身训练问题',url:'https://fitness.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'训练、装备与习惯养成的真实困惑',caution:'建议因人而异；社区内营销内容偏多'},
+{id:'se-mechanics',title:'Mechanics · 汽车养护问题',url:'https://mechanics.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'车主故障与养护描述具体且高频',caution:'硬件维修难软件化；各地法规与车型差异大'},
+{id:'se-cooking',title:'Seasoned Advice · 烹饪问题',url:'https://cooking.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'厨房场景的具体问题与工具摩擦',caution:'与软件机会的关联较弱，需人工筛选'},
+{id:'se-interpersonal',title:'Interpersonal Skills · 人际沟通问题',url:'https://interpersonal.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'沟通与协作场景的真实困境',caution:'多为软性问题，产品化路径不直接'},
+{id:'habr-best',title:'Хабр · 俄语区最佳发布',url:'https://habr.com/ru/rss/best/daily/',market:'International',language:'ru-RU',class:'firsthand_candidate',quality:'medium',intervalMinutes:1440,reason:'俄语区技术社区的用户体验复盘与工具实践',caution:'编辑聚合偏科技职业人群；不是消费者问答社区'}
 ]);
 export function catalogList(store){
  const feeds=store.list('feeds');
