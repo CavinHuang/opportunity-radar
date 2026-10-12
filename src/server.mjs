@@ -1,3 +1,4 @@
+import {scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
@@ -147,6 +148,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(researchReview&&req.method==='POST')return send(res,200,{item:recordResearchReview(store,decodeURIComponent(researchReview[1]),await body(req))});
     if(pathname==='/api/opportunity-scoreboard'&&req.method==='GET')return send(res,200,opportunityScoreboard(store));
     if(pathname==='/api/opportunity-scoreboard/config'&&req.method==='POST')return send(res,200,{item:updateScorecardConfig(store,await body(req))});
+    if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
+    if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
+      const scan=await scanSources(store,{});
+      return send(res,200,{scan,discovery:await scanHomeOpportunities(store)});
+    }
     if(pathname==='/api/opportunity-scan'&&req.method==='GET')return send(res,200,opportunityScanCandidates(store));
     if(pathname==='/api/opportunity-scan/run'&&req.method==='POST'){
       const result=await scanSources(store,{});
