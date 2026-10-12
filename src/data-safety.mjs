@@ -148,6 +148,28 @@ export function pruneEvents({database=defaultDatabasePath(),before,confirmed=fal
   return {database:resolve(database),cutoff,deleted:Number(result.changes),confirmed:true,note:EVENT_PRUNE_NOTE};
  }finally{db.close();}
 }
+/** Human-readable portability export: every record and audit event as JSON.
+ * This complements — never replaces — the SQLite backup/restore snapshot,
+ * which remains the consistency-checked recovery path. Refuses to overwrite. */
+export function exportJson({database=defaultDatabasePath(),output}){
+ if(!output)throw fail('OUTPUT_REQUIRED','--output is required: path for the JSON export');
+ const target=resolve(output);
+ if(fileExists(target))throw fail('EXPORT_EXISTS','Export refuses to overwrite; choose a new path');
+ const db=new DatabaseSync(resolve(database));
+ try{
+  const records=db.prepare('SELECT kind,id,json,revision FROM records ORDER BY kind,rowid').all()
+   .map(r=>({kind:r.kind,id:r.id,revision:r.revision,data:JSON.parse(r.json)}));
+  const events=db.prepare('SELECT seq,project_id,kind,entity_id,actor,detail,created_at FROM events ORDER BY seq').all()
+   .map(r=>({...r,detail:JSON.parse(r.detail)}));
+  const payload={format:'opportunity-radar-export@1',generatedAt:new Date().toISOString(),
+   counts:{records:records.length,events:events.length},records,events,
+   note:'包含私人研究内容的明文 JSON 导出；请像对待备份一样妥善保管。'};
+  mkdirSync(dirname(target),{recursive:true});
+  writeFileSync(target,JSON.stringify(payload,null,1),{mode:0o600});
+  return {output:target,records:records.length,events:events.length,
+   note:'可读导出完成。它不是 backup/restore 的替代品；恢复仍请使用 SQLite 快照。'};
+ }finally{db.close();}
+}
 export function readinessSummary(store,{ownerProtected=false}={}){
  const feeds=store.list('feeds'),enabled=feeds.filter(x=>x.enabled);
  const opportunities=store.list('opportunities');

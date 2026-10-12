@@ -113,3 +113,9 @@
 - Landing point for the spec's question "why this opportunity and not the others": approving an experiment now requires a 选择依据 (rationale versus other candidates, ≤500 chars, stored on the project with its decision time); dismissing or watching an opportunity captures an optional-but-prompted reason; the latest triage reason stays visible on the pool card.
 - The rationale surfaces where the question is asked twice: the project contract card (为什么是它) and the periodic review's 对照最初假设 section (最初的选择依据), so later reviews compare evidence against the original choice, not just the original hypothesis.
 - API keeps the fields optional for script compatibility; the approve UI enforces required. Old projects without a rationale render without the row.
+
+## v2.21 · Configuration and portability
+
+- Review cadence is deployment-configurable: `RADAR_REVIEW_CYCLE_DAYS` (integer 1–365, default 7) replaces the hardcoded 7-day cycle; the review header and next-due computation both follow it.
+- The promotion calendar groups entries by state (逾期 / 今日计划 / 即将到来 / 已发布) with per-group counts instead of one flat tagged list, so "what ships when" reads at a glance.
+- `npm run data -- export --output <file.json>`: human-readable portability export of every record and audit event (plaintext JSON, mode 0600, refuses overwrite). It complements — never replaces — the SQLite backup/restore snapshot.
