@@ -12,10 +12,14 @@ function explain(signals,cluster=null){
  if(!reasons.length)reasons.push('公开标题涉及具体工具或使用场景，值得进一步核查');
  const warnings=['原始文章及用户身份未经核验，可能包含广告、转载或一次性问题','讨论数量不是独立用户数，也不代表付费意愿'];
  if(cluster?.diagnostics?.possibleRepost)warnings.unshift('存在疑似转载、重复署名或重复内容');
+ const categories=[['AI 与自动化',/\bai\b|agent|llm|automat|模型|自动化/i],['开发者工具',/develop|program|github|code|debug|terminal|cli|开发|代码/i],['个人效率',/productiv|workflow|calendar|note|organize|效率|笔记|整理/i],['支付与财务',/receipt|invoice|payment|bill|budget|账单|发票|支付/i]];
+ const domains=categories.filter(([_,test])=>test.test(combined)).map(([label])=>label);
+ const competition=/(?:alternative|competitor|replace|existing tool|instead of|替代|竞品|已有工具)/i.test(combined);
+ const counterEvidence=[competition?'提到替代工具或已有方案，需要检查竞争和切换成本':'缺少现有竞品与替代方案的独立调查','未取得独立访谈、留存或付费证据'];
  const confidence=evidence.length>=2&&siteCount>1?'needs_original_verification':'weak_signal';
  return {id:cluster?'group:'+cluster.id:'signal:'+first.id,title:first.title,summary:String(first.description||'').slice(0,260),
   signalIds:signals.map(s=>s.id),sourceUrls:signals.map(s=>s.url),signalCount:signals.length,siteCount,
-  reasons,warnings,confidence,clusterId:cluster?.id||null,
+  reasons,warnings,confidence,domains,competitionMentioned:competition,counterEvidence,clusterId:cluster?.id||null,
   nextAction:'打开原帖，核对真实场景、现有替代方案、独立用户与反面案例，随后进行低成本访谈'};
 }
 /** Deterministic, non-LLM candidate read model. Never creates approved opportunities. */
