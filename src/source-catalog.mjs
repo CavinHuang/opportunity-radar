@@ -37,12 +37,19 @@ export const CATALOG=Object.freeze([
 {id:'se-workplace',title:'Workplace · 职场问题',url:'https://workplace.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'职场协作与流程摩擦是工具机会的重要来源',caution:'员工视角偏多；涉雇佣敏感话题需克制'},
 {id:'sspai',title:'少数派 · 产品体验',url:'https://sspai.com/feed',market:'中国大陆',language:'zh-CN',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'中文世界少见的高质量产品使用体验写手社区',caution:'编辑部内容为作者视角，不是问答式消费者证言'},
 {id:'es-stackoverflow',title:'Stack Overflow en Español',url:'https://es.stackoverflow.com/feeds',market:'International',language:'es',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'西语开发者问答，首个西语覆盖源',caution:'偏开发人群；与英文 SO 主题重叠'}
+,{id:'ph-launches',title:'Product Hunt · 最新产品发布',url:'https://www.producthunt.com/feed',market:'International',language:'en-US',class:'competitor_trend',signalType:'competitive_launch',quality:'medium',intervalMinutes:720,reason:'追踪新产品、定位、同类供给及竞争态势；不能当作真实消费者需求',caution:'产品发布推广内容，投票数不是付费意愿；每次扫描需要验证 Atom 解析'}
+,{id:'apple-askdifferent',title:'Ask Different · Apple 使用难题',url:'https://apple.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'macOS 与 iPhone 用户的实际软件使用摩擦',caution:'社区偏技术用户，排障不等于新产品机会'}
+,{id:'android-enthusiasts',title:'Android Enthusiasts · Android 使用问题',url:'https://android.stackexchange.com/feeds',market:'International',language:'en-US',class:'firsthand_candidate',quality:'medium',intervalMinutes:720,reason:'Android 设备、App、同步和效率痛点',caution:'设备或系统厂商限制可能没有第三方解决方案'}
+,{id:'ux-stackexchange',title:'User Experience · 产品交互问题',url:'https://ux.stackexchange.com/feeds',market:'International',language:'en-US',class:'professional_discussion',signalType:'design_friction',quality:'medium',intervalMinutes:720,reason:'发现软件使用流程与交互设计的摩擦',caution:'设计专业人士讨论不能直接视为消费者访谈'}
+,{id:'reddit-research',title:'Reddit · 海外社区需求观察',url:'https://www.reddit.com/',market:'International',language:'en-US',class:'manual_research',signalType:'firsthand_candidate',accessMode:'manual',quality:'high',reason:'在 r/SideProject、r/SaaS、r/Entrepreneur、r/selfhosted、r/productivity 中寻找用户原话和现有替代方案',caution:'Reddit 官方将于 2026-11-13 停止 RSS，未经授权不得抓取。请打开官方站点核查并手动保存帖子 URL'}
+,{id:'x-social',title:'X.com · 海外产品痛点与趋势',url:'https://x.com/explore',market:'International',language:'en-US',class:'manual_research',signalType:'social_discussion',accessMode:'manual',quality:'medium',reason:'关注用户对 AI、开发者工具、效率软件的抱怨、替代品和产品更新',caution:'默认只允许手动保存帖子链接；自动搜索需要单独获得官方 API 授权、预算和速率额度'}
+
 ]);
 export function catalogList(store){
  const feeds=store.list('feeds');
  return CATALOG.map(item=>{
-  const f=feeds.find(x=>x.url===item.url);
-  return {...item,installedFeedId:f?.id||null,
+  const f=item.accessMode==='manual'?null:feeds.find(x=>x.url===item.url);
+  return {...item,accessMode:item.accessMode||'rss',installedFeedId:f?.id||null,
    status:f?.lastSuccessAt?'reachable_at_last_scan':f?.lastError?'scan_failed':'unprobed',
    verifiedLive:Boolean(f?.lastSuccessAt),lastCheckedAt:f?.lastCheckedAt||null,
    lastError:f?.lastError||null,
@@ -52,6 +59,7 @@ export function catalogList(store){
 export function installCatalogFeed(store,id){
  const c=CATALOG.find(x=>x.id===id);
  if(!c)throw Object.assign(new Error('目录中没有此来源'),{code:'CATALOG_NOT_FOUND',status:404});
+ if(c.accessMode==='manual')throw Object.assign(new Error('此平台暂不提供可持续的公开 RSS 接入；请打开来源页面并使用手动保存网页线索'),{code:'CATALOG_MANUAL_ONLY',status:409});
  validateFeedUrl(c.url);
  const old=store.list('feeds').find(f=>f.url===c.url);
  if(old)return {item:old,alreadyInstalled:true};
