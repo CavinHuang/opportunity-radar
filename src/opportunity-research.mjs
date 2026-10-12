@@ -34,7 +34,7 @@ export async function draftOpportunityResearch(store,id,{fetchImpl=globalThis.fe
 }
 export function recordResearchReview(store,id,{fingerprint,sections,decision,note}={}){
  if(!['accept_as_notes','reject'].includes(decision))throw fail('BAD_DECISION','必须选择保留为待核查笔记或拒绝');
- const now=candidateContext(store,id);
+ let now;try{now=candidateContext(store,id)}catch(e){if(e.code==='CANDIDATE_NOT_FOUND')throw fail('CANDIDATE_CHANGED','候选问题证据不再满足筛选条件，请重新分析',409);throw e;}
  if(fingerprint!==now.fingerprint)throw fail('CANDIDATE_CHANGED','候选来源已变化，请重新分析',409);
  if(!sections||typeof sections!=='object')throw fail('BAD_REVIEW','缺少待审核内容');
  const allowed=new Set(now.sources.map(s=>s.id)),checked={};
