@@ -52,6 +52,7 @@ export function sourceQualityReport(store,{nowMs=Date.now()}={}){
     failingSources:items.filter(x=>x.failing).length,uniqueSignals:new Set(signals.map(s=>s.url)).size,
     linkedOpportunities:linkedOpportunities.size,
     sourcesWithOwnerReviewedFirsthand:items.filter(x=>x.ownerReviewedIndependentFirsthand>0).length},
+   ranking:items.map(x=>({...x,observedUtility:x.ownerReviewedIndependentFirsthand*5+x.linkedOpportunities*2+x.counts.saved,rankingCaveat:'仅供优先复核的观察排序，非需求真实性评分'})).sort((a,b)=>b.observedUtility-a.observedUtility||a.title.localeCompare(b.title)),
    items,notes:[
     'One story may be present in multiple feeds. Do not sum source counts as independent users.',
     'Firsthand and independent labels reflect owner review; author identity is not independently verified.',
