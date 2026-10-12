@@ -1,0 +1,59 @@
+name: Docker image
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: opportunity-radar:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Runtime smoke — health, owner auth, data persistence across restart
+        run: |
+          docker run -d --name radar-ci \
+            -e RADAR_HOST=0.0.0.0 -e RADAR_PORT=4177 \
+            -e RADAR_OWNER_TOKEN=ci-owner-secret \
+            -p 4919:4177 opportunity-radar:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4919/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          # health 无需鉴权
+          curl -fsS http://127.0.0.1:4919/api/health | grep -q '"ok":true'
+          # owner API 需要鉴权：无 key 401，带 key 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4919/api/opportunities)" = 401
+          curl -fsS -H 'X-Radar-Owner-Key: ci-owner-secret' http://127.0.0.1:4919/api/opportunities > /dev/null
+          # 写入数据 → 重启容器 → 数据仍在（卷持久化）
+          curl -fsS -X POST -H 'X-Radar-Owner-Key: ci-owner-secret' -H 'Content-Type: application/json' \
+            -d '{"title":"CI persistence probe","problem":"synthetic","market":"International"}' \
+            http://127.0.0.1:4919/api/opportunities > /dev/null
+          docker stop radar-ci && docker start radar-ci
+          sleep 3
+          COUNT=$(curl -fsS -H 'X-Radar-Owner-Key: ci-owner-secret' http://127.0.0.1:4919/api/opportunities | grep -o '"title"' | wc -l)
+          test "$COUNT" -ge 1
+          docker rm -f radar-ci > /dev/null
+      - name: compose file is valid
+        run: |
+          docker compose -f docker-compose.yml config > /dev/null
+        env:
+          RADAR_OWNER_TOKEN: ci-dummy

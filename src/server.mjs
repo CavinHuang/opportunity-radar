@@ -27,7 +27,8 @@ import {readinessSummary} from './data-safety.mjs';
 import {growthOverview,growthReport,createGrowthChannel,createGrowthCampaign,recordGrowthMetric,importGrowthMetrics,reviseGrowthMetric,retractGrowthMetric,verifyGrowthMetric,growthHistory} from './growth.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dbPath=process.env.RADAR_DB||path.join(root,'.data','radar.sqlite');
-const port=Number(process.env.RADAR_PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
+// RADAR_PORT 优先；PORT 兜底以兼容 Dokploy 等 PaaS 平台的端口注入惯例。
+const port=Number(process.env.RADAR_PORT||process.env.PORT||4177),host=process.env.RADAR_HOST||'127.0.0.1';
 if(!['127.0.0.1','localhost','::1'].includes(host)&&!process.env.RADAR_OWNER_TOKEN)throw new Error('RADAR_OWNER_TOKEN is required when binding to a non-loopback host');
 const store=openDatabase(dbPath);seedConfiguredSources(store);const service=createService(store);
 let storeClosed=false;

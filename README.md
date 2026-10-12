@@ -2,7 +2,7 @@
 
 > 个人 To C 机会雷达：发现真实问题 → 批准最小实验 → 外部 Coding Agent 交付 → 真实证据验收 → 创作者宣发 → 收益复盘。
 
-这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 持续演进的 **v2.22 本地运行版本**（当前阶段：安全加固、真实浏览器验证与全球信息源扩充之后），不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
+这是依据已批准 **PRD V1.2 / Agent Handoff V1.3** 持续演进的 **v2.23 版本**（支持本机运行或 Docker 服务器部署——单 owner：所有持有 owner token 的人共享同一数据集，详见 [docs/DEPLOY.md](docs/DEPLOY.md)）（当前阶段：安全加固、真实浏览器验证与全球信息源扩充之后），不是已完成真实消费者试点的产品。支持简体中文与 English，界面以轻量项目进度和决策为中心。
 
 ## 界面截图 / Screenshots
 
@@ -21,6 +21,18 @@
 ![Northstar Agent connection (demo data)](docs/screenshots/agent-setup-en.webp)
 
 复现方式：`python scripts/capture_screenshots.py`（需要 Python Playwright、Pillow 和 Chromium）。脚本使用临时数据库，不修改真实项目。
+
+## 服务器部署（Docker）
+
+数据存储在服务器的 SQLite（Docker 命名卷持久化），浏览器远程访问，单 owner token 鉴权：
+
+```bash
+cp docker-compose.yml .  # 或直接在仓库目录
+echo 'RADAR_OWNER_TOKEN=你的强口令' > .env
+docker compose up -d --build
+```
+
+完整指南见 [docs/DEPLOY.md](docs/DEPLOY.md)；**Dokploy 用户**直接看 [docs/DOKPLOY.md](docs/DOKPLOY.md)（Dockerfile 构建类型原生适配，含 Traefik 自动 HTTPS）。
 
 ## 最新更新（v2.10 → v2.16）
 
