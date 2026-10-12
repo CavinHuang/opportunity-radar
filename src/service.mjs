@@ -37,8 +37,10 @@ export function createService(store, options={}){
       if(active)throw err('PROJECT_IN_PROGRESS','实验尚未结束：先停止或归档项目，才能重新分诊该机会',409);
     }
     if(!['candidate','watching','dismissed'].includes(data.status))throw err('BAD_REQUEST','无效机会状态');
-    const next=store.put('opportunities',{...item,status:data.status},data.expected_revision);
-    event('opportunity.triaged',id,owner,{status:next.status});return next;
+    // 分诊原因（可选）：放弃/继续观察时记录，回答「为什么不是它」。
+    const reasonText=data.reason===undefined||data.reason===null?null:(String(data.reason).trim().slice(0,300)||null);
+    const next=store.put('opportunities',{...item,status:data.status,statusReason:reasonText?{status:data.status,text:reasonText,at:now()}:item.statusReason??null},data.expected_revision);
+    event('opportunity.triaged',id,owner,{status:next.status,reason:reasonText});return next;
   }
   function attachSignalToOpportunity(signalId,opportunityId){return store.transaction(()=>{
     const signal=get('sources',signalId),item=get('opportunities',opportunityId);
@@ -83,10 +85,13 @@ export function createService(store, options={}){
     const cash=nonNegative(data.cash??0,'cash');
     const criteria=(data.criteria||[]).map(x=>required(x,'criterion'));if(!criteria.length)throw err('BAD_REQUEST','需要至少一条可验证验收标准');
     const goal=required(data.goal,'goal'), hypothesis=required(data.hypothesis,'hypothesis'), stopCondition=required(data.stopCondition,'stopCondition');
+    // 任务书问题 2 的落点：批准时记录「为什么是它，而不是其他候选」。
+    // API 层可选（脚本兼容），批准界面必填；无理由的批准仍如实记为 null。
+    const selectionRationaleText=data.selectionRationale===undefined||data.selectionRationale===null?null:(String(data.selectionRationale).trim().slice(0,500)||null);
     const researchBasis=approvedResearchBasis(store,o.id,data.validationPlanId||null);
     const pId=randomUUID();
     const b={revision:1,approvedAt:now(),approvedBy:owner,goal,hypothesis,scope:data.scope||'',nonGoals:data.nonGoals||'',stopCondition,criteria:criteria.map(text=>({id:randomUUID(),text})),budget:{weeklyUserHours:hours,cash},evidenceIds:[],researchBasis};
-    const p=store.put('projects',{id:pId,opportunityId:o.id,name:o.title,market:data.market||o.market,channel:data.channel||o.channel,status:'research',stage:'research',baselines:[b],milestoneIds:[],latestAgentReport:null,agentLastSync:null,createdAt:now(),lastDecision:'实验已批准',externalProcessState:'unknown',researchBasis});
+    const p=store.put('projects',{id:pId,opportunityId:o.id,name:o.title,market:data.market||o.market,channel:data.channel||o.channel,status:'research',stage:'research',baselines:[b],milestoneIds:[],latestAgentReport:null,agentLastSync:null,createdAt:now(),lastDecision:'实验已批准',externalProcessState:'unknown',researchBasis,selectionRationale:selectionRationaleText?{text:selectionRationaleText,decidedAt:now()}:null});
     const items=[{title:'消费者需求取证',description:'获得可追溯的独立需求线索',acceptanceIds:[]},{title:'最小产品交付',description:'按批准的验收要求提供可运行原型',acceptanceIds:b.criteria.map(x=>x.id)},{title:'宣发与真实反馈',description:'人工发布并记录真实用户行为',acceptanceIds:[]}];
     for(let i=0;i<items.length;i++){const m=store.put('milestones',{id:randomUUID(),projectId:pId,order:i+1,...items[i],executionState:'not_started',evidenceState:'not_verified',acceptanceState:'pending',createdAt:now()});p.milestoneIds.push(m.id);}
     const saved=store.put('projects',p,p.revision);

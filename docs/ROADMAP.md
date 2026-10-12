@@ -107,3 +107,9 @@
 
 - `POST /api/mute-rules/apply` + a one-click button: evaluate the whole untriaged (new) queue against current rules immediately, so a fresh rule does not have to wait for the next scheduled scan. Explicit owner command semantics — it touches even manual entries, by design; converted and already-triaged signals are never touched. Counts (scanned/applied) returned and toasted.
 - Content version history UI: the versions array (kept intact since v2.8, every edit archiving the old revision and voiding approvals) is now browsable from a 历史 button on each content card — current revision plus archived versions newest-first with status and timestamps.
+
+## v2.20 · Selection rationale chain
+
+- Landing point for the spec's question "why this opportunity and not the others": approving an experiment now requires a 选择依据 (rationale versus other candidates, ≤500 chars, stored on the project with its decision time); dismissing or watching an opportunity captures an optional-but-prompted reason; the latest triage reason stays visible on the pool card.
+- The rationale surfaces where the question is asked twice: the project contract card (为什么是它) and the periodic review's 对照最初假设 section (最初的选择依据), so later reviews compare evidence against the original choice, not just the original hypothesis.
+- API keeps the fields optional for script compatibility; the approve UI enforces required. Old projects without a rationale render without the row.

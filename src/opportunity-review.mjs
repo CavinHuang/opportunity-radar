@@ -78,6 +78,7 @@ export function buildReviewDraft(store,projectId,{windowFrom,windowTo}={}){
  return {projectId,generatedAt:now(),window:{from:fromDay,to:toDay},
   originalBaseline:snapshotBaseline(project.baselines[0]),
   currentBaseline:snapshotBaseline(project.baselines.at(-1)),
+  selectionRationale:project.selectionRationale||null,
   decision,
   evidence:{total:evidenceRows.length,
    verified:evidenceRows.filter(x=>x.verificationState==='verified').length,
