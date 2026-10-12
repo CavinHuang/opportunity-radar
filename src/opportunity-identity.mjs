@@ -34,7 +34,7 @@ export function opportunityIdentityDossier(store,id){
  const events=store.list('home_opportunity_identity_events').filter(e=>e.identityId===id).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
  const feedback=store.list('home_opportunity_feedback').filter(f=>(identity.candidateIds||[]).includes(f.id)).map(f=>({candidateId:f.id,verdict:f.verdict,reason:f.reason,at:f.at}));
  const decisions=store.list('home_opportunity_decisions').filter(d=>(identity.candidateIds||[]).includes(d.id)).map(d=>({candidateId:d.id,action:d.action,at:d.at}));
- return {id:identity.id,title:identity.title,firstSeenAt:identity.firstSeenAt,lastSeenAt:identity.lastSeenAt,observations:identity.observations,sourceUrls:identity.sourceUrls||[],events,feedback,decisions,identityMethod:'规则关联：候选 ID、来源 URL 或标题相似度；未经人工验证',warning:'扫描次数不等于独立用户数，来源数量也不能证明付费需求'};
+ return {id:identity.id,revision:identity.revision,candidateIds:identity.candidateIds||[],title:identity.title,firstSeenAt:identity.firstSeenAt,lastSeenAt:identity.lastSeenAt,observations:identity.observations,sourceUrls:identity.sourceUrls||[],events,feedback,decisions,identityMethod:'规则关联：候选 ID、来源 URL 或标题相似度；未经人工验证',warning:'扫描次数不等于独立用户数，来源数量也不能证明付费需求'};
 }
 export function opportunityIdentityIndex(store,{limit=100}={}){
  return {items:store.list('home_opportunity_identities').sort((a,b)=>(b.lastSeenAt||'').localeCompare(a.lastSeenAt||'')).slice(0,Math.min(100,Math.max(1,limit))).map(x=>({id:x.id,title:x.title,firstSeenAt:x.firstSeenAt,lastSeenAt:x.lastSeenAt,observations:x.observations,sourceCount:(x.sourceUrls||[]).length})),notice:'仅统计已被 AI 初筛保留的候选身份，不等于已验证商业机会'};
