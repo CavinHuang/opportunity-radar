@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {openDatabase} from '../src/db.mjs';
 import {createService} from '../src/service.mjs';
-import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,readinessSummary,pruneEvents} from '../src/data-safety.mjs';
+import {backupDatabase,verifyBackup,restoreDatabase,inspectRadarDatabase,readinessSummary,pruneEvents,exportJson} from '../src/data-safety.mjs';
 
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'radar-data-v18-'));
@@ -138,5 +138,20 @@ test('prune-events reports first, deletes only old audit events on confirm, and 
   assert.equal(inspectRadarDatabase(x.dbfile).totalRecords,recordsBefore,'records and idem are never pruned');
   const oldLeft=x.store.db.prepare("SELECT COUNT(*) AS n FROM events WHERE created_at<'2021-01-01'").get().n;
   assert.equal(oldLeft,0);
+ }finally{x.close();}
+});
+
+test('JSON export writes every record and event to a portable file and refuses overwrite',()=>{
+ const x=fixture();
+ try{
+  const out=join(x.dir,'export.json');
+  const first=exportJson({database:x.dbfile,output:out});
+  assert.equal(first.records,4);
+  assert.ok(first.events>=1);
+  assert.throws(()=>exportJson({database:x.dbfile,output:out}),e=>e.code==='EXPORT_EXISTS');
+  const parsed=JSON.parse(readFileSync(out,'utf8'));
+  assert.equal(parsed.counts.records,4);
+  assert.ok(Array.isArray(parsed.events)&&parsed.events.length>=1);
+  assert.equal(parsed.format,'opportunity-radar-export@1');
  }finally{x.close();}
 });

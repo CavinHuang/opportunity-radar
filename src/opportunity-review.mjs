@@ -22,6 +22,13 @@ const DAY=86400000;
 const clean=(v,max)=>String(v??'').trim().slice(0,max);
 
 export const REVIEW_CYCLE_DAYS=7;
+/** Deployment-tunable review cadence: RADAR_REVIEW_CYCLE_DAYS (integer 1–365),
+ * default 7. Read at call time so tests and deployments can adjust without forks. */
+export function reviewCycleDays(env=process.env){
+ const raw=Number(env.RADAR_REVIEW_CYCLE_DAYS);
+ if(!Number.isInteger(raw)||raw<1||raw>365)return REVIEW_CYCLE_DAYS;
+ return raw;
+}
 export const FINDING_KINDS=['observation','contradiction','uncertainty','risk','anomaly'];
 export const STOP_ASSESSMENTS=['unassessed','not_met','partially_met','met'];
 export const REVIEW_CHOICES=['continue','adjust','pause','stop'];
@@ -50,8 +57,9 @@ export function reviewSummary(store,projectId){
  const reviews=store.list('opportunity_reviews').filter(r=>r.projectId===projectId)
   .sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
  const latest=reviews.at(-1)||null;
- const nextDueAt=latest?new Date(Date.parse(latest.createdAt)+REVIEW_CYCLE_DAYS*DAY).toISOString():null;
- return {count:reviews.length,cycleDays:REVIEW_CYCLE_DAYS,
+ const cycleDays=reviewCycleDays();
+ const nextDueAt=latest?new Date(Date.parse(latest.createdAt)+cycleDays*DAY).toISOString():null;
+ return {count:reviews.length,cycleDays,
   latestAt:latest?.createdAt||null,
   latestDecision:latest?.decision?{choice:latest.decision.choice,decidedAt:latest.decision.decidedAt,appliedStateChange:latest.decision.appliedStateChange}:null,
   nextDueAt,due:isActive(project)&&(!latest||Date.now()>=Date.parse(nextDueAt)),

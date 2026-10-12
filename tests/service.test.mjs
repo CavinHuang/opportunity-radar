@@ -185,3 +185,15 @@ test('selection rationale is recorded at approval and surfaces in the review dra
  assert.equal(draft.selectionRationale.text,'另外两条线索只有单一来源提及，这一条有两人独立发帖','复盘对照区包含最初的选择依据');
  db.close();
 });
+
+test('review cycle is deployment-configurable via env',async()=>{
+ const {db,s,o}=setup();
+ try{
+  process.env.RADAR_REVIEW_CYCLE_DAYS='14';
+  const {reviewSummary}=await import('../src/opportunity-review.mjs');
+  const p=experiment(s,o);
+  assert.equal(reviewSummary(db,p.id).cycleDays,14);
+  delete process.env.RADAR_REVIEW_CYCLE_DAYS;
+  assert.equal(reviewSummary(db,p.id).cycleDays,7);
+ }finally{delete process.env.RADAR_REVIEW_CYCLE_DAYS;db.close();}
+});
