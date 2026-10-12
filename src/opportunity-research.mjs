@@ -23,7 +23,7 @@ export async function draftOpportunityResearch(store,id,{fetchImpl=globalThis.fe
  const response=await fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},body:JSON.stringify({model,messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(prompt)}],temperature:0.1,max_tokens:1100}),signal:AbortSignal.timeout(25000)});
  if(!response.ok)throw fail('LLM_HTTP_ERROR','模型请求失败 HTTP '+response.status,502);
  const data=await response.json(),raw=clean(data?.choices?.[0]?.message?.content,12000);
- let parsed;try{parsed=JSON.parse(raw.replace(/^`(?:json)?s*/,'').replace(/s*`$/,''))}catch{throw fail('LLM_INVALID_RESPONSE','模型未返回可解析的结构化 JSON',502)}
+ let parsed;try{parsed=JSON.parse(raw.replace(/^```(?:json)?[ ]*/,'').replace(/```$/,'').trim())}catch{throw fail('LLM_INVALID_RESPONSE','模型未返回可解析的结构化 JSON',502)}
  const allowed=new Set(sources.map(x=>x.id)),sections={};
  for(const k of keys){const entry=parsed?.[k];if(!entry||typeof entry!=='object'||Array.isArray(entry))throw fail('LLM_INVALID_RESPONSE','缺少结构化字段：'+k,502);
   const ids=Array.isArray(entry.sourceIds)?[...new Set(entry.sourceIds)]:[];
