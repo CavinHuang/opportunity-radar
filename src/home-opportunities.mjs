@@ -1,3 +1,4 @@
+import {persistOpportunityIdentities} from './opportunity-identity.mjs';
 import {titleSimilarity} from './discovery.mjs';
 import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {jevConfig,jevSystemOne,extractAnswer} from './jev.mjs';
@@ -111,6 +112,12 @@ export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=glo
    aiReason:result.results.get(c.id).reason,engine:result.engine,
    ...compareOpportunityChange(c,prior)
  })): [];
+ const identities=result?persistOpportunityIdentities(store,items,{at:new Date().toISOString()}):[];
+ for(let i=0;i<items.length;i++){
+  const identity=identities[i];
+  items[i]={...items[i],identityId:identity.identityId,firstSeenAt:identity.firstSeenAt,observations:identity.observations,knownSources:identity.knownSources,novelty:identity.novelty,addedSourceCount:identity.addedSourceCount,
+   changeReason:identity.novelty==='new_since_previous_scan'?'历史知识库首次收录':identity.novelty==='new_evidence'?'累计新增 '+identity.addedSourceCount+' 条来源链接（独立性未核实）':'已有历史证据，本次未增加新来源'};
+ }
  const payload={id:recordId,status:result?'filtered':reason?.startsWith('未配置')?'not_configured':'filter_failed',
   reason,engine:result?.engine||null,at:new Date().toISOString(),scanned:all.examined,considered:candidates.length,
   accepted:items.length,newCount:items.filter(x=>x.novelty==='new_since_previous_scan').length,repeatCount:items.filter(x=>x.novelty==='seen_before').length,updatedCount:items.filter(x=>x.novelty==='new_evidence').length,items,notice:'AI 仅过滤公开候选。不能证明用户独立性、需求、付费意愿；请打开原帖核查。'};
