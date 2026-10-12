@@ -1,11 +1,14 @@
-# Opportunity Radar · 服务器部署编排
-# 用法：
-#   1. 在同目录创建 .env，至少设置 RADAR_OWNER_TOKEN（强口令，服务暴露到网络时的唯一鉴权）。
-#   2. docker compose up -d --build
-#   3. 浏览器打开 http://<服务器地址>:4177 ，输入 owner token。
+# Opportunity Radar · Dokploy Compose 部署编排
 #
-# HTTPS：建议前置反向代理（Caddy / Nginx）终止 TLS 后转发到 4177。
-# 设置了 RADAR_OWNER_TOKEN 时，应用接受任意 Host（反代场景无需 RADAR_ALLOWED_HOSTS）。
+# ⚠ Compose 部署类型的关键一步：Dokploy 不会为 Compose 服务自动接通反向代理。
+#    下面已预置 dokploy-network 挂载与 Traefik 路由标签——把 radar.example.com
+#    换成你的域名后，Dokploy 里 Redeploy 即可通过域名访问（自动 HTTPS）。
+#    不用域名时，也可以直接访问服务器 IP:4177（ports 已发布）。
+#
+# 用法：
+#   1. 在 Dokploy 环境变量（或同目录 .env）设置 RADAR_OWNER_TOKEN（强口令，必填）。
+#   2. docker compose up -d（本机）或在 Dokploy Redeploy。
+#   3. 验证：curl http://127.0.0.1:4177/api/health → {"ok":true,...}
 #
 # 数据：SQLite（含 WAL）持久化在命名卷 radar-data；升级镜像不丢数据。
 # 备份：docker compose exec radar node src/data-cli.mjs backup \
@@ -14,14 +17,11 @@
 services:
   radar:
     build: .
-    # 使用预构建镜像时注释掉 build、改用：
-    # image: ghcr.io/cavinhuang/opportunity-radar:latest
+    # image: ghcr.io/cavinhuang/opportunity-radar:latest   # 使用预构建镜像时替换 build
     container_name: opportunity-radar
-    ports:
-      - "${RADAR_PUBLISH_PORT:-4177}:4177"
     environment:
-      # 必填：暴露到网络时的唯一 owner 鉴权（不设置则应用启动即报错，见 src/server.mjs:30）
-      RADAR_OWNER_TOKEN: ${RADAR_OWNER_TOKEN:?请在 .env 中设置强口令 RADAR_OWNER_TOKEN}
+      # 必填：暴露到网络时的唯一 owner 鉴权
+      RADAR_OWNER_TOKEN: ${RADAR_OWNER_TOKEN:?请在环境变量中设置强口令 RADAR_OWNER_TOKEN}
       RADAR_AGENT_TOKEN: ${RADAR_AGENT_TOKEN:-}
       RADAR_HOST: 0.0.0.0
       RADAR_PORT: 4177
@@ -33,10 +33,21 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       RADAR_ALLOWED_HOSTS: ${RADAR_ALLOWED_HOSTS:-}
       RADAR_REVIEW_CYCLE_DAYS: ${RADAR_REVIEW_CYCLE_DAYS:-}
+    ports:
+      - "${RADAR_PUBLISH_PORT:-4177}:4177"
     volumes:
       - radar-data:/app/.data
       - ./backups:/app/backups
     restart: unless-stopped
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      # ↓↓↓ 把域名换成你自己的（两处必须一致）↓↓↓
+      - traefik.http.routers.radar.rule=Host(`radar.example.com`)
+      - traefik.http.routers.radar.entrypoints=websecure
+      - traefik.http.routers.radar.tls.certresolver=letsencrypt
+      - traefik.http.services.radar.loadbalancer.server.port=4177
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4177/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -46,3 +57,7 @@ services:
 
 volumes:
   radar-data:
+
+networks:
+  dokploy-network:
+    external: true

@@ -8,6 +8,33 @@
 - 本仓库的 Git 地址（公开仓库直接填；私有仓库在 Dokploy 里配置 GitHub 凭据）
 - 域名一个（可选，用于自动 HTTPS）
 
+## 两种部署类型怎么选
+
+| | Dockerfile（应用类型） | Docker Compose（组合类型） |
+|---|---|---|
+| 反代/域名 | Dokploy Domain 标签页自动接通 Traefik | **需手动接网络与路由标签**（仓库 compose 已预置） |
+| 适用 | 单容器最简路径，推荐 | 想把编排文件纳入版本控制的场景 |
+
+## Compose 部署的反代接线（404 page not found 的原因与解法）
+
+**症状**：部署成功、容器健康，访问域名得到纯文本「404 page not found」。
+
+**原因**：这是 Traefik 的默认响应——Compose 部署类型下，Dokploy **不会**自动把容器接入反向代理网络，也不自动生成路由。仓库的 `docker-compose.yml` 已预置所需配置：
+
+1. 服务挂载 Dokploy 的外部网络 `dokploy-network`（Traefik 只回源到这个网络上的容器）；
+2. 预置 Traefik 路由标签（Host 规则 + websecure 入口 + letsencrypt 证书 + 后端端口 4177）。
+
+**你要做的**：把 `docker-compose.yml` 里两处 `radar.example.com` 改成你的域名 → Dokploy 里 **Redeploy** → 验证：
+
+```bash
+# 服务器上确认容器在 dokploy-network 上、标签生效
+docker inspect opportunity-radar --format '{{json .NetworkSettings.Networks}}' | grep dokploy
+curl -H 'Host: 你的域名' -k https://127.0.0.1 -o /dev/null -w '%{http_code}
+'   # 应为 200（在服务器本机测试）
+```
+
+> 不用域名时：删除三条 `traefik.http.routers.*` 标签，直接访问 `http://服务器IP:4177`（compose 已发布该端口，防火墙放行即可）。`RADAR_ALLOWED_HOSTS` 仅在**未设置** `RADAR_OWNER_TOKEN` 时才需要。
+
 ## 部署步骤
 
 ### 1. 创建应用
