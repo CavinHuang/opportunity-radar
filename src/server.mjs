@@ -1,3 +1,4 @@
+import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
 import {opportunityScanCandidates} from './opportunity-scan.mjs';
@@ -139,6 +140,10 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    const deepResearch=/^\/api\/opportunity-scan\/([^/]+)\/research$/.exec(pathname);
+    if(deepResearch&&req.method==='POST')return send(res,200,{draft:await draftOpportunityResearch(store,decodeURIComponent(deepResearch[1]))});
+    const researchReview=/^\/api\/opportunity-scan\/([^/]+)\/review$/.exec(pathname);
+    if(researchReview&&req.method==='POST')return send(res,200,{item:recordResearchReview(store,decodeURIComponent(researchReview[1]),await body(req))});
     if(pathname==='/api/opportunity-scan'&&req.method==='GET')return send(res,200,opportunityScanCandidates(store));
     if(pathname==='/api/opportunity-scan/run'&&req.method==='POST'){
       const result=await scanSources(store,{});
