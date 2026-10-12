@@ -21,7 +21,8 @@ export async function jevSystemOne(state,questions,{apiKey,apiUrl=JEV_DEFAULT_UR
  if(!questions||!Object.keys(questions).length)throw fail('BAD_REQUEST','questions 不能为空');
  const body={state,questions};
  if(model)body.model=model;
- const response=await fetchImpl(apiUrl,{
+ const endpoint=/\/systemone\/?$/.test(apiUrl)||apiUrl===JEV_DEFAULT_URL?apiUrl:apiUrl.replace(/\/+$/,'')+'/systemone';
+ const response=await fetchImpl(endpoint,{
   method:'POST',
   headers:{'Content-Type':'application/json',Authorization:`Bearer ${apiKey}`},
   body:JSON.stringify(body),

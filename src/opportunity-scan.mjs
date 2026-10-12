@@ -1,3 +1,4 @@
+import {opportunityQualityReview} from './opportunity-quality.mjs';
 import {discoveryClusters,problemTokens} from './discovery.mjs';
 const hints=[['repetitive_work',/automati[sz]|manual(?:ly)?|repetit|tedious|time.consum|耗时|重复|手动|自动化/i,'提及重复操作或手动处理'],['workaround',/workaround|alternative|replace|instead of|looking for|recommend|替代|有没有|求推荐|找不到/i,'明确寻找替代工具或临时解决办法'],['friction',/difficult|frustrat|struggl|cannot|can't|broken|problem|pain|issue|无法|困难|麻烦|不方便/i,'描述具体使用障碍']];
 const isHttps=x=>{try{return new URL(x).protocol==='https:'}catch{return false}};
@@ -31,7 +32,7 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400}={}){
  const collected=[];
  for(const g of groups){const members=g.signals.map(s=>candidates.find(x=>x.id===s.id)).filter(Boolean);if(members.length>1)collected.push(explain(members,g));}
  for(const signal of candidates){if(groupedIds.has(signal.id)||problemTokens(signal.title).size<3)continue;const row=explain([signal]);if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
- const scored=collected.map(item=>({...item,priority:Math.min(5,item.reasons.length+(item.siteCount>1?1:0)),status:'unverified_candidate'}));
+ const scored=collected.map(item=>({...item,qualityReview:opportunityQualityReview(item),priority:Math.min(5,item.reasons.length+(item.siteCount>1?1:0)),status:'unverified_candidate'}));
  scored.sort((a,b)=>b.priority-a.priority||b.signalCount-a.signalCount||a.id.localeCompare(b.id));
  return {items:scored.slice(0,limit),total:scored.length,examined:candidates.length,generatedAt:new Date().toISOString(),
   note:'算法只基于已采集的公开文本和标题相似性生成核查候选，未验证真实性、独立用户或商业价值；没有发现合适候选时可以返回空结果'};
