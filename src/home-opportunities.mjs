@@ -15,6 +15,17 @@ export function decideHomeOpportunity(store,id,{action,expected_revision}={}){
  store.event('home.opportunity.decision',id,'owner',{action});
  return row;
 }
+export function homeDiscoveryDashboard(store,{limit=12}={}){
+ const latest=store.get('home_opportunity_scans','latest');
+ const history=store.list('home_scan_history').sort((a,b)=>(b.at||'').localeCompare(a.at||'')).slice(0,Math.min(30,Math.max(1,limit)));
+ const current=homeOpportunitySnapshot(store);
+ const decisions=store.list('home_opportunity_decisions');
+ const saved=current.items.filter(x=>x.decision?.action==='save');
+ const dismissed=(latest?.items||[]).filter(x=>decisions.some(d=>d.id===x.id&&d.action==='dismiss')).map(x=>({...x,decision:decisions.find(d=>d.id===x.id)}));
+ return {history:history.map(x=>({id:x.id,at:x.at,engine:x.engine,status:x.status,considered:x.considered,accepted:x.accepted,scanStats:x.scanStats||null})),
+  funnel:{examined:latest?.scanned||0,considered:latest?.considered||0,aiAccepted:latest?.accepted||0,visible:current.items.length,saved:saved.length,dismissed:dismissed.length},
+  saved,dismissed,notice:'历史只记录实际执行的扫描与 AI 结果，失败不可当成过滤成功；扫描期之前的历史不可追溯。'};
+}
 export function homeOpportunitySnapshot(store){
  const latest=store.get('home_opportunity_scans',recordId);
  if(!latest)return {status:'never_scanned',items:[],at:null,scanned:0,reason:'尚未执行首页 AI 机会检索'};
@@ -59,7 +70,7 @@ async function classifyJev(candidates,{env,fetchImpl}){
  }
  return {engine:'jev',results:out};
 }
-export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=globalThis.fetch}={}){
+export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=globalThis.fetch,scanStats=null}={}){
  const all=opportunityScanCandidates(store,{limit:50});
  const candidates=all.items.slice(0,12);
  let result=null,reason=null;
@@ -74,6 +85,8 @@ export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=glo
  const payload={id:recordId,status:result?'filtered':reason?.startsWith('未配置')?'not_configured':'filter_failed',
   reason,engine:result?.engine||null,at:new Date().toISOString(),scanned:all.examined,considered:candidates.length,
   accepted:items.length,items,notice:'AI 仅过滤公开候选。不能证明用户独立性、需求、付费意愿；请打开原帖核查。'};
+ const record={id:new Date().toISOString()+'-'+Math.random().toString(36).slice(2,8),at:payload.at,engine:payload.engine,status:payload.status,considered:payload.considered,accepted:payload.accepted,scanStats};
+ store.put('home_scan_history',record);
  const old=store.get('home_opportunity_scans',recordId);
  const saved=store.put('home_opportunity_scans',payload,old?.revision||0);
  store.event('home.opportunity_scan',recordId,'owner',{status:saved.status,engine:saved.engine,considered:saved.considered,accepted:saved.accepted});

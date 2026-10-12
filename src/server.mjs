@@ -1,4 +1,4 @@
-import {decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
+import {homeDiscoveryDashboard,decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
@@ -166,10 +166,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
         market:'International',risk:'AI 预筛未经人工验证；须调查现有竞品与独立需求',
         sources:urls.map(url=>({url,quote:current.summary||current.title,independent:false,origin:'ai_candidate'}))}))});
     }
+    if(pathname==='/api/home/discovery'&&req.method==='GET')return send(res,200,homeDiscoveryDashboard(store));
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
       const scan=await scanSources(store,{});
-      return send(res,200,{scan,discovery:await scanHomeOpportunities(store)});
+      return send(res,200,{scan,discovery:await scanHomeOpportunities(store,{scanStats:{feeds:scan.feeds,received:scan.received,added:scan.added,filtered:scan.filtered,duplicates:scan.duplicates,errors:scan.errors.length}})});
     }
     if(pathname==='/api/opportunity-scan'&&req.method==='GET')return send(res,200,opportunityScanCandidates(store));
     if(pathname==='/api/opportunity-scan/run'&&req.method==='POST'){
