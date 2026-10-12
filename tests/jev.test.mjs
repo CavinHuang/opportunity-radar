@@ -10,7 +10,7 @@ process.env.RADAR_AGENT_TOKEN='jev-agent';
 process.env.JEV_API_KEY='jv_test_key';
 const {jevSystemOne,extractAnswer}=await import('../src/jev.mjs');
 
-test('jevSystemOne calls System One API and extracts typed answers',async()=>{
+test('jevSystemOne calls the configured endpoint and extracts typed answers',async()=>{
  const calls=[];
  const mockFetch=async(url,opts)=>{
   calls.push({url:String(url),body:JSON.parse(opts.body)});
@@ -30,7 +30,7 @@ test('jevSystemOne calls System One API and extracts typed answers',async()=>{
  assert.equal(topic.type,'choice');
  assert.equal(topic.value,'product_friction');
  assert.equal(calls.length,1);
- assert.equal(calls[0].url,'https://jev.test/api/v1/systemone');
+ assert.equal(calls[0].url,'https://jev.test/api/v1');
  assert.equal(calls[0].body.state,'signal title and description');
  assert.ok(calls[0].body.questions.is_consumer_problem);
 });
@@ -43,11 +43,11 @@ test('Jev signal pre-filter dismisses noise and keeps consumer problems via scan
  const feedXml=()=>({ok:true,status:200,headers:new Headers(),
   body:new ReadableStream({start(c){c.enqueue(new TextEncoder().encode(xml));c.close();}})});
  const dnsPublic=async()=>[{address:'93.184.216.34',family:4}];
- // Jev System One mock：state 含 hiring → noise (P=0.03)；否则 keep (P=0.97)
  const oldFetch=globalThis.fetch;
  let jevCalls=0;
  globalThis.fetch=async(url,opts)=>{
-  if(String(url).includes('/systemone')){
+  const u=String(url);
+  if(u.includes('jev-latest')||u.includes('/systemone')){
    jevCalls++;
    const body=JSON.parse(opts.body);
    const isNoise=String(body.state).includes('hiring');
