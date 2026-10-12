@@ -171,6 +171,7 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
             page.locator('[name="hypothesis"]').fill('Users can complete a single important task')
             page.locator('[name="criteria"]').fill('One usable end-to-end core task')
             page.locator('[name="stopCondition"]').fill('Stop after 10 hours or unresolved critical blockers')
+            page.locator('[name="selectionRationale"]').fill('Chosen over the other synthetic candidates because two independent posts describe the same commute scenario')
             page.locator('#dialog-form button[type="submit"]').click()
             page.locator('#modal-root .modal').wait_for(state='hidden',timeout=10000)
             projects=call('/api/history')['projects']

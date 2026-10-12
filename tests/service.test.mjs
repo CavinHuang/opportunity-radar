@@ -170,3 +170,18 @@ test('content approval and publication registration freeze on inactive projects;
  assert.throws(()=>s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/late-post'}),e=>e.code==='PROJECT_NOT_ACTIVE');
  s.addLedger(p.id,{type:'visits',value:3,actual:true});
  assert.equal(s.getFullProject(p.id).ledger.length,1,'late actual recording stays possible by design');db.close();});
+
+test('selection rationale is recorded at approval and surfaces in the review draft; triage reasons persist',async()=>{
+ const {db,s,o}=setup();
+ const p=s.startExperiment({opportunityId:o.id,goal:'g',hypothesis:'h',criteria:['c'],stopCondition:'stop when budget burns out',hours:10,selectionRationale:'另外两条线索只有单一来源提及，这一条有两人独立发帖'});
+ assert.equal(p.selectionRationale.text,'另外两条线索只有单一来源提及，这一条有两人独立发帖');
+ const o2=s.createOpportunity({title:'另一条线索',problem:'p2',market:'China',sources:[{url:'https://example.com/alt'}]});
+ const triaged=s.changeOpportunityStatus(o2.id,{status:'dismissed',reason:'与主实验同质化，暂不投入'});
+ assert.equal(triaged.statusReason.text,'与主实验同质化，暂不投入');
+ const restored=s.changeOpportunityStatus(o2.id,{status:'candidate',expected_revision:triaged.revision});
+ assert.equal(restored.statusReason.text,'与主实验同质化，暂不投入','恢复候选时保留最近一次原因，透明可查');
+ const {buildReviewDraft}=await import('../src/opportunity-review.mjs');
+ const draft=buildReviewDraft(db,p.id,{from:'2026-01-01',to:'2026-12-31'});
+ assert.equal(draft.selectionRationale.text,'另外两条线索只有单一来源提及，这一条有两人独立发帖','复盘对照区包含最初的选择依据');
+ db.close();
+});
