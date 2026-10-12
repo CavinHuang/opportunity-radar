@@ -660,7 +660,10 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const events=d.events.slice(0,20).map(e=>'<p class="subtext">'+fmtTime(e.at)+' · '+esc(e.candidateId)+' · 新增来源 '+e.addedSourceCount+'</p>').join('');
     const reviews=d.feedback.map(x=>'<p class="subtext">'+fmtTime(x.at)+' · '+esc(x.verdict)+' · '+esc(x.reason)+'</p>').join('');
     const decisions=d.decisions.map(x=>'<p class="subtext">'+fmtTime(x.at)+' · '+esc(x.action)+'</p>').join('');
-    modal('历史机会档案：'+d.title,'<div class="field wide"><strong>首次观察</strong><p>'+fmtTime(d.firstSeenAt)+'</p><p>观察 '+d.observations+' 次 · 来源 '+d.sourceUrls.length+' 条</p><p class="subtext">'+esc(d.warning)+'</p></div><div class="field wide"><strong>历次观察</strong>'+events+'</div><div class="field wide"><strong>来源链接</strong>'+sources+'</div><div class="field wide"><strong>人工反馈</strong>'+(reviews||'<p class="subtext">暂无</p>')+'</div><div class="field wide"><strong>用户操作</strong>'+(decisions||'<p class="subtext">暂无</p>')+'</div>',async()=>{});
+    const splitCandidates=[...new Set(d.events.map(e=>e.candidateId))];
+    const splitFields=splitCandidates.length>1?'<div class="field wide"><label>拆分误合并候选</label><select name="candidateId">'+splitCandidates.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+'</select></div>'+field('reason','人工拆分理由（至少10字）',{type:'textarea',wide:true,required:true}):'';
+    modal('历史机会档案：'+d.title,'<div class="field wide"><strong>首次观察</strong><p>'+fmtTime(d.firstSeenAt)+'</p><p>观察 '+d.observations+' 次 · 来源 '+d.sourceUrls.length+' 条</p><p class="subtext">'+esc(d.warning)+'</p></div><div class="field wide"><strong>历次观察</strong>'+events+'</div><div class="field wide"><strong>来源链接</strong>'+sources+'</div><div class="field wide"><strong>人工反馈</strong>'+(reviews||'<p class="subtext">暂无</p>')+'</div><div class="field wide"><strong>用户操作</strong>'+(decisions||'<p class="subtext">暂无</p>')+'</div>'+splitFields,async values=>{if(splitCandidates.length>1){await api('/home/knowledge/'+encodeURIComponent(d.id)+'/split',{method:'POST',body:{candidateId:values.candidateId,reason:values.reason,expected_revision:d.revision}});toast('误合并已拆分');}});
+
     break;
   }
   case 'home-restore':{
