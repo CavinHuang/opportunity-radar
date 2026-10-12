@@ -27,6 +27,7 @@ test('navigation, forms, dialogs and accessibility strings translate into Englis
     '静音规则':'Mute rules','命中静音规则':'Matched mute rule',
     '版本历史':'Version history','应用到待研判信号':'Apply to untriaged signals',
     '为什么是它':'Why this one','最初的选择依据':'Initial selection rationale',
+    '静音规则':'Mute rules','已撤回':'Retracted',
     '关闭':'Close',
     'Language / 语言':'Language',
   }))assert.equal(translate(zh,'en-US'),en);

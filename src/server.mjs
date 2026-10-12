@@ -199,7 +199,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(planning&&req.method==='GET')return send(res,200,{items:projectOwnerTasks(store,planning[1])});
     if(planning&&req.method==='POST')return send(res,200,{item:upsertOwnerTask(store,planning[1],await body(req))});
     const proj=/^\/api\/projects\/([^/]+)$/.exec(pathname);
-    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.events(0,proj[1]).slice(-50)});}
+    if(proj&&req.method==='GET'){const result=service.getFullProject(proj[1]);return send(res,200,{...result,ledgerSummary:service.summaryLedger(result.ledger),decisionReview:experimentDecisionReview(result),pipeline:projectPipeline({...result,ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1])}),ownerTasks:projectOwnerTasks(store,proj[1]),reviewSummary:reviewSummary(store,proj[1]),campaignReview:campaignOverview(store,result),events:store.eventsLatest(50,proj[1])});}
     const reviewDecide=/^\/api\/projects\/([^/]+)\/reviews\/([^/]+)\/decide$/.exec(pathname);
     if(reviewDecide&&req.method==='POST')return send(res,200,{item:decideOpportunityReview(store,reviewDecide[1],reviewDecide[2],await body(req))});
     const reviewDraft=/^\/api\/projects\/([^/]+)\/reviews\/draft$/.exec(pathname);
@@ -229,6 +229,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     const ledger=/^\/api\/projects\/([^/]+)\/ledger$/.exec(pathname);
     if(ledger&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>service.addLedger(ledger[1],d))});
+    const ledgerEntry=/^\/api\/projects\/([^/]+)\/ledger\/([^/]+)\/(retract|revise)$/.exec(pathname);
+    if(ledgerEntry&&req.method==='POST'){const act=ledgerEntry[3];return send(res,200,{item:await ownerWrite(req,pathname,d=>act==='retract'?service.retractLedger(ledgerEntry[1],ledgerEntry[2],d):service.reviseLedger(ledgerEntry[1],ledgerEntry[2],d))});}
     const growth=/^\/api\/projects\/([^/]+)\/growth$/.exec(pathname);
     if(growth&&req.method==='GET')return send(res,200,growthOverview(store,growth[1]));
     const growthReportRoute=/^\/api\/projects\/([^/]+)\/growth\/report$/.exec(pathname);

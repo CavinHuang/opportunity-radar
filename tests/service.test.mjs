@@ -27,7 +27,7 @@ test('content approval invalidates on edit and records only manual publication',
  const edited=s.saveContent(p.id,{id:c.id,expected_revision:approved.revision,title:'Rewrite',body:'New body',objective:'interviews',channel:'site'});assert.equal(edited.reviewState,'draft');
  const approved2=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});const published=s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/posted',platform:'website'});assert.equal(published.publication.recordedBy,'owner');assert.equal(approved2.reviewState,'approved');db.close();});
 test('ledger distinguishes real income, refunds, costs and human hours',()=>{const {db,s,o}=setup();const p=experiment(s,o);for(const [type,value,actual] of [['income',40,true],['refund',10,true],['transaction_fee',2,true],['service_cost',4,true],['income',500,false],['user_hours',9,true],['agent_hours',18,true]])s.addLedger(p.id,{type,value,actual});const out=s.summaryLedger(s.getFullProject(p.id).ledger);assert.deepEqual(out,{collected:40,refunds:10,contribution:24,userHours:9,agentHours:18,cashSpent:0});db.close();});
-test('project pause revokes new agent writes but does not assert process stopped',()=>{const {db,s,o}=setup();const p=experiment(s,o);const pause=s.ownerDecision(p.id,{action:'pause',reason:'reassess'});assert.equal(pause.externalProcessState,'unknown');assert.throws(()=>s.tool('progress.report',{project_id:p.id,summary:'still running',idempotency_key:'r'}),e=>e.code==='PROJECT_NOT_ACTIVE');const resume=s.ownerDecision(p.id,{action:'resume'});assert.equal(resume.status,'research');db.close();});
+test('project pause revokes new agent writes but does not assert process stopped',()=>{const {db,s,o}=setup();const p=experiment(s,o);const pause=s.ownerDecision(p.id,{action:'pause',reason:'reassess',wakeCondition:'满足登记的条件后继续'});assert.equal(pause.externalProcessState,'unknown');assert.throws(()=>s.tool('progress.report',{project_id:p.id,summary:'still running',idempotency_key:'r'}),e=>e.code==='PROJECT_NOT_ACTIVE');const resume=s.ownerDecision(p.id,{action:'resume',acknowledgeWakeCondition:true});assert.equal(resume.status,'research');db.close();});
 test('event cursors replay independently of agent availability',()=>{const {db,s,o}=setup();const p=experiment(s,o);const start=s.tool('project.watch_changes',{project_id:p.id,cursor:0});assert.ok(start.events.length);s.tool('progress.report',{project_id:p.id,summary:'submitted work',idempotency_key:'r2'});const next=s.tool('project.watch_changes',{project_id:p.id,cursor:start.next_cursor});assert.ok(next.events.some(x=>x.kind==='agent.reported'));assert.ok(next.next_cursor>start.next_cursor);db.close();});
 
 test('campaign measurements only reference actually published content in same project',()=>{
@@ -131,9 +131,9 @@ test('opportunity re-triage stays blocked while paused but unlocks after stop or
   const p=experiment(s,o);
   const opp=()=>s.store.get('opportunities',o.id);
   // paused: experiment may resume, so re-triage stays blocked
-  s.ownerDecision(p.id,{action:'pause',reason:'budget pause'});
+  s.ownerDecision(p.id,{action:'pause',reason:'budget pause',wakeCondition:'满足登记的条件后继续'});
   assert.throws(()=>s.changeOpportunityStatus(o.id,{status:'dismissed',expected_revision:opp().revision}),e=>e.code==='PROJECT_IN_PROGRESS');
-  s.ownerDecision(p.id,{action:'resume'});
+  s.ownerDecision(p.id,{action:'resume',acknowledgeWakeCondition:true});
   // resume keeps status and stage consistent (previously stage drifted behind status)
   const resumed=s.getFullProject(p.id);
   assert.equal(resumed.status,'research');
@@ -150,7 +150,7 @@ test('resume restores a consistent read model when a promotion-stage project is 
   const p=experiment(s,o);
   const prj=s.store.get('projects',p.id);
   s.store.put('projects',{...prj,status:'paused',stage:'promotion'},prj.revision);
-  const resumed=s.ownerDecision(p.id,{action:'resume'});
+  const resumed=s.ownerDecision(p.id,{action:'resume',acknowledgeWakeCondition:true});
   assert.equal(resumed.status,'research');
   assert.equal(resumed.stage,'research');
  }finally{db.close();}
@@ -165,7 +165,7 @@ test('agent blocking requires a reason and stores it on the task',()=>{const {db
  assert.equal(blocked.status,'blocked');assert.equal(blocked.blockedReason,'waiting for external review feedback');db.close();});
 test('content approval and publication registration freeze on inactive projects; late ledger stays possible',()=>{const {db,s,o}=setup();const p=experiment(s,o);const c=s.saveContent(p.id,{title:'A story',body:'I built a prototype and need feedback',objective:'interviews',channel:'site'});
  const approved=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});
- s.ownerDecision(p.id,{action:'pause',reason:'reassess'});
+ s.ownerDecision(p.id,{action:'pause',reason:'reassess',wakeCondition:'满足登记的条件后继续'});
  assert.throws(()=>s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true}),e=>e.code==='PROJECT_NOT_ACTIVE');
  assert.throws(()=>s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/late-post'}),e=>e.code==='PROJECT_NOT_ACTIVE');
  s.addLedger(p.id,{type:'visits',value:3,actual:true});

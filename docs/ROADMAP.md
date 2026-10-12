@@ -119,3 +119,10 @@
 - Review cadence is deployment-configurable: `RADAR_REVIEW_CYCLE_DAYS` (integer 1–365, default 7) replaces the hardcoded 7-day cycle; the review header and next-due computation both follow it.
 - The promotion calendar groups entries by state (逾期 / 今日计划 / 即将到来 / 已发布) with per-group counts instead of one flat tagged list, so "what ships when" reads at a glance.
 - `npm run data -- export --output <file.json>`: human-readable portability export of every record and audit event (plaintext JSON, mode 0600, refuses overwrite). It complements — never replaces — the SQLite backup/restore snapshot.
+
+## v2.22 · Review remediation batch (five-agent gap review)
+
+- **Regressions fixed**: the project event stream no longer freezes after 100 events (latest-50 window, regression-tested); review-resume on a paused project now moves stage along with status (the same fix ownerDecision already carried, re-applied to the review path with assertions); the contract card's broken nesting (duplicated 批准预算 label from the v2.20 insert) is repaired.
+- **Ledger actuals become revisable**: entries can be retracted (excluded from every summary, kept visible with reason) or revised (old entry retracted, corrected entry created and mirrored); the growth-model mirror follows both operations so the ledger and growth pages can never disagree. Retraction requires a reason.
+- **Wake conditions (PRD D45)**: pausing — from the UI or a review decision — now requires recording a wake condition; resuming or continuing requires acknowledging it, with the condition displayed in the contract card, the resume modal and the review decide dialog. Negative coverage: pause without one is 400, resume without acknowledgment is 409.
+- **Usability**: schedule and growth-record time inputs are datetime-local pickers converted to ISO client-side; bulk growth import dedup builds its check sets once (O(rows) instead of O(rows × table)); pause/resume become proper dialogs.

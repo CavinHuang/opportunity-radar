@@ -53,6 +53,7 @@ export function openDatabase(path=':memory:') {
     },
     event(db,kind,entityId,actor,detail,projectId=null){const at=new Date().toISOString(); const result=db.prepare('INSERT INTO events(project_id,kind,entity_id,actor,detail,created_at) VALUES(?,?,?,?,?,?)').run(projectId,kind,entityId,actor,JSON.stringify(detail),at); return Number(result.lastInsertRowid);},
     events(db,after=0,projectId){const rows=projectId?db.prepare('SELECT * FROM events WHERE seq>? AND (project_id=? OR project_id IS NULL) ORDER BY seq LIMIT 100').all(after,projectId):db.prepare('SELECT * FROM events WHERE seq>? ORDER BY seq LIMIT 100').all(after);return rows.map(r=>({...r,detail:JSON.parse(r.detail)}));},
+    eventsLatest(db,limit=50,projectId){const rows=projectId?db.prepare('SELECT * FROM events WHERE (project_id=? OR project_id IS NULL) ORDER BY seq DESC LIMIT ?').all(projectId,limit):db.prepare('SELECT * FROM events ORDER BY seq DESC LIMIT ?').all(limit);return rows.reverse().map(r=>({...r,detail:JSON.parse(r.detail)}));},
     transaction(db,fn){// Re-entrant: writes that open their own transaction (e.g. addLedger)
      // must keep working when a caller already opened one (idempotency wrapper).
      const outer=txDepth.get(db)||0;

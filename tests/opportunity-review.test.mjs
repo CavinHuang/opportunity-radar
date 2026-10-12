@@ -116,7 +116,7 @@ test('decision requires explicit confirmation and valid reasons before any state
   assert.throws(()=>decideOpportunityReview(db,p.id,review.id,{choice:'pivot',reason:'这不是有效的决定类型，理由长度也足够',confirm:true}),{code:'BAD_REQUEST'});
   assert.throws(()=>decideOpportunityReview(db,p.id,'missing',{choice:'pause',reason:'复盘记录不存在时不能做出任何决定',confirm:true}),{code:'NOT_FOUND'});
   assert.equal(db.get('projects',p.id).status,'research'); // nothing changed by refused attempts
-  const decided=decideOpportunityReview(db,p.id,review.id,{choice:'pause',reason:'外部进度慢于预期，先暂停并核对外部状态',confirm:true});
+  const decided=decideOpportunityReview(db,p.id,review.id,{choice:'pause',reason:'外部进度慢于预期，先暂停并核对外部状态',wakeCondition:'外部进度恢复且租约核对完成',confirm:true});
   assert.deepEqual(decided.decision.appliedStateChange,{from:'research',to:'paused'});
   const project=db.get('projects',p.id);
   assert.equal(project.status,'paused');
@@ -131,7 +131,7 @@ test('decision requires explicit confirmation and valid reasons before any state
 test('paused projects can still be reviewed; stop works from pause, resume needs a free slot',()=>{
  const {db,s,p}=setup();try{
   const first=createOpportunityReview(db,p.id,{overallAssessment:'暂停前的中期复盘：证据不足以支撑继续投入'});
-  decideOpportunityReview(db,p.id,first.id,{choice:'pause',reason:'暂停两周，先完成外部状态与租约核对',confirm:true});
+  decideOpportunityReview(db,p.id,first.id,{choice:'pause',reason:'暂停两周，先完成外部状态与租约核对',wakeCondition:'外部状态核对完成且两周期满',confirm:true});
   assert.equal(db.get('projects',p.id).status,'paused');
   // reviewing a paused project is allowed (retrospective), with adapted options
   const second=createOpportunityReview(db,p.id,{overallAssessment:'暂停期间复盘：没有新的真实试用出现'});
@@ -147,7 +147,7 @@ test('paused projects can still be reviewed; stop works from pause, resume needs
   assert.throws(()=>decideOpportunityReview(db,p.id,third.id,{choice:'pause',reason:'停止后的项目不能再次暂停，应当拒绝',confirm:true}),{code:'BAD_STATE'});
   // continue on a stopped project only records the decision, no state change
   assert.throws(()=>decideOpportunityReview(db,p.id,third.id,{choice:'continue',reason:'停止条件已触发，直接继续需要确认风险',confirm:true}),{code:'OPEN_RISKS_ACK_REQUIRED'});
-  const resumed=decideOpportunityReview(db,p.id,third.id,{choice:'continue',reason:'新证据显示渠道可行，重启实验并保留历史记录',confirm:true,acceptOpenRisks:true});
+  const resumed=decideOpportunityReview(db,p.id,third.id,{choice:'continue',reason:'新证据显示渠道可行，重启实验并保留历史记录',confirm:true,acceptOpenRisks:true,acknowledgeWakeCondition:true});
   assert.equal(resumed.decision.appliedStateChange,null); // stopped ≠ paused: continue does not resume
   assert.equal(db.get('projects',p.id).status,'stopped');
  }finally{db.close();}
@@ -156,7 +156,7 @@ test('paused projects can still be reviewed; stop works from pause, resume needs
 test('continue on a paused project resumes only when no other experiment is active',()=>{
  const {db,s,p}=setup();try{
   const first=createOpportunityReview(db,p.id,{overallAssessment:'中期复盘：外部 Agent 进度受阻，先暂停'});
-  decideOpportunityReview(db,p.id,first.id,{choice:'pause',reason:'暂停并核对租约与外部进程的真实状态',confirm:true});
+  decideOpportunityReview(db,p.id,first.id,{choice:'pause',reason:'暂停并核对租约与外部进程的真实状态',wakeCondition:'租约与外部进程核对完成',confirm:true});
   // a second experiment can start while the first is paused
   const o2=s.createOpportunity({title:'Second chance',problem:'other problem',market:'China'});
   s.startExperiment({opportunityId:o2.id,goal:'validate other need',hypothesis:'other want',criteria:['works'],stopCondition:'stop when idle',hours:1,cash:0});
@@ -236,4 +236,27 @@ test('periodic reminder reaches the pipeline only with an explicit due review su
  assert.equal(projectPipeline({...base(),reviewSummary:{due:false}}).nextActions.some(x=>x.kind==='review'),false);
  const stopped=projectPipeline({status:'paused',baselines:[{revision:1}],tasks:[{status:'open',baselineRevision:1}],milestones:[{acceptanceState:'pending'}],submissions:[],decisions:[],contents:[],reviewSummary:{due:false,projectActive:false}});
  assert.equal(stopped.nextActions.some(x=>x.kind==='review'),false);
+});
+
+test('review continue on a paused project moves stage along with status',async()=>{
+ const {db,s,p}=setup();try{
+  // 推进到 promotion 阶段：手动登记一条已发布内容 + 账本，复盘后 continue
+  const c=s.saveContent(p.id,{title:'A launch note',body:'I built a prototype and want real feedback',objective:'trial feedback',channel:'site'});
+  const approved=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});
+  const published=s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/launch',platform:'site'});
+  s.ownerDecision(p.id,{action:'pause',reason:'reassess',wakeCondition:'满足登记的条件后继续'});
+  const paused=s.getFullProject(p.id);
+  assert.equal(paused.status,'paused');
+  const review=createOpportunityReview(db,p.id,{
+   windowFrom:'2026-09-01',windowTo:'2026-09-30',
+   findings:[
+    {kind:'observation',note:'一次走查任务被完整执行并留下可核验输出',ref:'P2'},
+    {kind:'uncertainty',note:'样本太小，无法区分好奇与真实需求'}],
+   stopConditionAssessment:'not_met',stopConditionNote:'暂停期间没有触发任何停止条件',
+   overallAssessment:'对照最初假设：交付路径可行但付费意愿未证实，继续小规模验证'});
+  const decided=decideOpportunityReview(db,p.id,review.id,{choice:'continue',reason:'复盘结论成立：继续推进并以真实试用数据检验核心假设',confirm:true,acceptOpenRisks:true,acknowledgeWakeCondition:true});
+  const after=s.getFullProject(p.id);
+  assert.equal(after.status,'research');
+  assert.equal(after.stage,'research','stage 必须跟随 status，不得停留在 promotion');
+ }finally{db.close();}
 });

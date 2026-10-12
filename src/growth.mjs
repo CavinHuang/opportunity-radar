@@ -208,13 +208,19 @@ export function importGrowthMetrics(store,projectId,{items}={}){
  if(!Array.isArray(items)||!items.length||items.length>200)throw fail('BAD_REQUEST','导入 items 必须是 1–200 条的数组');
  const accepted=[],rejected=[];let duplicateCount=0;
  store.transaction(()=>{
+  // 判重集合一次性构建：批量导入从 O(行数×表大小) 降为 O(行数)，不再在写事务内反复全表解析。
+  const active=store.list('growth_metrics').filter(x=>x.projectId===projectId&&x.status==='active');
+  const seenKeys=new Set(active.map(x=>x.dedupKey)),seenPrints=new Set(active.map(x=>x.fingerprint));
   items.forEach((raw,index)=>{
    try{
     const base=buildMetric(store,projectId,raw||{});
     const entry={id:randomUUID(),...base,fingerprint:null,status:'active',supersedesId:null,supersededById:null,
      supersededAt:null,retractedAt:null,retractReason:null,verifiedAt:null,verifyNote:null,
      originalProvenance:base.provenance,revisionNumber:1,recordedBy:'owner',createdAt:now()};
-    entry.fingerprint=assertNoDuplicate(store,entry);
+    entry.fingerprint=fingerprintOf(entry);
+    if(seenKeys.has(entry.dedupKey))throw fail('GROWTH_DUPLICATE','已存在相同来源编号（dedupKey）的记录；如确属两条独立数据，请使用不同的来源编号',409);
+    if(seenPrints.has(entry.fingerprint))throw fail('GROWTH_DUPLICATE','疑似重复数据（同一渠道、指标、时间与数值）。如确属两条独立记录，请补充不同的来源编号后再录入',409);
+    seenKeys.add(entry.dedupKey);seenPrints.add(entry.fingerprint);
     store.put('growth_metrics',entry);
     store.event('growth.metric.recorded',entry.id,'owner',
      {projectId,metric:entry.metric,value:entry.value,provenance:entry.provenance,imported:true},projectId);
