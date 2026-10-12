@@ -1,3 +1,4 @@
+import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {experimentDecisionReview} from './experiment-decision.mjs';
 import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
 import {createCampaign,adjustCampaign,cancelCampaign,completeCampaign,recordRetrospective,campaignOverview} from './campaign.mjs';
@@ -125,6 +126,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/opportunity-scan'&&req.method==='GET')return send(res,200,opportunityScanCandidates(store));
+    if(pathname==='/api/opportunity-scan/run'&&req.method==='POST'){
+      const result=await scanSources(store,{});
+      return send(res,200,{scan:result,candidates:opportunityScanCandidates(store)});
+    }
     if(pathname==='/api/signals/scan'&&req.method==='POST'){
       const data=await body(req);
       if(data.source_id!==undefined&&typeof data.source_id!=='string')throw Object.assign(new Error('source_id 必须是来源 ID 字符串'),{code:'BAD_REQUEST',status:400});
