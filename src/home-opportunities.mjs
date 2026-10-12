@@ -15,16 +15,28 @@ export function decideHomeOpportunity(store,id,{action,expected_revision}={}){
  store.event('home.opportunity.decision',id,'owner',{action});
  return row;
 }
+export function reviewHomeOpportunity(store,id,{verdict,reason,expected_revision}={}){
+ if(!['useful','false_positive'].includes(verdict))throw Object.assign(new Error('反馈类型无效'),{code:'BAD_FEEDBACK',status:400});
+ const note=safe(reason,500);if(note.length<8)throw Object.assign(new Error('请输入至少8字的反馈依据'),{code:'REASON_REQUIRED',status:400});
+ const entry=store.get('home_opportunity_scans','latest')?.items?.find(x=>x.id===id);
+ if(!entry)throw Object.assign(new Error('原候选不存在'),{code:'NOT_FOUND',status:404});
+ const old=store.get('home_opportunity_feedback',id);
+ if(expected_revision!==(old?.revision||0))throw Object.assign(new Error('反馈已更新，请刷新'),{code:'REVISION_CONFLICT',status:409});
+ const item=store.put('home_opportunity_feedback',{id,verdict,reason:note,at:new Date().toISOString(),sourceUrls:entry.sourceUrls},old?.revision||0);
+ store.event('home.opportunity.feedback',id,'owner',{verdict,revision:item.revision});
+ return item;
+}
 export function homeDiscoveryDashboard(store,{limit=12}={}){
  const latest=store.get('home_opportunity_scans','latest');
  const history=store.list('home_scan_history').sort((a,b)=>(b.at||'').localeCompare(a.at||'')).slice(0,Math.min(30,Math.max(1,limit)));
  const current=homeOpportunitySnapshot(store);
  const decisions=store.list('home_opportunity_decisions');
+ const feedback=store.list('home_opportunity_feedback');
  const saved=current.items.filter(x=>x.decision?.action==='save');
  const dismissed=(latest?.items||[]).filter(x=>decisions.some(d=>d.id===x.id&&d.action==='dismiss')).map(x=>({...x,decision:decisions.find(d=>d.id===x.id)}));
- return {history:history.map(x=>({id:x.id,at:x.at,engine:x.engine,status:x.status,considered:x.considered,accepted:x.accepted,scanStats:x.scanStats||null})),
-  funnel:{examined:latest?.scanned||0,considered:latest?.considered||0,aiAccepted:latest?.accepted||0,visible:current.items.length,saved:saved.length,dismissed:dismissed.length},
-  saved,dismissed,notice:'历史只记录实际执行的扫描与 AI 结果，失败不可当成过滤成功；扫描期之前的历史不可追溯。'};
+ return {history:history.map(x=>({id:x.id,at:x.at,engine:x.engine,status:x.status,considered:x.considered,accepted:x.accepted,newCount:x.newCount??null,repeatCount:x.repeatCount??null,scanStats:x.scanStats||null})),
+  funnel:{examined:latest?.scanned||0,considered:latest?.considered||0,aiAccepted:latest?.accepted||0,newCount:latest?.newCount||0,repeatCount:latest?.repeatCount||0,visible:current.items.length,saved:saved.length,dismissed:dismissed.length},
+  saved,dismissed,feedbackSummary:{useful:feedback.filter(x=>x.verdict==='useful').length,falsePositive:feedback.filter(x=>x.verdict==='false_positive').length},notice:'历史只记录实际执行的扫描与 AI 结果，失败不可当成过滤成功；扫描期之前的历史不可追溯。'};
 }
 export function homeOpportunitySnapshot(store){
  const latest=store.get('home_opportunity_scans',recordId);
@@ -35,7 +47,7 @@ export function homeOpportunitySnapshot(store){
  return {...latest,items:(latest.items||[]).filter(x=>{
    const candidate=current.get(x.id);
    return candidate&&candidate.sourceUrls?.every(url=>x.sourceUrls.includes(url));
- }).map(x=>({...x,decision:store.get('home_opportunity_decisions',x.id)||null})).filter(x=>x.decision?.action!=='dismiss')};
+ }).map(x=>({...x,decision:store.get('home_opportunity_decisions',x.id)||null,feedback:store.get('home_opportunity_feedback',x.id)||null})).filter(x=>x.decision?.action!=='dismiss').sort((a,b)=>((b.feedback?.verdict==='useful'?2:b.feedback?.verdict==='false_positive'?-1:0)-(a.feedback?.verdict==='useful'?2:a.feedback?.verdict==='false_positive'?-1:0))||(a.novelty==='new_since_previous_scan'?-1:1)-(b.novelty==='new_since_previous_scan'?-1:1))};
 }
 async function classifyLLM(candidates,{env,fetchImpl}){
  const base=env.RADAR_LLM_BASE_URL,key=env.RADAR_LLM_API_KEY,model=env.RADAR_LLM_MODEL;
@@ -77,15 +89,19 @@ export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=glo
  try{result=await classifyLLM(candidates,{env,fetchImpl})||await classifyJev(candidates,{env,fetchImpl});}
  catch(e){reason='AI 筛选失败：'+safe(e.message,150);}
  if(!result&&!reason)reason='未配置 AI 服务：需要 RADAR_LLM_* 或 JEV_API_KEY';
+ const prior=store.get('home_opportunity_scans',recordId)?.items||[];
+ const previousIds=new Set(prior.map(x=>x.id));
+ const priorSourceUrls=new Set(prior.flatMap(x=>x.sourceUrls||[]));
  const items=result?candidates.filter(c=>result.results.get(c.id)?.verdict==='keep').map(c=>({
    id:c.id,title:c.title,summary:c.summary,sourceUrls:c.sourceUrls.filter(validUrl).slice(0,8),
    signalCount:c.signalCount,domains:c.qualityReview?.domains?.map(x=>x.name)||[],reviewStatus:'unverified',
-   aiReason:result.results.get(c.id).reason,engine:result.engine
+   aiReason:result.results.get(c.id).reason,engine:result.engine,
+   novelty:previousIds.has(c.id)||c.sourceUrls.some(url=>priorSourceUrls.has(url))?'seen_before':'new_since_previous_scan'
  })): [];
  const payload={id:recordId,status:result?'filtered':reason?.startsWith('未配置')?'not_configured':'filter_failed',
   reason,engine:result?.engine||null,at:new Date().toISOString(),scanned:all.examined,considered:candidates.length,
-  accepted:items.length,items,notice:'AI 仅过滤公开候选。不能证明用户独立性、需求、付费意愿；请打开原帖核查。'};
- const record={id:new Date().toISOString()+'-'+Math.random().toString(36).slice(2,8),at:payload.at,engine:payload.engine,status:payload.status,considered:payload.considered,accepted:payload.accepted,scanStats};
+  accepted:items.length,newCount:items.filter(x=>x.novelty==='new_since_previous_scan').length,repeatCount:items.filter(x=>x.novelty==='seen_before').length,items,notice:'AI 仅过滤公开候选。不能证明用户独立性、需求、付费意愿；请打开原帖核查。'};
+ const record={id:new Date().toISOString()+'-'+Math.random().toString(36).slice(2,8),at:payload.at,engine:payload.engine,status:payload.status,considered:payload.considered,accepted:payload.accepted,newCount:payload.newCount,repeatCount:payload.repeatCount,scanStats};
  store.put('home_scan_history',record);
  const old=store.get('home_opportunity_scans',recordId);
  const saved=store.put('home_opportunity_scans',payload,old?.revision||0);
