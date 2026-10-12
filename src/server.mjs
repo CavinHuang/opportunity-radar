@@ -1,3 +1,4 @@
+import {problemExperimentDesigns,designProblemExperiment} from './problem-experiments.mjs';
 import {interviewBoard,createInterviewPlan,addInterviewObservation,decideInterviewPlan} from './problem-interviews.mjs';
 import {verificationContext,verifyProblem} from './problem-verification.mjs';
 import {splitOpportunityIdentity,opportunityIdentityDossier,opportunityIdentityIndex} from './opportunity-identity.mjs';
@@ -145,6 +146,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    const experimentDesign=/^\/api\/problem-experiments\/([^/]+)\/([^/]+)$/.exec(pathname);
+    if(experimentDesign&&req.method==='GET')return send(res,200,problemExperimentDesigns(store,decodeURIComponent(experimentDesign[1]),decodeURIComponent(experimentDesign[2])));
+    if(experimentDesign&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>designProblemExperiment(store,decodeURIComponent(experimentDesign[1]),decodeURIComponent(experimentDesign[2]),d))});
     const interviewRoute=/^\/api\/problem-interviews\/([^/]+)$/.exec(pathname);
     if(interviewRoute&&req.method==='GET')return send(res,200,interviewBoard(store,decodeURIComponent(interviewRoute[1])));
     if(interviewRoute&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>createInterviewPlan(store,decodeURIComponent(interviewRoute[1]),d))});
