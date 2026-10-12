@@ -15,7 +15,7 @@ import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
 import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
-import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,sourceDiagnostics,retryFailedFeed,addManualSignal,triageSignal,bulkTriageSignals,querySignals} from './source-hub.mjs';
+import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,sourceDiagnostics,probeFeed,retryFailedFeed,addManualSignal,triageSignal,bulkTriageSignals,querySignals} from './source-hub.mjs';
 import {applyMuteRules,createMuteRule,deleteMuteRule,muteRules} from './mute-rules.mjs';
 import {dispatchMcp,validateModernMcp} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
@@ -116,6 +116,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
     if(pathname==='/api/source-catalog/install'&&req.method==='POST'){const data=await body(req);return send(res,200,installCatalogFeed(store,data.id,{acceptExperimentalRisk:data.acceptExperimentalRisk===true}));}
     if(pathname==='/api/sources/diagnostics'&&req.method==='GET')return send(res,200,sourceDiagnostics(store,{limit:u.searchParams.get('limit')??8}));
+    const probeRoute=/^\/api\/sources\/([^/]+)\/probe$/.exec(pathname);
+    if(probeRoute&&req.method==='POST')return send(res,200,{result:await probeFeed(store,probeRoute[1])});
     const retryRoute=/^\/api\/sources\/([^/]+)\/retry$/.exec(pathname);
     if(retryRoute&&req.method==='POST')return send(res,200,{result:await retryFailedFeed(store,retryRoute[1],await body(req))});
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});

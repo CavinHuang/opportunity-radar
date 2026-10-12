@@ -141,6 +141,16 @@ async function fetchFeed(url,{fetchImpl,dnsLookup,maxBytes=1024*1024,etag,lastMo
   }
   throw error('SOURCE_REDIRECT','无法获取 RSS');
 }
+/** Read-only feed probe: never mutates records or scan watermarks. */
+export async function probeFeed(store,id,{fetchImpl=pinnedHttpsFetch,dnsLookup=lookup}={}){
+ const feed=store.get('feeds',id);if(!feed)throw error('NOT_FOUND','信息源不存在',404);
+ const started=Date.now();
+ try{
+  const response=await fetchFeed(feed.url,{fetchImpl,dnsLookup});
+  const items=response.notModified?[]:parseFeed(response.xml,feed.url);
+  return {id,status:'reachable',parsedItems:items.length,sampleTitles:items.slice(0,3).map(x=>x.title),elapsedMs:Date.now()-started,checkedAt:time(),persisted:false,warning:'只验证连通性和格式；不写入信号、不证明内容真实或需求存在'};
+ }catch(e){return {id,status:'failed',parsedItems:0,elapsedMs:Date.now()-started,checkedAt:time(),errorCode:e.code||'PROBE_FAILED',message:String(e.message||'探测失败').slice(0,240),persisted:false};}
+}
 export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLookup=lookup,onlyDue=false,nowMs=Date.now()}={}){
   if(scansInProgress.has(store))throw error('SCAN_IN_PROGRESS','采集任务正在运行，请稍后重试',409);
   const requested=ids?.length?ids:null;
