@@ -31,7 +31,8 @@ test('jevSystemOne calls System One API and extracts typed answers',async()=>{
  assert.equal(topic.type,'choice');
  assert.equal(topic.value,'product_friction');
  assert.equal(calls.length,1);
- assert.equal(calls[0].url,'https://jev.test/api/v1/systemone');
+ // Configured API bases resolve to the explicit System One route.
+ assert.equal(calls[0].url,new URL('systemone','https://jev.test/api/v1/').href);
  assert.equal(calls[0].body.state,'signal title and description');
  assert.ok(calls[0].body.questions.is_consumer_problem);
 });
