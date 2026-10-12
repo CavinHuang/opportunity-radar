@@ -1,3 +1,4 @@
+import {makeCommunityFeed} from './third-party-feed.mjs';
 import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {experimentDecisionReview} from './experiment-decision.mjs';
 import {projectOwnerTasks,upsertOwnerTask,ownerTaskHistory,ownerTaskBoard,ownerTaskTimeline,archiveOwnerTask,unarchiveOwnerTask} from './owner-tasks.mjs';
@@ -118,6 +119,14 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const retryRoute=/^\/api\/sources\/([^/]+)\/retry$/.exec(pathname);
     if(retryRoute&&req.method==='POST')return send(res,200,{result:await retryFailedFeed(store,retryRoute[1],await body(req))});
     if(pathname==='/api/sources'&&req.method==='GET')return send(res,200,{items:store.list('feeds').sort((a,b)=>a.title.localeCompare(b.title)),health:sourceHealth(store)});
+    if(pathname==='/api/sources/third-party'&&req.method==='POST'){
+      const data=await body(req);
+      if(data.acceptExperimentalRisk!==true)throw Object.assign(new Error('必须明确确认第三方订阅风险'),{code:'RISK_ACK_REQUIRED',status:409});
+      const template=makeCommunityFeed(data);
+      const feed=addFeed(store,{url:template.url,title:template.title,market:'International',intervalMinutes:1440});
+      const saved=store.put('feeds',{...feed,provider:template.provider,upstream:template.upstream,accessMode:template.accessMode,enabled:false,sourceCaution:'第三方实验接口可能不可用。需实际探测并在符合平台授权和条款时启用'},feed.revision);
+      return send(res,201,{item:saved});
+    }
     if(pathname==='/api/sources'&&req.method==='POST')return send(res,201,{item:addFeed(store,await body(req))});
     const source=/^\/api\/sources\/([^/]+)$/.exec(pathname);
     if(source&&req.method==='PATCH')return send(res,200,{item:editFeed(store,source[1],await body(req))});
