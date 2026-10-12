@@ -32,7 +32,7 @@ echo 'RADAR_OWNER_TOKEN=你的强口令' > .env
 docker compose up -d --build
 ```
 
-完整指南（HTTPS 反代、备份、升级、安全要点）见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+完整指南见 [docs/DEPLOY.md](docs/DEPLOY.md)；**Dokploy 用户**直接看 [docs/DOKPLOY.md](docs/DOKPLOY.md)（Dockerfile 构建类型原生适配，含 Traefik 自动 HTTPS）。
 
 ## 最新更新（v2.10 → v2.16）
 

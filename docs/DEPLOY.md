@@ -1,5 +1,7 @@
 # 服务器部署指南（Docker）
 
+> **用 Dokploy？** 仓库原生适配 Dokploy 的 Dockerfile 构建类型（含 Traefik 自动 HTTPS、健康检查路径 `/api/health`），逐步指南见 [DOKPLOY.md](DOKPLOY.md)。
+
 > 面向场景：把 Opportunity Radar 部署为一台服务器上的**单 owner** 网站——浏览器远程访问，数据（SQLite）持久化在服务器磁盘的 Docker 卷中。
 >
 > **边界必须先说清**：这是一个单 owner 应用。所有持有 `RADAR_OWNER_TOKEN` 的人共享同一份数据与全部管理权限；`RADAR_AGENT_TOKEN` 供外部 Coding Agent 自动化使用。它不是多租户 SaaS——多人协作请为每人发放各自角色 token，或等待多用户版本。
