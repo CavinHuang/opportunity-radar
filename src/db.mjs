@@ -5,7 +5,7 @@ import { LEDGER_METRIC_MAP, mirrorLedgerMetric } from './growth.mjs';
 
 const txDepth=new WeakMap();
 
-const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews','opportunity_research','campaigns','mute_rules','model_filter','scorecard_config','home_opportunity_scans','home_opportunity_decisions','home_scan_history','home_opportunity_feedback','home_opportunity_identities','home_opportunity_identity_events','home_identity_separations','problem_verifications','problem_interview_plans','problem_interview_observations'];
+const entities = ['opportunities','projects','tasks','milestones','evidence','submissions','decisions','contents','ledger','sources','feeds','validation_plans','validation_observations','product_feedback','discovery_reviews','owner_tasks','growth_channels','growth_campaigns','growth_metrics','opportunity_reviews','opportunity_research','campaigns','mute_rules','model_filter','scorecard_config','home_opportunity_scans','home_opportunity_decisions','home_scan_history','home_opportunity_feedback','home_opportunity_identities','home_opportunity_identity_events','home_identity_separations','problem_verifications','problem_interview_plans','problem_interview_observations','problem_experiment_designs'];
 /** Highest schema version this build understands, stamped via PRAGMA user_version.
  * Version 0 means "written before versioning existed" — every migration below is
  * incremental and idempotent, so old databases upgrade in place without losing rows. */
