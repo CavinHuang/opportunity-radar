@@ -126,3 +126,11 @@
 - **Ledger actuals become revisable**: entries can be retracted (excluded from every summary, kept visible with reason) or revised (old entry retracted, corrected entry created and mirrored); the growth-model mirror follows both operations so the ledger and growth pages can never disagree. Retraction requires a reason.
 - **Wake conditions (PRD D45)**: pausing — from the UI or a review decision — now requires recording a wake condition; resuming or continuing requires acknowledging it, with the condition displayed in the contract card, the resume modal and the review decide dialog. Negative coverage: pause without one is 400, resume without acknowledgment is 409.
 - **Usability**: schedule and growth-record time inputs are datetime-local pickers converted to ISO client-side; bulk growth import dedup builds its check sets once (O(rows) instead of O(rows × table)); pause/resume become proper dialogs.
+
+
+## v2.23 · Server deployment (Docker)
+
+- Container image (node:22-alpine, non-root, zero runtime dependencies so the image carries only source and static assets), named volume for the SQLite database and WAL, second mount for backups, built-in HEALTHCHECK over the unauthenticated /api/health endpoint.
+- docker-compose.yml: owner token required at up-time (`:?` guard fails fast without it), port/host/token/LLM env wiring, restart policy; deployment and operations guide in docs/DEPLOY.md (HTTPS reverse proxy, backup from inside the container, upgrade path, single-owner boundary stated explicitly).
+- CI: Dockerfile changes build the image and run a runtime smoke on GitHub runners — health, owner-auth negative/positive, and data persistence across a container restart.
+- Local-first remains the default posture: binding to loopback without a token works exactly as before; server deployment requires the owner token by design.

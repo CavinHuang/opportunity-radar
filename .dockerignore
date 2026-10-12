@@ -1,0 +1,15 @@
+node_modules
+.data
+.git
+.gitignore
+coverage
+tests
+scripts
+docs
+*.md
+!README.md
+.github
+artifacts
+backups
+docker-compose.yml
+.env*
