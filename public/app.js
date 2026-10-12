@@ -67,7 +67,12 @@ function renderBrief(){
   const discoveryPanel=`<section class="card card-pad mt" aria-label="AI 筛选的潜在机会"><div class="section-heading"><div><h2>AI 筛选的潜在机会</h2><p class="subtext">基于公开来源进行初步筛选，不代表需求已验证或值得投入。</p></div><button class="btn btn-primary btn-sm" data-action="scan-home-opportunities">${icon('search',14)} 一键检索机会</button></div>
     ${discovered.at?`<p class="subtext">最近检索：${fmtTime(discovered.at)} · 检查 ${Number(discovered.considered||0)} 项候选 · AI 保留 ${Number(discovered.accepted||0)} 项 · ${esc(discovered.engine||'未运行 AI')}</p>`:''}
     ${discovered.status!=='filtered'?'<p class="subtext">'+esc(discovered.reason||'首次使用请点击一键检索机会。')+'</p>':''}
-    ${matches.map(o=>`<div class="source-row"><div class="grow"><div class="flex"><strong>${esc(o.title)}</strong><span class="tag">AI 初筛 · 待人工核查</span></div><p class="subtext">${esc(o.summary||'')}</p><p class="subtext">保留理由：${esc(o.aiReason)}</p><p class="subtext">原始线索 ${o.signalCount} 条 · ${esc((o.domains||[]).join('、')||'未分类')}</p><a class="external" target="_blank" rel="noopener noreferrer" href="${esc(o.sourceUrls[0])}">查看原帖</a></div></div>`).join('')||'<p class="subtext">暂无 AI 筛选通过的候选。可能还没有信息源、模型未配置，或模型没有发现足够具体的问题。</p>'}</section>`;
+    ${matches.map(o=>`<div class="source-row"><div class="grow"><div class="flex"><strong>${esc(o.title)}</strong><span class="tag">AI 初筛 · 待人工核查</span></div><p class="subtext">${esc(o.summary||'')}</p><p class="subtext">保留理由：${esc(o.aiReason)}</p><p class="subtext">原始线索 ${o.signalCount} 条 · ${esc((o.domains||[]).join('、')||'未分类')}</p><div class="flex" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm" data-action="home-save" data-id="${esc(o.id)}" ${o.decision?.action==='save'?'disabled':''}>${o.decision?.action==='save'?'已收藏':'收藏'}</button>
+      <button class="btn btn-sm" data-action="home-dismiss" data-id="${esc(o.id)}">忽略</button>
+      <button class="btn btn-sm" data-action="home-research" data-id="${esc(o.id)}">深入研究</button>
+      <button class="btn btn-sm" data-action="home-convert" data-id="${esc(o.id)}">转入机会池</button>
+      <a class="external" target="_blank" rel="noopener noreferrer" href="${esc(o.sourceUrls[0])}">查看原帖</a></div></div></div>`).join('')||'<p class="subtext">暂无 AI 筛选通过的候选。可能还没有信息源、模型未配置，或模型没有发现足够具体的问题。</p>'}</section>`;
   const validationById=new Map((S.validations||[]).map(x=>[x.opportunityId,x]));
   const cards=items.length?items.map(o=>`<article class="card opp"><div class="opp-top"><span class="tag">${icon('radar',12)} 待取证</span><span class="mini-chip">${esc(o.market)}</span></div><h3>${esc(o.title)}</h3><p>${esc(o.problem)}</p><div class="opp-meta"><small>独立线索 ${o.sources?.filter(x=>x.independent).length||0} · ${esc(o.language||'')}</small><button class="link" data-action="show-research" data-id="${o.id}">研究证据 ${icon('arrow',12)}</button><button class="link" data-action="view-validation" data-id="${o.id}">用户验证 ${validationById.get(o.id)?.status==='active'?'· 进行中':validationById.get(o.id)?.outcome?'· 已决策':'· 未开始'}</button></div></article>`).join(''): `<div class="card">${empty('还没有可评估的机会','目前没有录入任何真实线索。你可以先添加一条消费者问题和来源；雷达不会用虚构市场数据填满首页。','<button class="btn btn-sm" data-action="new-opportunity">'+icon('plus',14)+' 添加线索</button>')}</div>`;
   const all=S.opportunities?.items||[];
@@ -637,6 +642,22 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'home-save':case 'home-dismiss':{
+    const candidate=S.homeOpportunities?.items?.find(x=>x.id===id);
+    if(!candidate)throw new Error('候选已变化，请刷新');
+    await api('/home/opportunities/'+encodeURIComponent(id)+'/decision',{method:'POST',body:{action:action==='home-save'?'save':'dismiss',expected_revision:candidate.decision?.revision||0}});
+    await refresh();toast(action==='home-save'?'已收藏为待核查机会':'已忽略该候选');break;
+  }
+  case 'home-convert':{
+    if(!window.confirm('将此 AI 初筛结果作为未经验证的候选加入机会池？不会启动实验。'))break;
+    await api('/home/opportunities/'+encodeURIComponent(id)+'/convert',{method:'POST',body:{}});
+    await refresh();toast('已加入机会池，仍须核查真实需求');break;
+  }
+  case 'home-research':{
+    const draft=(await api('/opportunity-scan/'+encodeURIComponent(id)+'/research',{method:'POST',body:{}})).draft;
+    modal('AI 深入研究草稿',Object.entries(draft.sections).map(([k,v])=>'<div class="field wide"><strong>'+esc(k)+'</strong><p>'+esc(v.text)+'</p><p class="subtext">引用：'+esc(v.sourceIds.join(', ')||'未知')+'</p></div>').join('')+field('note','审核理由（至少8字）',{wide:true,type:'textarea',required:true}),async d=>await api('/opportunity-scan/'+encodeURIComponent(id)+'/review',{method:'POST',body:{fingerprint:draft.fingerprint,sections:draft.sections,decision:'accept_as_notes',note:d.note}}));
     break;
   }
   case 'scan-home-opportunities':{
