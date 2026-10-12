@@ -97,3 +97,15 @@ References:
 - https://support.reddithelp.com/hc/en-us/articles/54353370049684-Changelog-October-8-2026
 - https://help.producthunt.com/en/articles/484970-does-product-hunt-have-an-rss-feed
 - https://api.producthunt.com/v2/docs
+
+## 可选第三方 RSS 转换源（实验功能 · 2026-10-12）
+
+在「信息源与信号」的来源目录中可以找到 Open RSS Reddit r/SaaS、r/SideProject 以及 RSSHub X 路由示例。它们**默认不订阅、不自动启用、不保证连接成功**；必须由 Owner 明确接受实验性来源风险，才会写入本地订阅列表。
+
+- Reddit 的官方 RSS 支持将于 2026-11-13 结束。Open RSS 的 Reddit 路由可能停止工作；转换服务并不能绕过上游的权限和条款。
+- RSSHub 的 X 路由依赖上游接口与认证状态；禁止通过未授权登录、反爬绕过来保证抓取。
+- 对实验性来源保留 `provider`、`accessMode`、`catalogId` 和警示说明。真实扫描才会更新最后成功时间、失败原因和重试时间；无成功记录时不能显示可用。
+- 失败时不制造信号，也不会将错误帖子晋升为已验证机会。仍可使用已有的「保存网页线索」录入原始 Reddit / X 帖子。
+- 社区热门内容和点赞不是消费者独立性、购买意愿或市场规模证据。
+
+免费并非无限额度。订阅前请自行检查 Open RSS / RSSHub 实例政策、网站 robots/访问要求及平台内容许可。优先使用原生公开 RSS 或正式 API；这些第三方路线是可选实验接入，不是生产可用性的承诺。
