@@ -381,7 +381,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const muteRuleRows=(S.muteRules||[]).map(r=>`<div class="source-row"><div class="grow"><strong>${esc(r.keyword)}</strong>${r.note?`<p class="subtext">${esc(r.note)}</p>`:''}<p class="subtext">${esc(t('创建于'))} ${fmtTime(r.createdAt)}</p></div><button class="btn btn-sm btn-danger" data-action="delete-mute-rule" data-id="${r.id}">${esc(t('删除'))}</button></div>`).join('');
   const info=`<div class="source-tips">${icon('shield',16)}<div><strong>真实信息源 ≠ 已验证的消费者需求</strong><p>来源文章只是待研判信号。你可以收藏、忽略或进一步取证后转换为机会；雷达保留原始 URL，不会自动生成付费结论。</p></div></div>`;
   return wrapPage('信息源与机会发现',`<div class="eyebrow">SOURCE RESEARCH DESK</div><div class="headline"><div><h1 class="hero-title">把信息，变成值得验证的机会。</h1><p class="hero-desc">订阅可信来源、关注真实场景、筛除噪音。没有足够证据，就继续观察。</p></div><button class="btn" data-action="show-opportunities">${icon('arrow',14)} 返回机会简报</button></div>${info}${readinessPanel}${qualityPanel}${diagnosticPanel}${opportunityDesk}${discoveryDesk}
-    <div class="section-heading"><h2>信息源管理</h2><span>已启用 ${S.sources?.health?.enabled||0} · 到期 ${S.sources?.health?.due||0} · 异常 ${S.sources?.health?.failing||0}</span><div class="flex"><button class="btn btn-sm" data-action="add-source">${icon('plus',13)} 添加 RSS</button><button class="btn btn-primary btn-sm" data-action="scan-signals">${icon('refresh',13)} 扫描全部</button></div></div>
+    <div class="section-heading"><h2>信息源管理</h2><span>已启用 ${S.sources?.health?.enabled||0} · 到期 ${S.sources?.health?.due||0} · 异常 ${S.sources?.health?.failing||0}</span><div class="flex"><button class="btn btn-sm" data-action="add-third-party-feed">第三方 Reddit / X</button><button class="btn btn-sm" data-action="add-source">${icon('plus',13)} 添加 RSS</button><button class="btn btn-primary btn-sm" data-action="scan-signals">${icon('refresh',13)} 扫描全部</button></div></div>
     <div class="card card-pad">${feeds.length?sourceRows:empty('还没有订阅信息源','粘贴一个公开 RSS / Atom 的 HTTPS 地址，即可开始从真实内容中发现信号。<br>无须先配置 AI 模型。','<button class="btn btn-primary" data-action="add-source">添加第一个 RSS 来源</button>')}</div>
     <div class="section-heading"><h2>精选公开信息源</h2><span>按需订阅，再通过扫描核验可用性</span></div><div class="card card-pad"><p class="subtext">论坛帖子是可追溯线索，不等于已经验证的消费者需求。</p>${catalog}</div>
     <div class="section-heading"><h2>${esc(t('静音规则'))}</h2><span>${esc(t('新进信号命中即自动忽略，可恢复；手动录入不受影响'))}</span><button class="btn btn-sm" data-action="add-mute-rule">${icon('plus',13)} ${esc(t('添加静音规则'))}</button><button class="btn btn-sm" data-action="apply-mute-rules">${esc(t('应用到待研判信号'))}</button></div><div class="card card-pad">${muteRuleRows||empty(t('还没有静音规则'),t('给出关键词后，扫描新进的信号标题或摘要命中即自动忽略，并记录命中的规则。'))}</div>
@@ -585,6 +585,12 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     await api('/discovery/clusters/'+encodeURIComponent(id)+'/review',{method:'POST',
      body:{action:'restore',fingerprint:g.fingerprint,expected_revision:g.reviewRevision}});
     await refresh();break;
+  }
+  case 'add-third-party-feed':{
+    const approved=window.confirm('第三方 Reddit / X RSS 不保证可用；不得绕过原平台认证与使用条款。继续配置吗？');
+    if(!approved)break;
+    modal('添加海外社区 RSS（实验）',`<div class="field wide"><label>转换方式</label><select id="f-provider" name="provider"><option value="openrss-reddit">Open RSS · Reddit 社区</option><option value="rsshub-x">RSSHub · X 账号</option></select></div>`+field('community','Reddit 社区名（例如 SaaS）',{value:'SaaS'})+field('account','X 账号名（例如 DIYgod）',{value:'DIYgod'})+`<p class="subtext">新来源默认暂停；请先确认第三方服务的规则，再启用及扫描。转换服务可能随时失效。</p>`,async d=>await api('/sources/third-party',{method:'POST',body:{...d,acceptExperimentalRisk:true}}));
+    break;
   }
   case 'add-source':editSource();break;
   case 'edit-source':editSource(S.sources.items.find(x=>x.id===id));break;
