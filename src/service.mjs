@@ -77,7 +77,22 @@ export function createService(store, options={}){
     });
   }
   function brief(){const cutoff=Date.now()-7*86400000;const active=store.list('projects').find(x=>!['paused','stopped','archived'].includes(x.status));
-    const candidates=store.list('opportunities').filter(x=>x.status==='candidate').sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
+    const candidates=store.list('opportunities').filter(x=>x.status==='candidate').sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);
+    // 跨页面待办聚合：让 owner 打开首页就能看到所有需要处理的事。
+    const newSignals=store.list('sources').filter(x=>x.status==='new').length;
+    const failingSources=store.list('feeds').filter(x=>x.enabled&&(x.consecutiveFailures||0)>0).length;
+    let pendingAcceptance=0,overduePublications=0,reviewDue=false;
+    if(active){
+      pendingAcceptance=store.list('submissions').filter(x=>x.projectId===active.id&&x.acceptanceState==='pending').length;
+      const nowMs=Date.now();
+      overduePublications=store.list('contents').filter(c=>c.projectId===active.id&&c.plannedAt&&new Date(c.plannedAt)<new Date()&&c.reviewState!=='published').length;
+      const reviews=store.list('opportunity_reviews').filter(x=>x.projectId===active.id);
+      const latestReview=reviews.sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
+      reviewDue=!latestReview||(nowMs-Date.parse(latestReview.createdAt))>7*86400000;
+    }
+    return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),
+      actionItems:{newSignals,failingSources,pendingAcceptance,overduePublications,reviewDue},
+      note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
   function startExperiment(data){return store.transaction(()=>{
     const o=get('opportunities',data.opportunityId);
     if(store.list('projects').some(x=>!['paused','stopped','archived'].includes(x.status)))throw err('ACTIVE_EXPERIMENT_EXISTS','同时只能有一个主实验',409);
