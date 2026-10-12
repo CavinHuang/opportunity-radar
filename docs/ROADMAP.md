@@ -135,3 +135,11 @@
 - CI: Dockerfile changes build the image and run a runtime smoke on GitHub runners — health, owner-auth negative/positive, and data persistence across a container restart.
 - Local-first remains the default posture: binding to loopback without a token works exactly as before; server deployment requires the owner token by design.
 - Dokploy-ready: the Dockerfile is the build configuration for Dokploy's Dockerfile build type; `PORT` env is honored as a fallback to `RADAR_PORT` per PaaS convention; docs/DOKPLOY.md walks through env vars, the mandatory /app/.data volume, healthcheck path and Traefik HTTPS.
+
+## v2.24 · Jev System One integration
+
+- `src/jev.mjs`: adapter for Jev by TypeSafe AI's System One API (`POST /api/v1/systemone`) — a structured decision model (not an LLM) that answers typed questions (Noul/Choice/Score) with calibrated probabilities.
+- Signal ingestion: when `JEV_API_KEY` is set, non-muted fresh candidates are individually judged (`is_consumer_problem` Noul) — those below 0.5 are auto-dismissed with `triageBy:'model_filter'`; LLM pre-filter becomes the fallback when Jev is not configured.
+- Fail-open: Jev errors, timeouts and parse failures never lose signals — all fall through to the untriaged queue with an audit event.
+- Scan events carry `modelFiltered` count; per-signal `triageBy`/`filterReason`/`filterModel` are visible in the signal list.
+- Tests: adapter unit test (typed answer extraction, auth header) + end-to-end scan test (noise dismissed, consumer problem kept, per-signal reason).
