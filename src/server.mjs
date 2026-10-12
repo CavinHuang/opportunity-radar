@@ -1,3 +1,4 @@
+import {interviewBoard,createInterviewPlan,addInterviewObservation,decideInterviewPlan} from './problem-interviews.mjs';
 import {verificationContext,verifyProblem} from './problem-verification.mjs';
 import {splitOpportunityIdentity,opportunityIdentityDossier,opportunityIdentityIndex} from './opportunity-identity.mjs';
 import {reviewHomeOpportunity,homeDiscoveryDashboard,decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
@@ -144,6 +145,13 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    const interviewRoute=/^\/api\/problem-interviews\/([^/]+)$/.exec(pathname);
+    if(interviewRoute&&req.method==='GET')return send(res,200,interviewBoard(store,decodeURIComponent(interviewRoute[1])));
+    if(interviewRoute&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>createInterviewPlan(store,decodeURIComponent(interviewRoute[1]),d))});
+    const interviewObservation=/^\/api\/problem-interviews\/([^/]+)\/([^/]+)\/observations$/.exec(pathname);
+    if(interviewObservation&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>addInterviewObservation(store,decodeURIComponent(interviewObservation[1]),decodeURIComponent(interviewObservation[2]),d))});
+    const interviewDecision=/^\/api\/problem-interviews\/([^/]+)\/([^/]+)\/decision$/.exec(pathname);
+    if(interviewDecision&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>decideInterviewPlan(store,decodeURIComponent(interviewDecision[1]),decodeURIComponent(interviewDecision[2]),d))});
     const problemCheck=/^\/api\/problem-verification\/([^/]+)$/.exec(pathname);
     if(problemCheck&&req.method==='GET'){
       const id=decodeURIComponent(problemCheck[1]);
