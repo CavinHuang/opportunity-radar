@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import {evaluateMuteRules} from './mute-rules.mjs';
+import {filterNewCandidates} from './model-filter.mjs';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { configuredFeeds, parseFeed } from './signals.mjs';
@@ -151,7 +152,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
   scansInProgress.add(store);
   try{
     for(const feed of feeds){
-      let received=0,added=0,filtered=0,duplicates=0,muted=0,notModified=false;
+      let received=0,added=0,filtered=0,duplicates=0,muted=0,modelFiltered=0,notModified=false;
       const normal=intervalMinutes(feed.intervalMinutes);
       try{
         const response=await fetchFeed(feed.url,{fetchImpl,dnsLookup,etag:feed.etag,lastModified:feed.lastModified});
@@ -159,30 +160,51 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         // Commit each feed's new signals and its scan watermark atomically:
         // invalid late items must never leave an apparently successful partial import.
         const items=notModified?[]:parseFeed(response.xml,feed.url);
+        // Phase 1: read-only collection — keyword filter, dedup check, mute eval.
+        // No writes; the model pre-filter (async LLM) must run outside the write lock.
+        const fresh=[];const known=new Map();
+        received=items.length;
+        for(const candidate of items){
+          const text=(candidate.title+' '+candidate.description).toLocaleLowerCase();
+          if(feed.keywords.length&&!feed.keywords.some(k=>text.includes(k.toLocaleLowerCase()))){filtered++;continue;}
+          const canonical=canonicalArticleUrl(candidate.url),id=hash(canonical);
+          const existing=store.get('sources',id);
+          if(existing){
+            duplicates++;
+            if(!existing.feedIds?.includes(feed.id))known.set(id,{...existing,feedIds:[...(existing.feedIds||[]),feed.id],rev:existing.revision});
+            continue;
+          }
+          const mute=evaluateMuteRules(store.list('mute_rules'),candidate);
+          fresh.push({candidate,canonical,id,mute});
+        }
+        // Phase 2: model pre-filter (async LLM, fail-open) — outside the write lock.
+        const toModelFilter=fresh.filter(f=>!f.mute).map(f=>({key:f.id,title:f.candidate.title,description:f.candidate.description}));
+        const modelResults=toModelFilter.length?await filterNewCandidates(store,toModelFilter,{fetchImpl}):{assignments:new Map(),scanned:0,modelFiltered:0};
+        // Phase 3: atomic write — all puts in one transaction.
         store.transaction(()=>{
           const current=store.get('feeds',feed.id);
           if(!current||current.revision!==feed.revision)
             throw error('SOURCE_CHANGED','信息源在采集过程中被修改或删除',409);
-          received=items.length;
-          for(const candidate of items){
-            const text=(candidate.title+' '+candidate.description).toLocaleLowerCase();
-            if(feed.keywords.length&&!feed.keywords.some(k=>text.includes(k.toLocaleLowerCase()))){filtered++;continue;}
-            const canonical=canonicalArticleUrl(candidate.url),id=hash(canonical);
-            const existing=store.get('sources',id);
-            if(existing){
-              duplicates++;
-              if(!existing.feedIds?.includes(feed.id))store.put('sources',{...existing,feedIds:[...(existing.feedIds||[]),feed.id]},existing.revision);
-              continue;
-            }
-            const mute=evaluateMuteRules(store.list('mute_rules'),candidate);
-            store.put('sources',{...candidate,id,url:canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:candidate.publishedAt||null,createdAt:time(),
-              status:mute?'dismissed':'new',muteRule:mute?{id:mute.id,keyword:mute.keyword}:null,triagedAt:mute?time():null,linkedOpportunityId:null});
-            if(mute){muted++;store.event('signal.muted',id,'owner',{ruleId:mute.id,keyword:mute.keyword});}else added++;
+          for(const [id,upd] of known){
+            if(!store.get('sources',id)?.feedIds?.includes(feed.id))store.put('sources',{...upd},upd.rev);
+          }
+          for(const f of fresh){
+            const mf=modelResults.assignments.get(f.id);
+            const byModel=mf&&mf.verdict==='noise';
+            const entry={...f.candidate,id:f.id,url:f.canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:f.candidate.publishedAt||null,createdAt:time(),
+              status:f.mute?'dismissed':byModel?'dismissed':'new',
+              muteRule:f.mute?{id:f.mute.id,keyword:f.mute.keyword}:null,
+              triageBy:byModel?'model_filter':null,
+              filterReason:byModel?mf.reason:null,filterModel:byModel?mf.model:null,filterAt:byModel?time():null,
+              triagedAt:(f.mute||byModel)?time():null,linkedOpportunityId:null};
+            store.put('sources',entry);
+            if(byModel){modelFiltered++;store.event('signal.model_filtered',f.id,'owner',{reason:mf.reason,model:mf.model},null);}
+            else if(!f.mute)added++;
           }
           scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
             nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
             itemsSeen:(feed.itemsSeen||0)+received,addedTotal:(feed.addedTotal||0)+added},nowMs);
-          store.event('source.scan_succeeded',feed.id,'system',{received,added,filtered,duplicates,muted,notModified,checkedAt:new Date(nowMs).toISOString()});
+          store.event('source.scan_succeeded',feed.id,'system',{received,added,filtered,duplicates,muted,modelFiltered,notModified,checkedAt:new Date(nowMs).toISOString()});
         });
       }catch(e){
         // A concurrent edit/delete invalidates the in-flight snapshot. Never
