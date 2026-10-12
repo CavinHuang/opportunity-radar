@@ -1,3 +1,4 @@
+import {opportunityIdentityDossier,opportunityIdentityIndex} from './opportunity-identity.mjs';
 import {reviewHomeOpportunity,homeDiscoveryDashboard,decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
@@ -168,6 +169,13 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     const homeFeedback=/^\/api\/home\/opportunities\/([^/]+)\/feedback$/.exec(pathname);
     if(homeFeedback&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,data=>reviewHomeOpportunity(store,decodeURIComponent(homeFeedback[1]),data))});
+    if(pathname==='/api/home/knowledge'&&req.method==='GET')return send(res,200,opportunityIdentityIndex(store));
+    const dossier=/^\/api\/home\/knowledge\/([^/]+)$/.exec(pathname);
+    if(dossier&&req.method==='GET'){
+      const item=opportunityIdentityDossier(store,decodeURIComponent(dossier[1]));
+      if(!item)throw Object.assign(new Error('历史机会档案不存在'),{code:'NOT_FOUND',status:404});
+      return send(res,200,item);
+    }
     if(pathname==='/api/home/discovery'&&req.method==='GET')return send(res,200,homeDiscoveryDashboard(store));
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
