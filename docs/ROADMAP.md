@@ -143,3 +143,8 @@
 - Fail-open: Jev errors, timeouts and parse failures never lose signals — all fall through to the untriaged queue with an audit event.
 - Scan events carry `modelFiltered` count; per-signal `triageBy`/`filterReason`/`filterModel` are visible in the signal list.
 - Tests: adapter unit test (typed answer extraction, auth header) + end-to-end scan test (noise dismissed, consumer problem kept, per-signal reason).
+
+## v2.25 · Brief page daily dashboard
+
+- The brief page now has a 今日待办 section that aggregates cross-page actionable items: new signals awaiting triage and failing sources. Each item shows a count and a link to the relevant tab.
+- Helper functions `failingSourceItem` and `signalTriageItem` render source health and signal queue status inline on the brief page.
