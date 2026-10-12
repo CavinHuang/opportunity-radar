@@ -647,7 +647,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     break;
   }
   case 'home-restore':{
-    await api('/home/opportunities/'+encodeURIComponent(id)+'/decision',{method:'POST',body:{action:'restore',expected_revision:Number(revision||0)}});
+    await api('/home/opportunities/'+encodeURIComponent(id)+'/decision',{method:'POST',body:{action:'restore',expected_revision:S.homeDiscovery?.dismissed?.find(x=>x.id===id)?.decision?.revision||0}});
     await refresh();toast('候选已恢复');break;
   }
   case 'home-save':case 'home-dismiss':{
