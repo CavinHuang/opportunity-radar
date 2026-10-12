@@ -47,7 +47,7 @@ export function homeOpportunitySnapshot(store){
  return {...latest,items:(latest.items||[]).filter(x=>{
    const candidate=current.get(x.id);
    return candidate&&candidate.sourceUrls?.every(url=>x.sourceUrls.includes(url));
- }).map(x=>({...x,decision:store.get('home_opportunity_decisions',x.id)||null,feedback:store.get('home_opportunity_feedback',x.id)||null})).filter(x=>x.decision?.action!=='dismiss')};
+ }).map(x=>({...x,decision:store.get('home_opportunity_decisions',x.id)||null,feedback:store.get('home_opportunity_feedback',x.id)||null})).filter(x=>x.decision?.action!=='dismiss').sort((a,b)=>((b.feedback?.verdict==='useful'?2:b.feedback?.verdict==='false_positive'?-1:0)-(a.feedback?.verdict==='useful'?2:a.feedback?.verdict==='false_positive'?-1:0))||(a.novelty==='new_since_previous_scan'?-1:1)-(b.novelty==='new_since_previous_scan'?-1:1))};
 }
 async function classifyLLM(candidates,{env,fetchImpl}){
  const base=env.RADAR_LLM_BASE_URL,key=env.RADAR_LLM_API_KEY,model=env.RADAR_LLM_MODEL;
