@@ -4,6 +4,17 @@ import {jevConfig,jevSystemOne,extractAnswer} from './jev.mjs';
 const recordId='latest';
 const safe=(v,n=360)=>String(v??'').trim().slice(0,n);
 const validUrl=v=>{try{return new URL(v).protocol==='https:'}catch{return false}};
+export function decideHomeOpportunity(store,id,{action,expected_revision}={}){
+ if(!['save','dismiss','restore'].includes(action))throw Object.assign(new Error('未知操作'),{code:'BAD_ACTION',status:400});
+ const entry=store.get('home_opportunity_scans','latest')?.items?.find(x=>x.id===id);
+ if(!entry)throw Object.assign(new Error('候选不存在'),{code:'NOT_FOUND',status:404});
+ if(!homeOpportunitySnapshot(store).items.find(x=>x.id===id)&&action!=='restore')throw Object.assign(new Error('候选已失效，请重新扫描'),{code:'CANDIDATE_CHANGED',status:409});
+ const previous=store.get('home_opportunity_decisions',id);
+ if(expected_revision!==(previous?.revision||0))throw Object.assign(new Error('版本冲突，请刷新'),{code:'REVISION_CONFLICT',status:409});
+ const row=store.put('home_opportunity_decisions',{id,action,sourceUrls:entry.sourceUrls,at:new Date().toISOString()},previous?.revision||0);
+ store.event('home.opportunity.decision',id,'owner',{action});
+ return row;
+}
 export function homeOpportunitySnapshot(store){
  const latest=store.get('home_opportunity_scans',recordId);
  if(!latest)return {status:'never_scanned',items:[],at:null,scanned:0,reason:'尚未执行首页 AI 机会检索'};
@@ -13,7 +24,7 @@ export function homeOpportunitySnapshot(store){
  return {...latest,items:(latest.items||[]).filter(x=>{
    const candidate=current.get(x.id);
    return candidate&&candidate.sourceUrls?.every(url=>x.sourceUrls.includes(url));
- })};
+ }).map(x=>({...x,decision:store.get('home_opportunity_decisions',x.id)||null})).filter(x=>x.decision?.action!=='dismiss')};
 }
 async function classifyLLM(candidates,{env,fetchImpl}){
  const base=env.RADAR_LLM_BASE_URL,key=env.RADAR_LLM_API_KEY,model=env.RADAR_LLM_MODEL;
