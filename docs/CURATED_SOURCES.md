@@ -75,3 +75,25 @@ API: `GET /api/source-catalog`, `POST /api/source-catalog/install`, `GET /api/op
 ## v0.9 观察数据与来源效果复盘
 
 来源目录的质量提示不等于市场证据。进入「信息源与信号」后，每条已安装来源都有来自 SQLite 的观察数据：实际采集数量、收藏与忽略、关联机会、人工核查的原文及 Owner 分类的独立第一手经历。点击「研判该来源」可查看该源仍待处理的帖子。相同帖子在不同 RSS 中出现时，不能将来源侧计数相加为独立消费者数量。任何统计都不自动代表用户规模、付费意愿或需求已被证实。
+
+## Overseas platforms (2026-10-12)
+
+New opt-in sources:
+- ph-launches: Product Hunt official public Atom at https://www.producthunt.com/feed; competitor / product-launch signal, **not demand evidence**.
+- apple-askdifferent: https://apple.stackexchange.com/feeds; Apple user friction.
+- android-enthusiasts: https://android.stackexchange.com/feeds; Android user friction.
+- ux-stackexchange: https://ux.stackexchange.com/feeds; professional UX discussions rather than consumers.
+- reddit-research: https://www.reddit.com/; **manual research only**. Reddit discontinues RSS on November 13, 2026; do not rely on automatic feeds.
+- x-social: https://x.com/explore; **manual research only**. API-based automatic search requires explicit authorization, cost controls and quotas; no uncredentialed scraping.
+
+Manual collection: open a source from the catalog, inspect a public original post, and use the existing **保存网页线索** UI to save its original HTTPS link and a short factual summary. Review provenance and independence before promoting a lead to an opportunity. Reposts, upvotes, and views do not prove independent consumers or willingness to pay.
+
+To probe new RSS sources on an isolated database, run:
+PROBE_CATALOG_IDS=ph-launches,apple-askdifferent,android-enthusiasts,ux-stackexchange npm run catalog:probe
+
+External feed availability is not guaranteed. Product Hunt official API docs also prohibit commercial use by default without permission; this implementation uses its public Atom feed, not its GraphQL API.
+
+References:
+- https://support.reddithelp.com/hc/en-us/articles/54353370049684-Changelog-October-8-2026
+- https://help.producthunt.com/en/articles/484970-does-product-hunt-have-an-rss-feed
+- https://api.producthunt.com/v2/docs
