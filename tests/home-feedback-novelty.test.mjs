@@ -18,7 +18,7 @@ test('human feedback is revision-fenced and never approves an opportunity',async
  const db=openDatabase();try{
   db.put('sources',{id:'s1',title:'Cannot automate repetitive invoice workflow for freelancers',description:'I manually move invoices between tools and need an alternative',url:'https://forum.example/post/1',status:'new',createdAt:'2026-10-12T05:00:00Z'});
   await scanHomeOpportunities(db,{env,fetchImpl:mock});
-  assert.throws(()=>reviewHomeOpportunity(db,'signal:s1',{verdict:'false_positive',reason:'too short',expected_revision:0}),{code:'REASON_REQUIRED'});
+  assert.throws(()=>reviewHomeOpportunity(db,'signal:s1',{verdict:'false_positive',reason:'brief',expected_revision:0}),{code:'REASON_REQUIRED'});
   const row=reviewHomeOpportunity(db,'signal:s1',{verdict:'false_positive',reason:'This is likely promotional content',expected_revision:0});
   assert.equal(homeOpportunitySnapshot(db).items[0].feedback.verdict,'false_positive');
   assert.throws(()=>reviewHomeOpportunity(db,'signal:s1',{verdict:'useful',reason:'Several independent people reported issues',expected_revision:0}),{code:'REVISION_CONFLICT'});
