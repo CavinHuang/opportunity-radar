@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {openDatabase} from '../src/db.mjs';import {opportunityScanCandidates} from '../src/opportunity-scan.mjs';
+const put=(db,id,title,description,status='new')=>db.put('sources',{id,title,description,url:'https://example.org/posts/'+id,author:id,status,createdAt:'2026-10-12T03:00:00Z'});
+test('empty scan reports no invented opportunities',()=>{const db=openDatabase();try{const x=opportunityScanCandidates(db);assert.equal(x.total,0);assert.deepEqual(x.items,[])}finally{db.close()}});
+test('concrete friction produces traceable unverified reasons without side effects',()=>{const db=openDatabase();try{put(db,'a','Cannot automate repetitive receipts workflow','I spend hours manually copying receipts between tools.');const r=opportunityScanCandidates(db);assert.equal(r.total,1);assert.equal(r.items[0].status,'unverified_candidate');assert.ok(r.items[0].reasons.length);assert.equal(r.items[0].sourceUrls[0],'https://example.org/posts/a');assert.equal(db.list('opportunities').length,0);}finally{db.close()}});
+test('dismissed items cannot generate suggestions',()=>{const db=openDatabase();try{put(db,'b','Cannot automate repetitive receipts workflow','manual data entry is painful','dismissed');assert.equal(opportunityScanCandidates(db).total,0)}finally{db.close()}});
