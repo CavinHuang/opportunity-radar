@@ -8,6 +8,7 @@ process.env.RADAR_DB=join(dir,'db.sqlite');
 process.env.RADAR_OWNER_TOKEN='jev-owner';
 process.env.RADAR_AGENT_TOKEN='jev-agent';
 process.env.JEV_API_KEY='jv_test_key';
+process.env.JEV_API_URL='https://jev.test/api/v1';
 const {jevSystemOne,extractAnswer}=await import('../src/jev.mjs');
 
 test('jevSystemOne calls System One API and extracts typed answers',async()=>{
