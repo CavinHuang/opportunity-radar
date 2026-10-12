@@ -44,6 +44,10 @@ export const CATALOG=Object.freeze([
 ,{id:'reddit-research',title:'Reddit · 海外社区需求观察',url:'https://www.reddit.com/',market:'International',language:'en-US',class:'manual_research',signalType:'firsthand_candidate',accessMode:'manual',quality:'high',reason:'在 r/SideProject、r/SaaS、r/Entrepreneur、r/selfhosted、r/productivity 中寻找用户原话和现有替代方案',caution:'Reddit 官方将于 2026-11-13 停止 RSS，未经授权不得抓取。请打开官方站点核查并手动保存帖子 URL'}
 ,{id:'x-social',title:'X.com · 海外产品痛点与趋势',url:'https://x.com/explore',market:'International',language:'en-US',class:'manual_research',signalType:'social_discussion',accessMode:'manual',quality:'medium',reason:'关注用户对 AI、开发者工具、效率软件的抱怨、替代品和产品更新',caution:'默认只允许手动保存帖子链接；自动搜索需要单独获得官方 API 授权、预算和速率额度'}
 
+,{id:'openrss-reddit-saas',title:'Open RSS · Reddit r/SaaS（实验）',url:'https://openrss.org/www.reddit.com/r/SaaS/',market:'International',language:'en-US',class:'firsthand_candidate',signalType:'social_discussion',accessMode:'experimental_rss',provider:'openrss',quality:'experimental',intervalMinutes:1440,reason:'第三方聚合 Reddit SaaS 社区讨论；需要逐条验证原帖与来源授权',caution:'非 Reddit 官方接口；Reddit RSS 将于 2026-11-13 停止，第三方服务可能随时不可用或受访问政策影响'}
+,{id:'openrss-reddit-sideproject',title:'Open RSS · Reddit r/SideProject（实验）',url:'https://openrss.org/www.reddit.com/r/SideProject/',market:'International',language:'en-US',class:'firsthand_candidate',signalType:'social_discussion',accessMode:'experimental_rss',provider:'openrss',quality:'experimental',intervalMinutes:1440,reason:'第三方社区项目讨论线索，发现开发者的实际问题和替代工具需求',caution:'地址与访问可用性需要实测；不保证在 Reddit RSS 退役后继续工作'}
+,{id:'rsshub-x-diygod',title:'RSSHub · X 用户动态（实验示例）',url:'https://rsshub.app/twitter/user/DIYgod',market:'International',language:'en-US',class:'social_discussion',signalType:'social_discussion',accessMode:'experimental_rss',provider:'rsshub',quality:'experimental',intervalMinutes:1440,reason:'展示第三方 X 帖子转 RSS 的可选接入方式，适合跟踪公开工具资讯',caution:'公共 RSSHub X 路由可能要求认证或失效；不保证稳定；仅在已获授权且符合平台规则时订阅'}
+
 ]);
 export function catalogList(store){
  const feeds=store.list('feeds');
@@ -56,13 +60,14 @@ export function catalogList(store){
    notice:'RSS 连通性与需求是否真实必须分开核验'};
  });
 }
-export function installCatalogFeed(store,id){
+export function installCatalogFeed(store,id,{acceptExperimentalRisk=false}={}){
  const c=CATALOG.find(x=>x.id===id);
  if(!c)throw Object.assign(new Error('目录中没有此来源'),{code:'CATALOG_NOT_FOUND',status:404});
  if(c.accessMode==='manual')throw Object.assign(new Error('此平台暂不提供可持续的公开 RSS 接入；请打开来源页面并使用手动保存网页线索'),{code:'CATALOG_MANUAL_ONLY',status:409});
+ if(c.accessMode==='experimental_rss'&&acceptExperimentalRisk!==true)throw Object.assign(new Error('第三方 RSS 未经持续可用性验证，请确认其访问条件和风险后再订阅'),{code:'EXPERIMENTAL_SOURCE_CONFIRMATION_REQUIRED',status:409});
  validateFeedUrl(c.url);
  const old=store.list('feeds').find(f=>f.url===c.url);
  if(old)return {item:old,alreadyInstalled:true};
  const f=addFeed(store,{url:c.url,title:c.title,market:c.market,intervalMinutes:c.intervalMinutes});
- return {item:store.put('feeds',{...f,catalogId:c.id,sourceClass:c.class,qualityHint:c.quality},f.revision),alreadyInstalled:false};
+ return {item:store.put('feeds',{...f,catalogId:c.id,sourceClass:c.class,qualityHint:c.quality,accessMode:c.accessMode||'rss',provider:c.provider||'native',sourceCaution:c.caution},f.revision),alreadyInstalled:false};
 }
