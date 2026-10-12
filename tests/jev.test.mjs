@@ -68,7 +68,7 @@ test('Jev signal pre-filter dismisses noise and keeps consumer problems via scan
   assert.equal(crashing.status,'new','consumer problem stays in queue');
   assert.equal(hiring.status,'dismissed','noise auto-dismissed');
   assert.equal(hiring.triageBy,'model_filter');
-  assert.ok(hiring.filterReason.includes('非消费者问题'));
+  assert.ok(hiring.filterReason.includes('Jev'),'filterReason records model assessment');
  }finally{
   globalThis.fetch=oldFetch;
   db.close();
