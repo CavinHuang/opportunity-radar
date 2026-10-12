@@ -1,3 +1,4 @@
+import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
 import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {experimentDecisionReview} from './experiment-decision.mjs';
@@ -104,6 +105,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
     if(pathname==='/api/operations/readiness'&&req.method==='GET')return send(res,200,readinessSummary(store,{ownerProtected:Boolean(process.env.RADAR_OWNER_TOKEN)}));
+    if(pathname==='/api/source-operations'&&req.method==='GET')return send(res,200,sourceOperations(store));
     if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
     if(pathname==='/api/discovery/clusters'&&req.method==='GET'){
