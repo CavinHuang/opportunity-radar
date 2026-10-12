@@ -24,3 +24,17 @@ test('additional international community feeds stay opt-in',()=>{
  const ids=['apple-askdifferent','android-enthusiasts','ux-stackexchange'];
  for(const id of ids){const x=CATALOG.find(c=>c.id===id);assert.ok(x);assert.match(x.url,/^https:\/\//);assert.notEqual(x.accessMode,'manual')}
 });
+
+test('third-party Reddit and X RSS templates require explicit opt-in and preserve provenance',()=>{
+ const store=openDatabase();try{
+  for(const id of ['openrss-reddit-saas','openrss-reddit-sideproject','rsshub-x-diygod']){
+   const c=catalogList(store).find(x=>x.id===id);assert.equal(c.accessMode,'experimental_rss');assert.equal(c.verifiedLive,false);
+   assert.throws(()=>installCatalogFeed(store,id),{code:'EXPERIMENTAL_SOURCE_CONFIRMATION_REQUIRED'});
+   const installed=installCatalogFeed(store,id,{acceptExperimentalRisk:true});
+   assert.equal(installed.item.accessMode,'experimental_rss');
+   assert.equal(installed.item.provider,c.provider);
+   assert.equal(installed.item.catalogId,id);
+   assert.equal(installCatalogFeed(store,id,{acceptExperimentalRisk:true}).alreadyInstalled,true);
+  }
+ }finally{store.close()}
+});
