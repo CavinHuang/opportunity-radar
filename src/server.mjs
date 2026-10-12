@@ -1,3 +1,4 @@
+import {verificationContext,verifyProblem} from './problem-verification.mjs';
 import {splitOpportunityIdentity,opportunityIdentityDossier,opportunityIdentityIndex} from './opportunity-identity.mjs';
 import {reviewHomeOpportunity,homeDiscoveryDashboard,decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
@@ -143,6 +144,15 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    const problemCheck=/^\/api\/problem-verification\/([^/]+)$/.exec(pathname);
+    if(problemCheck&&req.method==='GET'){
+      const id=decodeURIComponent(problemCheck[1]);
+      return send(res,200,{...verificationContext(store,id),review:store.get('problem_verifications',id)||null});
+    }
+    if(problemCheck&&req.method==='POST'){
+      const id=decodeURIComponent(problemCheck[1]);
+      return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
+    }
     const deepResearch=/^\/api\/opportunity-scan\/([^/]+)\/research$/.exec(pathname);
     if(deepResearch&&req.method==='POST')return send(res,200,{draft:await draftOpportunityResearch(store,decodeURIComponent(deepResearch[1]))});
     const researchReview=/^\/api\/opportunity-scan\/([^/]+)\/review$/.exec(pathname);

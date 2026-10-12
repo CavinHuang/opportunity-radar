@@ -70,7 +70,7 @@ function renderBrief(){
     ${matches.map(o=>`<div class="source-row"><div class="grow"><div class="flex"><strong>${esc(o.title)}</strong><span class="tag">AI 初筛 · 待人工核查</span></div><p class="subtext">${esc(o.summary||'')}</p><p class="subtext">问题档案：使用主体 ${esc(o.problemCase?.signals?.actor?.quote||'待核查')} · 具体任务 ${esc(o.problemCase?.signals?.task?.quote||'待核查')}</p><p class="subtext">障碍 ${esc(o.problemCase?.signals?.obstacle?.quote||'待核查')} · 当前办法 ${esc(o.problemCase?.signals?.workaround?.quote||'未知')}</p><p class="subtext">影响 / 频率：${esc(o.problemCase?.signals?.impact?.quote||'未量化')} / ${esc(o.problemCase?.signals?.frequency?.quote||'未说明')} · 下一步：${esc(o.problemCase?.nextVerification||'核对原帖')}</p><p class="subtext">真实问题线索：${esc((o.problemEvidence?.criteria||[]).join(" · ")||"待核查")} · 有具体问题的原始帖子 ${o.problemEvidence?.qualifiedSignals?.length||0} 条</p><p class="subtext">AI 保留理由：${esc(o.aiReason)}</p><p class="subtext">本次状态：${o.novelty==='new_since_previous_scan'?'首次发现':o.novelty==='new_evidence'?'新证据':'此前已出现'} · 变化依据：${esc(o.changeReason||'尚无历史对比')} · 累计出现 ${Number(o.observations||1)} 次 · 已记录来源 ${Number(o.knownSources||o.sourceUrls.length)} 条 · 人工反馈：${o.feedback?.verdict==='useful'?'有价值':o.feedback?.verdict==='false_positive'?'误报':'未反馈'}</p><p class="subtext">原始线索 ${o.signalCount} 条 · ${esc((o.domains||[]).join('、')||'未分类')}</p><div class="flex" style="gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" data-action="home-save" data-id="${esc(o.id)}" ${o.decision?.action==='save'?'disabled':''}>${o.decision?.action==='save'?'已收藏':'收藏'}</button>
       <button class="btn btn-sm" data-action="home-dismiss" data-id="${esc(o.id)}">忽略</button><button class="btn btn-sm" data-action="home-feedback" data-status="useful" data-id="${esc(o.id)}">有价值</button><button class="btn btn-sm" data-action="home-feedback" data-status="false_positive" data-id="${esc(o.id)}">误报</button>
-      <button class="btn btn-sm" data-action="home-research" data-id="${esc(o.id)}">深入研究</button>
+      <button class="btn btn-sm" data-action="home-research" data-id="${esc(o.id)}">深入研究</button><button class="btn btn-sm" data-action="verify-problem" data-id="${esc(o.id)}">核查真实问题</button>
       <button class="btn btn-sm" data-action="home-convert" data-id="${esc(o.id)}">转入机会池</button>
       <a class="external" target="_blank" rel="noopener noreferrer" href="${esc(o.sourceUrls[0])}">查看原帖</a></div></div></div>`).join('')||'<p class="subtext">暂无 AI 筛选通过的候选。可能还没有信息源、模型未配置，或模型没有发现足够具体的问题。</p>'}</section>`;
   const h=S.homeDiscovery||{history:[],funnel:{},saved:[],dismissed:[]};
@@ -646,6 +646,22 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'verify-problem':{
+    const result=await api('/problem-verification/'+encodeURIComponent(id));
+    const hints=result.firsthand.map(x=>'<p class="subtext">'+esc(x.sourceId)+'：'+esc(x.level)+' · <a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">原帖</a></p>').join('');
+    const fields='<div class="field wide"><strong>来源类型提示（非身份核验）</strong>'+hints+'</div>'+
+      '<div class="field wide"><label>已查看原帖并确认当事人亲身经历？</label><select name="firsthand"><option value="no">尚未确认</option><option value="yes">已人工确认</option></select></div>'+
+      field('workaround','当前实际解决办法',{wide:true,type:'textarea'})+
+      '<div class="field wide"><label>问题的实际影响是否已核实？</label><select name="impact"><option value="no">尚未核实</option><option value="yes">已人工核实</option></select></div>'+
+      '<div class="field wide"><label>现有替代方案是否足够好？</label><select name="adequacy"><option value="unknown">不知道</option><option value="adequate">足够好</option><option value="inadequate">不足以解决</option></select></div>'+
+      '<div class="field wide"><label>核查结论</label><select name="decision"><option value="needs_more_evidence">继续取证</option><option value="worth_interviewing">值得访谈</option><option value="not_a_real_problem">非真实问题</option></select></div>'+
+      field('notes','原帖核查依据（至少10字）',{wide:true,type:'textarea',required:true});
+    modal('真实用户问题核查 · '+result.candidate.title,fields,async d=>{
+      await api('/problem-verification/'+encodeURIComponent(id),{method:'POST',body:{fingerprint:result.fingerprint,firsthandConfirmed:d.firsthand==='yes',actualWorkaround:d.workaround,impactConfirmed:d.impact==='yes',alternativeAdequacy:d.adequacy,decision:d.decision,notes:d.notes,expected_revision:result.review?.revision||0}});
+      toast('已保存人工核查结论');
+    });
     break;
   }
   case 'home-feedback':{
