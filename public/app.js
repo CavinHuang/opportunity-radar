@@ -70,7 +70,7 @@ function renderBrief(){
     ${matches.map(o=>`<div class="source-row"><div class="grow"><div class="flex"><strong>${esc(o.title)}</strong><span class="tag">AI 初筛 · 待人工核查</span></div><p class="subtext">${esc(o.summary||'')}</p><p class="subtext">问题档案：使用主体 ${esc(o.problemCase?.signals?.actor?.quote||'待核查')} · 具体任务 ${esc(o.problemCase?.signals?.task?.quote||'待核查')}</p><p class="subtext">障碍 ${esc(o.problemCase?.signals?.obstacle?.quote||'待核查')} · 当前办法 ${esc(o.problemCase?.signals?.workaround?.quote||'未知')}</p><p class="subtext">影响 / 频率：${esc(o.problemCase?.signals?.impact?.quote||'未量化')} / ${esc(o.problemCase?.signals?.frequency?.quote||'未说明')} · 下一步：${esc(o.problemCase?.nextVerification||'核对原帖')}</p><p class="subtext">真实问题线索：${esc((o.problemEvidence?.criteria||[]).join(" · ")||"待核查")} · 有具体问题的原始帖子 ${o.problemEvidence?.qualifiedSignals?.length||0} 条</p><p class="subtext">AI 保留理由：${esc(o.aiReason)}</p><p class="subtext">本次状态：${o.novelty==='new_since_previous_scan'?'首次发现':o.novelty==='new_evidence'?'新证据':'此前已出现'} · 变化依据：${esc(o.changeReason||'尚无历史对比')} · 累计出现 ${Number(o.observations||1)} 次 · 已记录来源 ${Number(o.knownSources||o.sourceUrls.length)} 条 · 人工反馈：${o.feedback?.verdict==='useful'?'有价值':o.feedback?.verdict==='false_positive'?'误报':'未反馈'}</p><p class="subtext">原始线索 ${o.signalCount} 条 · ${esc((o.domains||[]).join('、')||'未分类')}</p><div class="flex" style="gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" data-action="home-save" data-id="${esc(o.id)}" ${o.decision?.action==='save'?'disabled':''}>${o.decision?.action==='save'?'已收藏':'收藏'}</button>
       <button class="btn btn-sm" data-action="home-dismiss" data-id="${esc(o.id)}">忽略</button><button class="btn btn-sm" data-action="home-feedback" data-status="useful" data-id="${esc(o.id)}">有价值</button><button class="btn btn-sm" data-action="home-feedback" data-status="false_positive" data-id="${esc(o.id)}">误报</button>
-      <button class="btn btn-sm" data-action="home-research" data-id="${esc(o.id)}">深入研究</button><button class="btn btn-sm" data-action="verify-problem" data-id="${esc(o.id)}">核查真实问题</button>
+      <button class="btn btn-sm" data-action="home-research" data-id="${esc(o.id)}">深入研究</button><button class="btn btn-sm" data-action="verify-problem" data-id="${esc(o.id)}">核查真实问题</button><button class="btn btn-sm" data-action="problem-interviews" data-id="${esc(o.id)}">访谈验证</button>
       <button class="btn btn-sm" data-action="home-convert" data-id="${esc(o.id)}">转入机会池</button>
       <a class="external" target="_blank" rel="noopener noreferrer" href="${esc(o.sourceUrls[0])}">查看原帖</a></div></div></div>`).join('')||'<p class="subtext">暂无 AI 筛选通过的候选。可能还没有信息源、模型未配置，或模型没有发现足够具体的问题。</p>'}</section>`;
   const h=S.homeDiscovery||{history:[],funnel:{},saved:[],dismissed:[]};
@@ -646,6 +646,16 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'problem-interviews':{
+    const board=await api('/problem-interviews/'+encodeURIComponent(id));
+    const active=board.plans.find(x=>x.status==='active');
+    if(!active){
+      modal('建立可证伪访谈计划',field('audience','目标用户及场景',{wide:true,type:'textarea',required:true})+field('hypothesis','问题假设',{wide:true,type:'textarea',required:true})+field('falsifier','什么证据会让你停止？',{wide:true,type:'textarea',required:true})+field('questions','访谈问题（请避免诱导性问题）',{wide:true,type:'textarea',required:true})+field('minInterviews','访谈人数目标（1–20）',{type:'number',value:3}),async d=>api('/problem-interviews/'+encodeURIComponent(id),{method:'POST',body:{...d,minInterviews:Number(d.minInterviews)}}));
+    }else{
+      modal('访谈验证 · '+board.candidate.title,'<div class="field wide"><p>假设：'+esc(active.hypothesis)+'</p><p>停止条件：'+esc(active.falsifier)+'</p><p>已记录访谈 '+active.observations.length+' / '+active.minInterviews+'</p></div>'+field('participant','匿名受访者标识',{required:true})+field('scenario','亲身问题场景',{wide:true,type:'textarea',required:true})+field('actualBehavior','实际行为与现在如何解决',{wide:true,type:'textarea',required:true})+field('contradiction','反例或反证（无则说明尚未取得）',{wide:true,type:'textarea',required:true})+field('sourceUrl','可选证据 HTTPS 链接',{wide:true}),async d=>api('/problem-interviews/'+encodeURIComponent(id)+'/'+encodeURIComponent(active.id)+'/observations',{method:'POST',body:d}));
+    }
     break;
   }
   case 'verify-problem':{
