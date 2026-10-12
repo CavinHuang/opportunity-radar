@@ -107,3 +107,16 @@ test('product delivery cannot use non-GitHub owner attestation to bypass G1',()=
     assert.throws(()=>s.ownerDecision(p.id,{action:'accept',submissionId:sub.id,reason:'reviewed'}),{code:'GITHUB_G1_REQUIRED'});
   }finally{db.close();}
 });
+
+test('project event stream returns the LATEST window even after 100+ events',()=>{
+ const store=openDatabase();
+ try{
+  for(let i=1;i<=110;i++)store.event('test.fill','e'+i,'test',{i},'proj-x');
+  const latest=store.eventsLatest(50,'proj-x');
+  assert.equal(latest.length,50);
+  assert.equal(latest[0].seq,61,'oldest in window is seq 61');
+  assert.equal(latest.at(-1).seq,110,'newest event is visible');
+  const legacy=store.events(0,'proj-x');
+  assert.ok(legacy.length<=100);
+ }finally{store.close();}
+});

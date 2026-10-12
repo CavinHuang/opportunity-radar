@@ -36,7 +36,7 @@ test('campaign creation validates project, name, goal, channels, range and budge
   assert.equal(c.cancelReason,null);assert.equal(c.retrospective,null);
   assert.ok(db.events(0,p.id).some(x=>x.kind==='campaign.created'));
   // paused projects reject campaign writes
-  s.ownerDecision(p.id,{action:'pause',reason:'budget pause'});
+  s.ownerDecision(p.id,{action:'pause',reason:'budget pause',wakeCondition:'满足登记的条件后继续'});
   assert.throws(()=>createCampaign(db,p.id,{name:'X',goal:'Y',channels:['blog']}),e=>e.code==='PROJECT_NOT_ACTIVE');
   assert.throws(()=>adjustCampaign(db,p.id,c.id,{goal:'Y',expected_revision:c.revision}),e=>e.code==='PROJECT_NOT_ACTIVE');
  }finally{db.close();}

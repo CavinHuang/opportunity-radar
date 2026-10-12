@@ -132,12 +132,17 @@ export function createService(store, options={}){
     if(action==='pause'||action==='stop'||action==='resume'){
       if(action==='resume' && p.status!=='paused')throw err('BAD_STATE','只有暂停项目才能恢复',409);
       if(action==='resume'&&store.list('projects').some(x=>x.id!==id&&!['paused','stopped','archived'].includes(x.status)))throw err('ACTIVE_EXPERIMENT_EXISTS','已有其他主实验',409);
+      // PRD D45: pausing must record the wake condition — what has to be true
+      // before continuing — and resuming requires acknowledging it explicitly.
+      const wakeCondition=action==='pause'?{text:required(data.wakeCondition,'wakeCondition'),at:now()}:p.wakeCondition||null;
+      if(action==='resume'&&p.wakeCondition&&data.acknowledgeWakeCondition!==true)
+       throw err('WAKE_CONDITION_ACK_REQUIRED','恢复前需对照暂停时登记的唤醒条件并在请求中确认（acknowledgeWakeCondition）',409);
       const status=action==='pause'?'paused':action==='stop'?'stopped':'research';
       // Resume previously left stage behind (e.g. 'promotion' with status 'research');
       // stage now follows status so the read model stays consistent.
       const stage=action==='resume'?'research':p.stage;
-      const updated=store.put('projects',{...p,status,stage,externalProcessState:'unknown',lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
-      event(`project.${action}`,id,owner,{reason:data.reason||'',externalExecutionConfirmed:false},id);return updated;
+      const updated=store.put('projects',{...p,status,stage,externalProcessState:'unknown',wakeCondition,lastDecision:action==='pause'?'已暂停':action==='stop'?'已停止授权（外部执行未确认停止）':'已批准恢复，待外部状态检查'},p.revision);
+      event(`project.${action}`,id,owner,{reason:data.reason||'',externalExecutionConfirmed:false,wakeConditionAcknowledged:action==='resume'?data.acknowledgeWakeCondition===true:undefined,wakeCondition:p.wakeCondition?.text??null},id);return updated;
     }
     if(action==='archive'){
       // G01: an explicit, owner-approved close-out. Archived projects keep all history;
@@ -262,7 +267,30 @@ export function createService(store, options={}){
     // transaction, so the growth page and the ledger can never disagree.
     if(hasLedgerMirror(entry))mirrorLedgerMetric(store,id,entry);
     return entry;});}
-  function summaryLedger(entries){const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
+  function retractLedger(id,entryId,data){getProject(id);const reason=required(data.reason,'reason');
+   return store.transaction(()=>{
+    const entry=get('ledger',entryId);if(!entry||entry.projectId!==id)throw err('NOT_FOUND','账本条目不存在',404);
+    if(entry.retractedAt)throw err('BAD_REQUEST','该条目已撤回');
+    const next=store.put('ledger',{...entry,retractedAt:now(),retractReason:reason},entry.revision);
+    event('ledger.retracted',next.id,owner,{type:next.type,value:next.value,reason},id);
+    for(const m of store.list('growth_metrics').filter(x=>x.projectId===id&&x.status==='active'&&x.dedupKey==='ledger:'+entryId)){
+     const g=store.put('growth_metrics',{...m,status:'retracted',retractedAt:now(),retractReason:'账本条目已撤回'},m.revision);
+     event('growth.metric.retracted',g.id,'owner',{ledgerId:entryId},id);
+    }
+    return next;});}
+  function reviseLedger(id,entryId,data){getProject(id);const value=nonNegative(data.value,'value');const reason=required(data.reason,'reason');
+   return store.transaction(()=>{
+    const entry=get('ledger',entryId);if(!entry||entry.projectId!==id)throw err('NOT_FOUND','账本条目不存在',404);
+    if(entry.retractedAt)throw err('BAD_REQUEST','已撤回的条目不能修订');
+    const retracted=store.put('ledger',{...entry,retractedAt:now(),retractReason:'修订为正确值：'+reason},entry.revision);
+    const corrected=store.put('ledger',{...entry,id:randomUUID(),value,retractedAt:null,correctsId:entry.id,notes:(entry.notes?entry.notes+'；':'')+'修订自已撤回的记录',createdAt:now(),at:now()},0);
+    event('ledger.revised',corrected.id,owner,{correctsId:entry.id,oldValue:entry.value,newValue:value,reason},id);
+    for(const m of store.list('growth_metrics').filter(x=>x.projectId===id&&x.status==='active'&&x.dedupKey==='ledger:'+entry.id)){
+     store.put('growth_metrics',{...m,status:'retracted',retractedAt:now(),retractReason:'账本条目已修订'},m.revision);
+    }
+    if(hasLedgerMirror(corrected))mirrorLedgerMetric(store,id,corrected);
+    return corrected;});}
+  function summaryLedger(entries){entries=entries.filter(x=>!x.retractedAt);const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
 
   function tool(name,p={}){
     if(name==='project.get_context'){const x=getFullProject(p.project_id);return {project:{id:x.id,name:x.name,status:x.status,stage:x.stage,agentLastSync:x.agentLastSync,milestones:x.milestones,tasks:x.tasks,evidence:x.evidence,submissions:x.submissions,decisions:x.decisions.filter(d=>['pending','approved','rejected'].includes(d.status)).map(d=>({id:d.id,kind:d.kind,summary:d.summary,status:d.status}))},baseline:baseline(p.project_id),researchBasis:x.researchBasis||{status:'unlinked'},serverTime:now()};}
@@ -341,5 +369,5 @@ export function createService(store, options={}){
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);
   }
   const tools=['project.get_context','project.get_next_work','project.watch_changes','task.claim','task.upsert','task.transition','task.release','progress.report','evidence.attach','issue.raise_blocker','decision.request','handoff.submit'];
-  return {createOpportunity,changeOpportunityStatus,attachSignalToOpportunity,linkDiscoveryCluster,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,scheduleContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
+  return {createOpportunity,changeOpportunityStatus,retractLedger,reviseLedger,attachSignalToOpportunity,linkDiscoveryCluster,brief,startExperiment,prepareKickoff,getFullProject,ownerDecision,saveContent,scheduleContent,reviewContent,addLedger,summaryLedger,tool,tools,store};
 }

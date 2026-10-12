@@ -35,7 +35,7 @@ test('HTTP contract enforces role separation and end-to-end workflow',async()=>{
   assert.equal(bypass.status,409);assert.equal(bypass.data.error,'GITHUB_AUTOMATED_CHECK_REQUIRED');
   const decision=await call('/api/agent/tools/decision.request','POST',{project_id:pid,kind:'scope_change',summary:'Need a larger scope',idempotency_key:'int-request-1'},agent);assert.equal(decision.data.result.status,'pending');
   assert.equal((await call('/api/projects/'+pid)).data.baselines.length,1);
-  const pause=await call('/api/projects/'+pid+'/decide','POST',{action:'pause',reason:'budget check'});assert.equal(pause.status,200);
+  const pause=await call('/api/projects/'+pid+'/decide','POST',{action:'pause',reason:'budget check',wakeCondition:'满足登记的条件后继续'});assert.equal(pause.status,200);
   const blocked=await call('/api/agent/tools/task.upsert','POST',{project_id:pid,milestone_id:p.milestones[1].id,title:'Should fail',idempotency_key:'paused-task'},agent);assert.equal(blocked.status,409);
   const home=await fetch(base+'/');assert.equal(home.status,200);assert.ok((await home.text()).includes('northstar')===false); // title is Northstar; UI mount root is static
   const staticJs=await fetch(base+'/app.js');assert.equal(staticJs.status,200);assert.ok((await staticJs.text()).includes('机会简报'));

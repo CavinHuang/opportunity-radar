@@ -72,7 +72,7 @@ test('review routes are owner-only and state changes require explicit confirmati
   assert.equal((await call(`/api/projects/${pid}`)).data.status,'research');
 
   // pause requires confirmation and then really pauses
-  const pause=await call(`/api/projects/${pid}/reviews/${reviewId}/decide`,'POST',{choice:'pause',reason:'外部进度慢于预期，先暂停并核对状态',confirm:true});
+  const pause=await call(`/api/projects/${pid}/reviews/${reviewId}/decide`,'POST',{choice:'pause',reason:'外部进度慢于预期，先暂停并核对状态',wakeCondition:'外部状态核对完成且重新具备推进条件',confirm:true});
   assert.equal(pause.status,200);
   assert.deepEqual(pause.data.item.decision.appliedStateChange,{from:'research',to:'paused'});
   assert.equal(pause.data.item.decision.baselineRevisionAtDecision,1);

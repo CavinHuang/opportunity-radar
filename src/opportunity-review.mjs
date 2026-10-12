@@ -242,7 +242,7 @@ export function decideOpportunityReview(store,projectId,reviewId,data){
   }
   if(openRiskKinds.length&&data.acceptOpenRisks!==true)
    throw fail('OPEN_RISKS_ACK_REQUIRED','该选项存在未解决问题（'+openRiskKinds.join('、')+'）；先处理问题，或确认已知风险后再记录该决定',409);
-  const applied=applyStateChange(store,project,choice);
+   const applied=applyStateChange(store,project,choice,data);
   const decision={choice,reason,decidedAt:now(),decidedBy:'owner',confirmed:true,
    baselineRevisionAtDecision:project.baselines.at(-1)?.revision??null,
    openRiskKinds,acknowledgedOpenRisks:openRiskKinds.length>0,
@@ -256,7 +256,7 @@ export function decideOpportunityReview(store,projectId,reviewId,data){
  });
 }
 
-function applyStateChange(store,project,choice){
+function applyStateChange(store,project,choice,data={}){
  const from=project.status;
  let to=null;
  if(choice==='pause'){
@@ -270,10 +270,23 @@ function applyStateChange(store,project,choice){
  if(choice==='continue'&&from==='paused'){
   if(store.list('projects').some(x=>x.id!==project.id&&!['paused','stopped','archived'].includes(x.status)))
    throw fail('ACTIVE_EXPERIMENT_EXISTS','已有其他主实验在推进，不能同时恢复',409);
+  if(project.wakeCondition&&data.acknowledgeWakeCondition!==true)
+   throw fail('WAKE_CONDITION_ACK_REQUIRED','恢复前需对照暂停时登记的唤醒条件并确认（acknowledgeWakeCondition）',409);
   to='research';
  }
  if(!to)return null;
- store.put('projects',{...project,status:to,externalProcessState:'unknown',
+ // PRD D45: pausing must record the wake condition; resuming requires the
+ // owner to acknowledge it (decided at the review, same rule as ownerDecision).
+ let wakeCondition=project.wakeCondition||null;
+ if(to==='paused'){
+  const wake=String(data.wakeCondition||'').trim();
+  if(!wake)throw fail('BAD_REQUEST','暂停必须登记唤醒条件（满足什么条件才继续）',400);
+  wakeCondition={text:wake,at:now()};
+ }
+ // Resume must move stage along with status — the same fix service.ownerDecision
+ // already carries; without it a paused promotion project resumes as research/promotion.
+ const stage=to==='research'?'research':project.stage;
+ store.put('projects',{...project,status:to,stage,wakeCondition,externalProcessState:'unknown',
   lastDecision:'复盘决定：'+CHOICE_LABELS[choice]+'（依据见复盘记录）'},project.revision);
  return {from,to};
 }
