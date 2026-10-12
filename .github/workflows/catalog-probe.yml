@@ -23,3 +23,7 @@ jobs:
       - run: npm run catalog:probe
         env:
           PROBE_CATALOG_IDS: v2ex-qna,v2ex-life,v2ex-apple,ask-hn,superuser,webapps,se-lifehacks,se-money,se-parenting,se-diy,lobsters,se-travel,se-pets,se-fitness,se-mechanics,se-cooking,se-interpersonal,habr-best,softwarerecs,hardwarerecs,se-photo,se-bicycles,se-outdoors,se-gardening,se-workplace,sspai,es-stackoverflow
+      - name: Probe newly added international RSS channels
+        run: npm run catalog:probe
+        env:
+          PROBE_CATALOG_IDS: ph-launches,apple-askdifferent,android-enthusiasts,ux-stackexchange
