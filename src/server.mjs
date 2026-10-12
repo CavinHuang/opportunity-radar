@@ -1,4 +1,4 @@
-import {scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
+import {decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
@@ -148,6 +148,23 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(researchReview&&req.method==='POST')return send(res,200,{item:recordResearchReview(store,decodeURIComponent(researchReview[1]),await body(req))});
     if(pathname==='/api/opportunity-scoreboard'&&req.method==='GET')return send(res,200,opportunityScoreboard(store));
     if(pathname==='/api/opportunity-scoreboard/config'&&req.method==='POST')return send(res,200,{item:updateScorecardConfig(store,await body(req))});
+    const homeDecision=/^\/api\/home\/opportunities\/([^/]+)\/decision$/.exec(pathname);
+    if(homeDecision&&req.method==='POST'){
+      const cid=decodeURIComponent(homeDecision[1]);
+      return send(res,200,{item:decideHomeOpportunity(store,cid,await body(req))});
+    }
+    const homeConvert=/^\/api\/home\/opportunities\/([^/]+)\/convert$/.exec(pathname);
+    if(homeConvert&&req.method==='POST'){
+      const cid=decodeURIComponent(homeConvert[1]);
+      const current=homeOpportunitySnapshot(store).items.find(x=>x.id===cid);
+      if(!current)throw Object.assign(new Error('候选已忽略或失效'),{code:'CANDIDATE_CHANGED',status:409});
+      const data=await body(req);
+      const urls=current.sourceUrls.filter(x=>x.startsWith('https://'));
+      if(!urls.length)throw Object.assign(new Error('候选缺少真实来源'),{code:'MISSING_EVIDENCE',status:409});
+      return send(res,201,{item:service.createOpportunity({title:current.title,problem:current.summary||current.title,
+        market:'International',risk:'AI 预筛未经人工验证；须调查现有竞品与独立需求',
+        sources:urls.map(url=>({url,quote:current.summary||current.title,independent:false,origin:'ai_candidate'}))})});
+    }
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
       const scan=await scanSources(store,{});
