@@ -35,6 +35,7 @@ docker compose up -d --build
 完整指南见 [docs/DEPLOY.md](docs/DEPLOY.md)；**Dokploy 用户**直接看 [docs/DOKPLOY.md](docs/DOKPLOY.md)（Dockerfile 构建类型原生适配，含 Traefik 自动 HTTPS）。
 
 ## 最新更新（v2.10 → v2.16）
+- **Jev System One 信号预筛**：配置 `JEV_API_KEY`（走 OpenRouter `openrouter.ai/~typesafe/jev-latest`）即可自动过滤非消费者问题信号，带校准概率与判定理由，可在界面恢复。
 
 - **v2.10–v2.11（Phase D/E）**：证据驱动的机会复盘与决策（继续/调整/暂停/停止必须显式确认，永不自动宣布「已验证」）；SQLite 版本化迁移、备份/恢复校验、加载/错误/离线状态与端到端回归。
 - **v2.12 安全加固**：DNS rebinding 防护（无 token 时仅接受回环 Host）、owner 幂等键（`Idempotency-Key`）、移除无防护的抓取死代码、前端渲染防崩。

@@ -57,6 +57,9 @@ Dokploy 控制台 → **Create Project** → **Create Service** → **Applicatio
 | `RADAR_FEED_URLS` | 可选 | 逗号分隔的 HTTPS RSS 源；也可部署后在界面里订阅 |
 | `RADAR_LLM_BASE_URL` / `RADAR_LLM_API_KEY` / `RADAR_LLM_MODEL` | 可选 | 启用 AI 起草（DeepSeek 等 OpenAI 兼容端点） |
 | `GITHUB_TOKEN` | 可选 | 交付证据的 GitHub CI 核验 |
+| `JEV_API_KEY` | 可选 | Jev System One 信号预筛（默认走 `https://openrouter.ai/~typesafe/jev-latest`） |
+| `JEV_API_URL` | 可选 | 覆盖 Jev 端点（默认已指向 OpenRouter） |
+| `JEV_MODEL` | 可选 | 覆盖 Jev 模型标识 |
 
 > `RADAR_DB`、`RADAR_HOST`、`RADAR_PORT` 已由 Dockerfile 内置默认值（`/app/.data/radar.sqlite`、`0.0.0.0`、`4177`），无需重复设置。
 

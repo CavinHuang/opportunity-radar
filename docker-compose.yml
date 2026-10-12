@@ -31,6 +31,9 @@ services:
       RADAR_LLM_API_KEY: ${RADAR_LLM_API_KEY:-}
       RADAR_LLM_MODEL: ${RADAR_LLM_MODEL:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      JEV_API_KEY: ${JEV_API_KEY:-}
+      JEV_API_URL: ${JEV_API_URL:-https://openrouter.ai/~typesafe/jev-latest}
+      JEV_MODEL: ${JEV_MODEL:-}
       RADAR_ALLOWED_HOSTS: ${RADAR_ALLOWED_HOSTS:-}
       RADAR_REVIEW_CYCLE_DAYS: ${RADAR_REVIEW_CYCLE_DAYS:-}
     ports:

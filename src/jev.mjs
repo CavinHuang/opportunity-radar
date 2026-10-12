@@ -4,7 +4,7 @@
 // Jev 判定永远只是参考信号——不替代人工验收、不改变项目状态、不宣布机会已验证。
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 
-export const JEV_DEFAULT_URL='https://jev-agent.com/api/v1';
+export const JEV_DEFAULT_URL='https://openrouter.ai/~typesafe/jev-latest';
 
 export function jevConfig(env=process.env){
  const apiKey=env.JEV_API_KEY||'';
@@ -21,7 +21,7 @@ export async function jevSystemOne(state,questions,{apiKey,apiUrl=JEV_DEFAULT_UR
  if(!questions||!Object.keys(questions).length)throw fail('BAD_REQUEST','questions 不能为空');
  const body={state,questions};
  if(model)body.model=model;
- const response=await fetchImpl(`${apiUrl.replace(/\/+$/,'')}/systemone`,{
+ const response=await fetchImpl(apiUrl,{
   method:'POST',
   headers:{'Content-Type':'application/json',Authorization:`Bearer ${apiKey}`},
   body:JSON.stringify(body),
