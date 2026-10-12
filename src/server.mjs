@@ -113,7 +113,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const discoveryLink=/^\/api\/discovery\/clusters\/([a-zA-Z0-9_-]+)\/link$/.exec(pathname);
     if(discoveryLink&&req.method==='POST')return send(res,200,service.linkDiscoveryCluster(discoveryLink[1],await body(req)));
     if(pathname==='/api/source-catalog'&&req.method==='GET')return send(res,200,{items:catalogList(store)});
-    if(pathname==='/api/source-catalog/install'&&req.method==='POST')return send(res,200,installCatalogFeed(store,(await body(req)).id));
+    if(pathname==='/api/source-catalog/install'&&req.method==='POST'){const data=await body(req);return send(res,200,installCatalogFeed(store,data.id,{acceptExperimentalRisk:data.acceptExperimentalRisk===true}));}
     if(pathname==='/api/sources/diagnostics'&&req.method==='GET')return send(res,200,sourceDiagnostics(store,{limit:u.searchParams.get('limit')??8}));
     const retryRoute=/^\/api\/sources\/([^/]+)\/retry$/.exec(pathname);
     if(retryRoute&&req.method==='POST')return send(res,200,{result:await retryFailedFeed(store,retryRoute[1],await body(req))});
