@@ -189,11 +189,12 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
            const stateText=(f.title+' · '+f.description).slice(0,800);
            const result=await jevSystemOne(stateText,{
             is_consumer_problem:{type:'noul',instructions:'判断这条信息是否描述了普通消费者遇到的具体问题、工具或产品的使用摩擦、未满足的需求。招聘求职、广告赞助、纯产品公告、优惠促销、与产品使用无关的闲聊、无用户摩擦的纯技术教程判为 false。拿不准时判 true（宁可多留给人工）。',criteria:{true:'是消费者问题或产品使用摩擦',false:'不是消费者问题（招聘/广告/公告/闲聊/纯教程等）'}}
-           },{apiKey:jev.apiKey,apiUrl:jev.apiUrl});
+           },{apiKey:jev.apiKey,apiUrl:jev.apiUrl,model:process.env.JEV_MODEL});
            const ans=extractAnswer(result,'is_consumer_problem');
-           if(ans&&ans.type==='noul'&&ans.value<0.5){
-            modelResults.assignments.set(f.key,{verdict:'noise',reason:'Jev 判定为非消费者问题（P='+ans.value.toFixed(2)+'）',model:'jev'});
-            modelResults.modelFiltered++;
+           if(ans&&ans.type==='noul'){
+            const noise=ans.value<0.5;
+            modelResults.assignments.set(f.key,{verdict:noise?'noise':'consumer_problem',probability:ans.value,reason:'Jev 消费者问题概率 '+Math.round(ans.value*100)+'%',model:'jev'});
+            if(noise)modelResults.modelFiltered++;
            }
           }
          }catch(e){
@@ -214,10 +215,12 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
           for(const f of fresh){
             const mf=modelResults.assignments.get(f.id);
             const byModel=mf&&mf.verdict==='noise';
+            const jevEvaluated=mf&&mf.probability!==undefined;
             const entry={...f.candidate,id:f.id,url:f.canonical,feed:feed.url,feedIds:[feed.id],market:feed.market,sourceClass:feed.sourceClass||'unknown',publishedAt:f.candidate.publishedAt||null,createdAt:time(),
               status:f.mute?'dismissed':byModel?'dismissed':'new',
               muteRule:f.mute?{id:f.mute.id,keyword:f.mute.keyword}:null,
               triageBy:byModel?'model_filter':null,
+              jevProbability:jevEvaluated?mf.probability:null,jevVerdict:jevEvaluated?mf.verdict:null,
               filterReason:byModel?mf.reason:null,filterModel:byModel?mf.model:null,filterAt:byModel?time():null,
               triagedAt:(f.mute||byModel)?time():null,linkedOpportunityId:null};
             store.put('sources',entry);
