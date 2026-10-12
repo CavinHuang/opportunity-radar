@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import {evaluateMuteRules} from './mute-rules.mjs';
 import {filterNewCandidates} from './model-filter.mjs';
+import {jevSystemOne,extractAnswer,jevConfig} from './jev.mjs';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { configuredFeeds, parseFeed } from './signals.mjs';
@@ -148,7 +149,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
   if(requested&&feeds.length!==requested.length)throw error('NOT_FOUND','指定的信息源不存在',404);
   if(onlyDue)feeds=feeds.filter(f=>f.enabled&&(!f.nextScanAt||!Number.isFinite(Date.parse(f.nextScanAt))||Date.parse(f.nextScanAt)<=nowMs));
   if(feeds.length>30)throw error('SOURCE_LIMIT','最多扫描 30 个信息源');
-  const result={feeds:feeds.length,received:0,added:0,filtered:0,duplicates:0,notModified:0,skipped:0,errors:[],details:[]};
+  const result={feeds:feeds.length,received:0,added:0,filtered:0,duplicates:0,muted:0,modelFiltered:0,notModified:0,skipped:0,errors:[],details:[]};
   scansInProgress.add(store);
   try{
     for(const feed of feeds){
@@ -177,9 +178,31 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
           const mute=evaluateMuteRules(store.list('mute_rules'),candidate);
           fresh.push({candidate,canonical,id,mute});
         }
-        // Phase 2: model pre-filter (async LLM, fail-open) — outside the write lock.
+        // Phase 2a: Jev System One pre-filter — structured Noul judgment per signal.
+        // Replaces LLM pre-filter when JEV_API_KEY is configured (faster, typed output).
+        const jev=jevConfig();
         const toModelFilter=fresh.filter(f=>!f.mute).map(f=>({key:f.id,title:f.candidate.title,description:f.candidate.description}));
-        const modelResults=toModelFilter.length?await filterNewCandidates(store,toModelFilter,{fetchImpl}):{assignments:new Map(),scanned:0,modelFiltered:0};
+        let modelResults={assignments:new Map(),scanned:0,modelFiltered:0};
+        if(jev.configured&&toModelFilter.length){
+         try{
+          for(const f of toModelFilter){
+           const stateText=(f.title+' · '+f.description).slice(0,800);
+           const result=await jevSystemOne(stateText,{
+            is_consumer_problem:{type:'noul',instructions:'判断这条信息是否描述了普通消费者遇到的具体问题、工具或产品的使用摩擦、未满足的需求。招聘求职、广告赞助、纯产品公告、优惠促销、与产品使用无关的闲聊、无用户摩擦的纯技术教程判为 false。拿不准时判 true（宁可多留给人工）。',criteria:{true:'是消费者问题或产品使用摩擦',false:'不是消费者问题（招聘/广告/公告/闲聊/纯教程等）'}}
+           },{apiKey:jev.apiKey,apiUrl:jev.apiUrl});
+           const ans=extractAnswer(result,'is_consumer_problem');
+           if(ans&&ans.type==='noul'&&ans.value<0.5){
+            modelResults.assignments.set(f.key,{verdict:'noise',reason:'Jev 判定为非消费者问题（P='+ans.value.toFixed(2)+'）',model:'jev'});
+            modelResults.modelFiltered++;
+           }
+          }
+         }catch(e){
+          // Jev fail-open：预筛失败不丢信号
+          store.event('signal.jev_filter.error',null,'system',{message:e.message},null);
+         }
+        }
+        // Phase 2b: LLM pre-filter fallback — only when Jev not configured.
+        if(!jev.configured&&toModelFilter.length){modelResults=await filterNewCandidates(store,toModelFilter,{fetchImpl});}
         // Phase 3: atomic write — all puts in one transaction.
         store.transaction(()=>{
           const current=store.get('feeds',feed.id);
@@ -232,7 +255,7 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
         });
         result.errors.push({feedId:feed.id,feed:feed.url,error:errMsg});
       }
-      result.received+=received;result.added+=added;result.filtered+=filtered;result.duplicates+=duplicates;
+      result.received+=received;result.added+=added;result.filtered+=filtered;result.duplicates+=duplicates;result.modelFiltered=(result.modelFiltered||0)+modelFiltered;
       if(notModified)result.notModified++;
       result.details.push({feedId:feed.id,title:feed.title,received,added,filtered,duplicates,notModified,error:result.errors.find(x=>x.feedId===feed.id)?.error||null});
     }
