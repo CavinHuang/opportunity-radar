@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {releasePreflight,releasePreflightHistory} from './discovery-release-preflight.mjs';
+import {ruleTrialLedger} from './discovery-rule-approval.mjs';
 import {assessRealProblem} from './real-problem.mjs';
 const key='real_problem_production_release';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
@@ -12,7 +13,7 @@ export function productionRuleStatus(store){
 export function selectProductionProblem(store,source){
  const baseline=assessRealProblem(source);
  const release=productionRuleStatus(store);
- if(release.policyId!=='require_workaround'||bucket(source.id)>=release.percentage)return {...baseline,productionVariant:'real_problem_v1'};
+ if(release.policyId!=='require_workaround'||ruleTrialLedger(store).selectedTrial!==release.policyId||bucket(source.id)>=release.percentage)return {...baseline,productionVariant:'real_problem_v1'};
  return {...baseline,qualified:baseline.qualified&&baseline.flags.workaround,productionVariant:'require_workaround_v1'};
 }
 export function changeProductionRule(store,{action,policy_id,percentage,evidence_hash,reason,expected_revision}={}){
