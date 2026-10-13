@@ -1,4 +1,5 @@
 import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
+import {opportunityDiscoveryBenchmark,opportunityBenchmarkHistory,captureOpportunityBenchmark} from './opportunity-discovery-benchmark.mjs';
 import {ruleTrialLedger,decideRuleTrial} from './discovery-rule-approval.mjs';
 import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from './discovery-shadow.mjs';
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from './discovery-release-preflight.mjs';
@@ -160,6 +161,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    if(pathname==='/api/discovery/opportunity-benchmark'&&req.method==='GET')return send(res,200,{report:opportunityDiscoveryBenchmark(store),history:opportunityBenchmarkHistory(store)});
+    if(pathname==='/api/discovery/opportunity-benchmark'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>captureOpportunityBenchmark(store,d)));
     if(pathname==='/api/discovery/rule-trials'&&req.method==='GET')return send(res,200,ruleTrialLedger(store));
     if(pathname==='/api/discovery/shadow'&&req.method==='GET')return send(res,200,{status:shadowStatus(store),preview:evaluateShadow(store)});
     if(pathname==='/api/discovery/shadow/history'&&req.method==='GET')return send(res,200,shadowHistory(store));
