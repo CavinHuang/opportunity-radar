@@ -3,6 +3,7 @@ import {opportunityStage} from './opportunity-stages.mjs';
 import {externalResearchStatus} from './opportunity-external-research.mjs';
 import {verificationContext} from './problem-verification.mjs';
 import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
+import {alternativeResearchBoard} from './opportunity-alternative-research.mjs';
 
 // A single read-only view of existing, versioned evidence. It creates no new
 // assertion of demand and never launches interviews, experiments or searches.
