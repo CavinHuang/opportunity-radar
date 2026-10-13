@@ -19,6 +19,7 @@ import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opp
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
 import {opportunityStage} from './opportunity-stages.mjs';
 import {opportunityResearchWorkbench} from './opportunity-research-workbench.mjs';
+import {evidenceReviewBoard,reviewExternalEvidence} from './opportunity-evidence-review.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -206,6 +207,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const evidenceReviewRoute=/^\/api\/opportunity-scan\/([^/]+)\/evidence-review$/.exec(pathname);
+    if(evidenceReviewRoute&&req.method==='GET')return send(res,200,evidenceReviewBoard(store,decodeURIComponent(evidenceReviewRoute[1])));
+    if(evidenceReviewRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>reviewExternalEvidence(store,decodeURIComponent(evidenceReviewRoute[1]),d))});
     const workbenchRoute=/^\/api\/opportunity-scan\/([^/]+)\/workbench$/.exec(pathname);
     if(workbenchRoute&&req.method==='GET')return send(res,200,opportunityResearchWorkbench(store,decodeURIComponent(workbenchRoute[1])));
     const stageQuery=/^\/api\/opportunity-scan\/([^/]+)\/stage$/.exec(pathname);
