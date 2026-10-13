@@ -311,3 +311,22 @@ test('ledger accepts retention additively without changing summary semantics',()
   assert.equal(summary.contribution,0); // retention never enters cash math
  }finally{db.close();}
 });
+test('bulk import accepts multiple rows without dedupKey; empty keys never collide',()=>{
+ const {db,s,p}=setup();try{
+  const ch=createGrowthChannel(db,p.id,{name:'批量导入渠道'});
+  const first=importGrowthMetrics(db,p.id,{items:[
+   {metric:'visits',value:12,occurredAt:T1,channelId:ch.id},
+   {metric:'visits',value:30,occurredAt:T2,channelId:ch.id}]});
+  assert.equal(first.acceptedCount,2);assert.equal(first.rejected.length,0);
+  // 跨批次的无 dedupKey 合法行同样不能被历史空键误拒。
+  const second=importGrowthMetrics(db,p.id,{items:[{metric:'visits',value:44,occurredAt:T3,channelId:ch.id}]});
+  assert.equal(second.acceptedCount,1);
+ }finally{db.close()}
+});
+test('ledger mirror rows refuse direct growth-side revision',()=>{
+ const {db,s,p}=setup();try{
+  const ch=createGrowthChannel(db,p.id,{name:'镜像守卫渠道'});
+  const saved=recordGrowthMetric(db,p.id,{metric:'visits',value:7,occurredAt:T1,channelId:ch.id,dedupKey:'ledger:demo-1'});
+  assert.throws(()=>reviseGrowthMetric(db,p.id,saved.id,{value:9,reason:'直接修订镜像行的测试请求'}),e=>e.code==='BAD_STATE'&&e.message.includes('结果账本'));
+ }finally{db.close()}
+});

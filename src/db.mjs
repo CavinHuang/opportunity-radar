@@ -76,7 +76,8 @@ export function openDatabase(path=':memory:') {
   // never allowed to break opening the database.
   try{
    const mirrored=new Set(store.list('growth_metrics').map(x=>x.dedupKey));
-   const pending=store.list('ledger').filter(x=>x.actual===true&&LEDGER_METRIC_MAP[x.type]&&!mirrored.has('ledger:'+x.id));
+   // 已撤回的账本条目不得被回填复活为 active 增长数据；否则撤回状态会在下次启动时丢失。
+   const pending=store.list('ledger').filter(x=>x.actual===true&&!x.retractedAt&&LEDGER_METRIC_MAP[x.type]&&!mirrored.has('ledger:'+x.id));
    if(pending.length){
     store.transaction(()=>{
      for(const entry of pending){
