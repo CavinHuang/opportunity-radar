@@ -17,7 +17,7 @@ function seed(db){
 test('only owner-reviewed existing solutions can be investigated with missing price kept unknown',()=>{
  const db=openDatabase();try{
   const {id,ctx,search,url}=seed(db);
-  assert.throws(()=>recordAlternativeResearch(db,id,{url,expected_revision:0}),{code:'NOT_REVIEWED_SOLUTION'});
+  assert.throws(()=>recordAlternativeResearch(db,id,{url,candidateFingerprint:ctx.fingerprint,searchRevision:search.revision,reviewRevision:0,expected_revision:0}),{code:'NOT_REVIEWED_SOLUTION'});
   const review=reviewExternalEvidence(db,id,{candidateFingerprint:ctx.fingerprint,searchRevision:search.revision,url,classification:'existing_solution',notes:'人工检查链接后认为可能是现有替代方案',expected_revision:0});
   const board=alternativeResearchBoard(db,id);
   assert.equal(board.eligible.length,1);
