@@ -21,6 +21,7 @@ import {opportunityStage} from './opportunity-stages.mjs';
 import {opportunityResearchWorkbench} from './opportunity-research-workbench.mjs';
 import {evidenceReviewBoard,reviewExternalEvidence} from './opportunity-evidence-review.mjs';
 import {alternativeResearchBoard,recordAlternativeResearch} from './opportunity-alternative-research.mjs';
+import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -208,6 +209,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const competitionRoute=/^\/api\/opportunity-scan\/([^/]+)\/competition-space$/.exec(pathname);
+    if(competitionRoute&&req.method==='GET')return send(res,200,opportunityCompetitionSpace(store,decodeURIComponent(competitionRoute[1])));
     const alternativeRoute=/^\/api\/opportunity-scan\/([^/]+)\/alternatives$/.exec(pathname);
     if(alternativeRoute&&req.method==='GET')return send(res,200,alternativeResearchBoard(store,decodeURIComponent(alternativeRoute[1])));
     if(alternativeRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>recordAlternativeResearch(store,decodeURIComponent(alternativeRoute[1]),d))});

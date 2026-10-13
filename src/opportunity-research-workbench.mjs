@@ -4,6 +4,7 @@ import {externalResearchStatus} from './opportunity-external-research.mjs';
 import {verificationContext} from './problem-verification.mjs';
 import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
 import {alternativeResearchBoard} from './opportunity-alternative-research.mjs';
+import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 
 // A single read-only view of existing, versioned evidence. It creates no new
 // assertion of demand and never launches interviews, experiments or searches.
@@ -18,6 +19,7 @@ export function opportunityResearchWorkbench(store,id){
  const researchCurrent=Boolean(research&&research.sourceFingerprint===fingerprint);
  const evidenceReview=evidenceReviewBoard(store,id);
  const alternatives=alternativeResearchBoard(store,id);
+ const competitionSpace=opportunityCompetitionSpace(store,id);
  const timeline=store.eventsLatest(400).filter(x=>x.entity_id===id&&(String(x.kind||'').startsWith('opportunity.')||String(x.kind||'').startsWith('problem.'))).slice(-35).reverse();
  const plans=store.list('problem_interview_plans').filter(p=>p.problemId===id);
  const observations=store.list('problem_interview_observations').filter(o=>o.problemId===id);
@@ -51,6 +53,7 @@ export function opportunityResearchWorkbench(store,id){
    decision:researchCurrent?research.decision:null,sections:researchCurrent?research.sections:null},
   interviews:{plans:planRows,observationCount:observations.length},
   experiments:{designCount:experiments.length,drafts:experiments.slice(0,8).map(e=>({id:e.id,status:e.status,planId:e.planId}))},
+  competitionSpace,
   alternatives:{stale:alternatives.stale,items:alternatives.items,eligible:alternatives.eligible},
   evidenceReview:{current:evidenceReview.current,revision:evidenceReview.revision,searchRevision:evidenceReview.searchRevision,reviews:evidenceReview.reviews},
   timeline:timeline.map(x=>({kind:x.kind,at:x.created_at,actor:x.actor,detail:x.detail})),
