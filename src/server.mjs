@@ -3,6 +3,7 @@ import {ruleTrialLedger,decideRuleTrial} from './discovery-rule-approval.mjs';
 import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from './discovery-shadow.mjs';
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from './discovery-release-preflight.mjs';
 import {productionRuleStatus,changeProductionRule} from './discovery-production-release.mjs';
+import {productionMonitorReport,productionMonitorHistory,captureProductionMonitor} from './discovery-production-monitor.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -161,6 +162,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/discovery/shadow/history'&&req.method==='GET')return send(res,200,shadowHistory(store));
     if(pathname==='/api/discovery/release-preflight'&&req.method==='GET')return send(res,200,{report:releasePreflight(store),history:releasePreflightHistory(store)});
     if(pathname==='/api/discovery/production-rule'&&req.method==='GET')return send(res,200,productionRuleStatus(store));
+    if(pathname==='/api/discovery/production-monitor'&&req.method==='GET')return send(res,200,{report:productionMonitorReport(store),history:productionMonitorHistory(store)});
+    if(pathname==='/api/discovery/production-monitor'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>captureProductionMonitor(store,d)));
     if(pathname==='/api/discovery/production-rule'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>changeProductionRule(store,d)));
     if(pathname==='/api/discovery/release-preflight'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>captureReleasePreflight(store,d)));
     if(pathname==='/api/discovery/shadow'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>d.action==='snapshot'?recordShadowSnapshot(store,d):setShadowStatus(store,d)));
