@@ -16,6 +16,7 @@ import {splitOpportunityIdentity,opportunityIdentityDossier,opportunityIdentityI
 import {reviewHomeOpportunity,homeDiscoveryDashboard,decideHomeOpportunity,scanHomeOpportunities,homeOpportunitySnapshot} from './home-opportunities.mjs';
 import {scorecardConfig,updateScorecardConfig,opportunityScoreboard} from './opportunity-scorecard.mjs';
 import {draftOpportunityResearch,recordResearchReview} from './opportunity-research.mjs';
+import {opportunityStage} from './opportunity-stages.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -201,6 +202,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const stageQuery=/^\/api\/opportunity-scan\/([^/]+)\/stage$/.exec(pathname);
+    if(stageQuery&&req.method==='GET')return send(res,200,opportunityStage(store,decodeURIComponent(stageQuery[1])));
     const externalResearch=/^\/api\/opportunity-scan\/([^/]+)\/external-research$/.exec(pathname);
     if(externalResearch&&req.method==='GET')return send(res,200,externalResearchBrief(store,decodeURIComponent(externalResearch[1])));
     if(externalResearch&&req.method==='POST')return send(res,200,{result:await ownerWrite(req,pathname,()=>investigateExternalEvidence(store,decodeURIComponent(externalResearch[1])))});
