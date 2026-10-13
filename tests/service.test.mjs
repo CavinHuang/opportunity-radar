@@ -26,7 +26,9 @@ test('content approval invalidates on edit and records only manual publication',
  const approved=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});assert.equal(approved.approvedRevision,approved.revision);
  const edited=s.saveContent(p.id,{id:c.id,expected_revision:approved.revision,title:'Rewrite',body:'New body',objective:'interviews',channel:'site'});assert.equal(edited.reviewState,'draft');
  const approved2=s.reviewContent(p.id,c.id,{action:'approve',privacyChecked:true,factsChecked:true});const published=s.reviewContent(p.id,c.id,{action:'publish_record',url:'https://example.com/posted',platform:'website'});assert.equal(published.publication.recordedBy,'owner');assert.equal(approved2.reviewState,'approved');db.close();});
-test('ledger distinguishes real income, refunds, costs and human hours',()=>{const {db,s,o}=setup();const p=experiment(s,o);for(const [type,value,actual] of [['income',40,true],['refund',10,true],['transaction_fee',2,true],['service_cost',4,true],['income',500,false],['user_hours',9,true],['agent_hours',18,true]])s.addLedger(p.id,{type,value,actual});const out=s.summaryLedger(s.getFullProject(p.id).ledger);assert.deepEqual(out,{collected:40,refunds:10,contribution:24,userHours:9,agentHours:18,cashSpent:0});db.close();});
+test('ledger distinguishes real income, refunds, costs and human hours',()=>{const {db,s,o}=setup();const p=experiment(s,o);for(const [type,value,actual] of [['income',40,true],['refund',10,true],['transaction_fee',2,true],['service_cost',4,true],['income',500,false],['user_hours',9,true],['agent_hours',18,true]])s.addLedger(p.id,{type,value,actual});const out=s.summaryLedger(s.getFullProject(p.id).ledger);assert.deepEqual({collected:out.collected,refunds:out.refunds,contribution:out.contribution,userHours:out.userHours,agentHours:out.agentHours,cashSpent:out.cashSpent},{collected:40,refunds:10,contribution:24,userHours:9,agentHours:18,cashSpent:0});
+ // recordedTypes 只统计实际记录，供前端把「未记录」显示为未知而非零。
+ assert.deepEqual([...out.recordedTypes].sort(),['agent_hours','income','refund','service_cost','transaction_fee','user_hours']);db.close();});
 test('project pause revokes new agent writes but does not assert process stopped',()=>{const {db,s,o}=setup();const p=experiment(s,o);const pause=s.ownerDecision(p.id,{action:'pause',reason:'reassess',wakeCondition:'满足登记的条件后继续'});assert.equal(pause.externalProcessState,'unknown');assert.throws(()=>s.tool('progress.report',{project_id:p.id,summary:'still running',idempotency_key:'r'}),e=>e.code==='PROJECT_NOT_ACTIVE');const resume=s.ownerDecision(p.id,{action:'resume',acknowledgeWakeCondition:true});assert.equal(resume.status,'research');db.close();});
 test('event cursors replay independently of agent availability',()=>{const {db,s,o}=setup();const p=experiment(s,o);const start=s.tool('project.watch_changes',{project_id:p.id,cursor:0});assert.ok(start.events.length);s.tool('progress.report',{project_id:p.id,summary:'submitted work',idempotency_key:'r2'});const next=s.tool('project.watch_changes',{project_id:p.id,cursor:start.next_cursor});assert.ok(next.events.some(x=>x.kind==='agent.reported'));assert.ok(next.next_cursor>start.next_cursor);db.close();});
 
@@ -197,3 +199,9 @@ test('review cycle is deployment-configurable via env',async()=>{
   assert.equal(reviewSummary(db,p.id).cycleDays,7);
  }finally{delete process.env.RADAR_REVIEW_CYCLE_DAYS;db.close();}
 });
+test('brief weekly focus only includes candidates created within the last 7 days',()=>{const {db,s,o}=setup();
+ const stale=s.createOpportunity({title:'Stale candidate',problem:'Old repeated manual effort',market:'China'});
+ db.put('opportunities',{...stale,createdAt:new Date(Date.now()-30*86400000).toISOString()},stale.revision);
+ const brief=s.brief();
+ assert.equal(brief.candidates.length,1);assert.equal(brief.candidates[0].id,o.id);
+ db.close();});

@@ -74,7 +74,8 @@ export function buildReviewDraft(store,projectId,{windowFrom,windowTo}={}){
  const fromDay=windowFrom!=null?parseDay(windowFrom,'开始日期'):new Date(Date.parse(toDay+'T00:00:00Z')-29*DAY).toISOString().slice(0,10);
  if(fromDay>toDay)throw fail('BAD_REQUEST','开始日期不能晚于结束日期');
  const decision=experimentDecisionReview({
-  ledger:store.list('ledger').filter(x=>x.projectId===projectId),
+  // 已撤回的账本条目不再计入复盘：收入/净现金/预算判断必须基于有效数据。
+  ledger:store.list('ledger').filter(x=>x.projectId===projectId&&!x.retractedAt),
   milestones:store.list('milestones').filter(m=>m.projectId===projectId).sort((a,b)=>a.order-b.order),
   submissions:store.list('submissions').filter(x=>x.projectId===projectId),
   baselines:project.baselines});

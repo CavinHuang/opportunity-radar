@@ -260,3 +260,13 @@ test('review continue on a paused project moves stage along with status',async()
   assert.equal(after.stage,'research','stage 必须跟随 status，不得停留在 promotion');
  }finally{db.close();}
 });
+test('retracted ledger entries no longer count into review outcomes',()=>{
+ const {db,s,p}=setup();try{
+  s.addLedger(p.id,{type:'income',value:40,actual:true});
+  const entry=db.list('ledger').find(x=>x.type==='income'&&x.actual);
+  s.retractLedger(p.id,entry.id,{reason:'误录后撤回，验证复盘不再计入已撤回数据'});
+  const draft=buildReviewDraft(db,p.id);
+  assert.equal(draft.decision.outcomes.income,null);
+  assert.equal(draft.decision.evidenceCoverage.actualEntries,0);
+ }finally{db.close()}
+});
