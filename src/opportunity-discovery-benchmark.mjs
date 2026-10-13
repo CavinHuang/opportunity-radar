@@ -3,6 +3,7 @@ import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {assessRealProblem} from './real-problem.mjs';
 import {discoveryClusters} from './discovery.mjs';
 import {clusterRootCauseAudit} from './root-cause-audit.mjs';
+import {rootCauseOwnerReplay} from './root-cause-owner-replay.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const key='real_problem_discovery_quality_benchmark';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -20,6 +21,7 @@ export function opportunityDiscoveryBenchmark(store){
  const window=sources.slice(0,400),eligible=new Set(window.map(s=>s.id));
  const scan=opportunityScanCandidates(store,{limit:50,maxSignals:400});
  const rootCauseAudit=clusterRootCauseAudit(discoveryClusters(store,{includeDismissed:true,limit:300,maxSignals:400}).items);
+ const rootCauseReplay=rootCauseOwnerReplay(store);
  const surfaced=new Map();
  for(const c of scan.items)for(const id of c.problemEvidence?.qualifiedSignals||[])
   if(!surfaced.has(id))surfaced.set(id,{candidateId:c.id,priority:c.priority});
@@ -78,7 +80,7 @@ export function opportunityDiscoveryBenchmark(store){
   negativeLabeled:fresh.filter(x=>x.label==='not_problem').length,uncertain:uncertain.length,
   stale:stale.length,outOfWindow:outOfWindow.length,examined:scan.examined,topCandidateLimit:50,
   candidateCount:scan.items.length,missed:missed.slice(0,30),falsePositives:falsePositives.slice(0,30),
-  matched:matched.slice(0,15),recallTrial,diversityTrial,rootCauseAudit,evidenceFingerprint,generatedAt:new Date().toISOString(),
+  matched:matched.slice(0,15),recallTrial,diversityTrial,rootCauseAudit,rootCauseReplay,evidenceFingerprint,generatedAt:new Date().toISOString(),
   policy:'current_version_owner_labels_top50_candidate_visibility',
   notice:'只评估400条已收录来源窗口内，人工标注且原帖版本未变的帖子是否进入前50条机会候选；漏报可能是门槛、聚合或榜单截断造成。标注不是随机样本，指标不能推断总体表现或商业价值。'};
 }
