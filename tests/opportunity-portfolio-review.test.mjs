@@ -19,7 +19,7 @@ test('portfolio prioritizes pending feedback without pretending commercial ROI',
   assert.equal(report.suggested[0].id,candidate.id);
  }finally{db.close();}
 });
-test('stopped opportunities are flagged for review, not recommended for automatic investment',()=>{
+test('stopped opportunities are flagged for review, not recommended for automatic investment',async()=>{
  const db=openDatabase();try{
   put(db,'a','I cannot reconcile invoice records manually');
   const id=opportunityScanCandidates(db).items[0].id;
