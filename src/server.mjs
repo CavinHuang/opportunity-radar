@@ -201,7 +201,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
-    const externalResearch=/^\\/api\\/opportunity-scan\\/([^/]+)\\/external-research$/.exec(pathname);
+    const externalResearch=/^\/api\/opportunity-scan\/([^/]+)\/external-research$/.exec(pathname);
     if(externalResearch&&req.method==='GET')return send(res,200,externalResearchBrief(store,decodeURIComponent(externalResearch[1])));
     if(externalResearch&&req.method==='POST')return send(res,200,{result:await ownerWrite(req,pathname,()=>investigateExternalEvidence(store,decodeURIComponent(externalResearch[1])))});
     const deepResearch=/^\/api\/opportunity-scan\/([^/]+)\/research$/.exec(pathname);
