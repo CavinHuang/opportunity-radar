@@ -108,7 +108,7 @@ export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=glo
  const prior=last?.status==='filtered'?last.items||[]:[];
  const items=result?candidates.filter(c=>result.results.get(c.id)?.verdict==='keep').map(c=>({
    id:c.id,title:c.title,summary:c.summary,sourceUrls:c.sourceUrls.filter(validUrl).slice(0,8),
-   signalCount:c.signalCount,evidencePriority:c.evidencePriority,domains:c.qualityReview?.domains?.map(x=>x.name)||[],reviewStatus:'unverified',
+   signalCount:c.signalCount,evidencePriority:c.evidencePriority,evidenceDossier:c.evidenceDossier,domains:c.qualityReview?.domains?.map(x=>x.name)||[],reviewStatus:'unverified',
    aiReason:result.results.get(c.id).reason,engine:result.engine,problemEvidence:c.problemEvidence,problemCase:c.problemCase,
    ...compareOpportunityChange(c,prior)
  })): [];
