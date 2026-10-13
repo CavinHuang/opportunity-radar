@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
-import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot} from '../src/discovery-shadow.mjs';
+import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from '../src/discovery-shadow.mjs';
 import {decideRuleTrial} from '../src/discovery-rule-approval.mjs';
 test('shadow trial requires approval, caps sample percent and never changes sources',()=>{
  const db=openDatabase();try{
@@ -44,5 +44,31 @@ test('revoked approval fails closed for shadow evaluation',()=>{
   assert.equal(evaluateShadow(db).active,false);
   assert.equal(evaluateShadow(db).staleApproval,true);
   assert.throws(()=>recordShadowSnapshot(db,{expected_revision:1}),{code:'NOT_ACTIVE'});
+ }finally{db.close();}
+});
+
+test('snapshot history retains comparisons and automatically stops on verified worsening',()=>{
+ const db=openDatabase();try{
+  // Approval uses unrelated reviewed negatives, while the shadow bucket gets
+  // a separately selected group of current human-reviewed positives.
+  for(let i=0;i<120;i++){
+   const id='item-'+i;
+   const description=i<20?'Generic article':'I copy invoices every day and spend hours fixing errors';
+   const title=i<20?'AI news':'Cannot automate repetitive invoice workflow';
+   const s=db.put('sources',{id,title,description,url:'https://example.org/'+id});
+   db.put('discovery_quality_labels',{id,label:i<20?'not_problem':'real_problem',reason:'Actual human review',sourceRevision:s.revision});
+  }
+  // The rule is unsafe globally, so simulate an approval that preceded new evidence.
+  db.put('discovery_rule_decisions',{id:'real_problem_rule_trials',selectedTrial:'require_workaround',history:[]});
+  setShadowStatus(db,{action:'start',policy_id:'require_workaround',percentage:25,reason:'已获批准的候选现在进行影子观察',expected_revision:0});
+  const preview=evaluateShadow(db);
+  assert.ok(preview.reviewed>=5);
+  assert.ok(preview.deltaFalseNegative>0);
+  const saved=recordShadowSnapshot(db,{expected_revision:1});
+  assert.equal(saved.active,false);
+  assert.equal(saved.lastRun.autoStopped,true);
+  assert.equal(shadowHistory(db).entries.length,1);
+  assert.equal(shadowHistory(db).entries[0].autoStopped,true);
+  assert.equal(db.list('sources').length,120);
  }finally{db.close();}
 });
