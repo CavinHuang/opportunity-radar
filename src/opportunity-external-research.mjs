@@ -51,7 +51,40 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
   for(const issue of payload.items.slice(0,15)){
    const url=safeLink(issue.html_url);
    // Search only canonical public GitHub issue pages, never pull requests or arbitrary URLs.
-   if(!url||new URL(url).hostname!=='github.com'||!/^\\/[^/]+\\/[^/]+\\/issues\\/\\d+$/.test(new URL(url).pathname)||issue.pull_request||seen.has(url))continue;
+   if(!url||new URL(url).hostname!=='github.com'||!new RegExp('^/[^/]+/[^/]+/issues/[0-9]+
+   seen.add(url);count++;
+   results.push({url,title:plain(issue.title)||'未命名 Issue',excerpt:plain(issue.body),
+    author:plain(issue.user?.login).slice(0,80),source:'GitHub Issues',query:githubQuery,
+    createdAt:issue.created_at||null,classification:'unreviewed_external_search_hit'});
+  }
+  sourceStatus.push({source:'GitHub Issues',status:'ok',count});
+ }catch(e){
+  sourceStatus.push({source:'GitHub Issues',status:'failed',reason:String(e.code||'FETCH_FAILED')});
+ }
+ sourceStatus.unshift({source:'Hacker News',status:'ok',count:results.filter(x=>x.source==='Hacker News').length});
+ // These are retrieval leads, not independent users, proven competitors, or verified claims.
+ const record={id,candidateFingerprint:context.fingerprint,queryFingerprint:digest(queries),
+  queries,sourceStatus,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
+  missing:['独立用户与原帖关系未核查','检索结果可能相关性不足','现有产品能力及收费情况未核查','不能根据没有搜索结果断言市场空白'],
+  notice:'只查询固定 Hacker News 与 GitHub Issues 公开接口；部分来源失败会显式记录。命中结果不是已验证的竞争产品或独立用户证据。'};
+ const previous=externalResearchStatus(store,id);
+ return store.transaction(()=>{
+  const current=candidateContext(store,id);
+  if(current.fingerprint!==context.fingerprint)throw fail('CANDIDATE_CHANGED','候选来源已变化，请重新搜索',409);
+  const saved=store.put('opportunity_external_research',record,previous.revision);
+  store.event('opportunity.external_research.searched',id,'owner',{hits:saved.results.length,revision:saved.revision});
+  return saved;
+ });
+}
+export function externalResearchBrief(store,id){
+ const context=candidateContext(store,id),current=externalResearchStatus(store,id);
+ return {candidateId:id,current:current.record&&current.record.candidateFingerprint===context.fingerprint,
+   stale:!!current.record&&current.record.candidateFingerprint!==context.fingerprint,
+   results:current.record?.results||[],queries:current.record?.queries||[],sourceStatus:current.record?.sourceStatus||[],
+   searchedAt:current.record?.searchedAt||null,revision:current.revision,
+   notice:'匹配结果只能用于进一步调查；不能自动认定为相同问题、独立需求或有效竞品。'};
+}
+).test(new URL(url).pathname)||issue.pull_request||seen.has(url))continue;
    seen.add(url);count++;
    results.push({url,title:plain(issue.title)||'未命名 Issue',excerpt:plain(issue.body),
     author:plain(issue.user?.login).slice(0,80),source:'GitHub Issues',query:githubQuery,
