@@ -20,6 +20,12 @@ export function opportunityResearchWorkbench(store,id){
  const planRows=plans.map(p=>({id:p.id,status:p.status,decision:p.decision||null,createdAt:p.createdAt||null,
   observationCount:observations.filter(o=>o.planId===p.id).length,
   currentVerification:Boolean(verificationCurrent&&p.verificationRevision===review.revision)}));
+ const actions=[{id:'external-research',label:externalCurrent?'重新检索外部反证':'检索外部反证',available:true},
+  {id:'verify-problem',label:verificationCurrent?'重新核查真实问题':'核查真实问题',available:true},
+  {id:'problem-interviews',label:'制定或查看访谈计划',available:verificationCurrent&&review.decision==='worth_interviewing'},
+  {id:'interview-decision',label:'访谈结果决策',available:plans.some(p=>p.status==='active')},
+  {id:'experiment-design',label:'低成本实验设计',available:verificationCurrent&&review.decision==='worth_interviewing'&&plans.some(p=>p.decision==='low_cost_test'&&p.verificationRevision===review.revision)},
+  {id:'research-opportunity',label:'AI 研究草稿（可选）',available:true}];
  const nextAction=!externalCurrent?'external_research':!verificationCurrent?'problem_verification':
   !plans.some(p=>p.status==='active'||p.status==='closed'&&p.decision==='low_cost_test')?'interview_plan':
   !experiments.length?'experiment_readiness':'review_evidence';
@@ -40,6 +46,6 @@ export function opportunityResearchWorkbench(store,id){
    decision:researchCurrent?research.decision:null,sections:researchCurrent?research.sections:null},
   interviews:{plans:planRows,observationCount:observations.length},
   experiments:{designCount:experiments.length,drafts:experiments.slice(0,8).map(e=>({id:e.id,status:e.status,planId:e.planId}))},
-  nextAction,readOnly:true,validatedMarketDemand:false,
+  nextAction,actions,readOnly:true,validatedMarketDemand:false,
   notice:'统一视图仅汇集已有记录。外部搜索命中、人工核查及访谈数量不代表经过独立验证的商业需求；过期证据不用于当前结论。'};
 }
