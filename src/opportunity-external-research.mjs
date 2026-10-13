@@ -17,7 +17,7 @@ export function externalResearchStatus(store,id){
 }
 export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis.fetch,now=()=>new Date().toISOString()}={}){
  const context=candidateContext(store,id),queries=externalResearchQueries(context.candidate.title);
- const results=[],seen=new Set();
+ const results=[],seen=new Set(),sourceStatus=[];
  for(const query of queries){
   // Fixed public endpoint: never fetch an untrusted URL or follow a post URL.
   const endpoint=new URL('https://hn.algolia.com/api/v1/search');
@@ -35,11 +35,38 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
     classification:'unreviewed_external_search_hit'});
   }
  }
+ // GitHub issue search complements community discussion with concrete bug/friction reports.
+ // Public API calls may be rate limited; preserve successful sources and report failures.
+ const githubQuery=queries[0].split(' ').slice(0,4).join(' ')+' is:issue';
+ const githubUrl=new URL('https://api.github.com/search/issues');
+ githubUrl.searchParams.set('q',githubQuery);
+ githubUrl.searchParams.set('per_page','15');
+ try{
+  const response=await fetchImpl(githubUrl,{signal:AbortSignal.timeout(12000),redirect:'error',
+   headers:{Accept:'application/vnd.github+json','User-Agent':'OpportunityRadar/1.0','X-GitHub-Api-Version':'2022-11-28'}});
+  if(!response.ok)throw fail('GITHUB_SEARCH_FAILED','GitHub Issues 检索 HTTP '+response.status,502);
+  const payload=await response.json();
+  if(!Array.isArray(payload?.items))throw fail('GITHUB_SEARCH_INVALID','GitHub Issues 检索响应格式错误',502);
+  let count=0;
+  for(const issue of payload.items.slice(0,15)){
+   const url=safeLink(issue.html_url);
+   // Search only canonical public GitHub issue pages, never pull requests or arbitrary URLs.
+   if(!url||new URL(url).hostname!=='github.com'||!/^\\/[^/]+\\/[^/]+\\/issues\\/\\d+$/.test(new URL(url).pathname)||issue.pull_request||seen.has(url))continue;
+   seen.add(url);count++;
+   results.push({url,title:plain(issue.title)||'未命名 Issue',excerpt:plain(issue.body),
+    author:plain(issue.user?.login).slice(0,80),source:'GitHub Issues',query:githubQuery,
+    createdAt:issue.created_at||null,classification:'unreviewed_external_search_hit'});
+  }
+  sourceStatus.push({source:'GitHub Issues',status:'ok',count});
+ }catch(e){
+  sourceStatus.push({source:'GitHub Issues',status:'failed',reason:String(e.code||'FETCH_FAILED')});
+ }
+ sourceStatus.unshift({source:'Hacker News',status:'ok',count:results.filter(x=>x.source==='Hacker News').length});
  // These are retrieval leads, not independent users, proven competitors, or verified claims.
  const record={id,candidateFingerprint:context.fingerprint,queryFingerprint:digest(queries),
-  queries,results:results.slice(0,25),searchedAt:now(),status:'needs_owner_review',
+  queries,sourceStatus,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
   missing:['独立用户与原帖关系未核查','检索结果可能相关性不足','现有产品能力及收费情况未核查','不能根据没有搜索结果断言市场空白'],
-  notice:'只查询固定 Hacker News 搜索接口；外部命中是待核查线索，不是已验证的竞争产品或用户证据。'};
+  notice:'只查询固定 Hacker News 与 GitHub Issues 公开接口；部分来源失败会显式记录。命中结果不是已验证的竞争产品或独立用户证据。'};
  const previous=externalResearchStatus(store,id);
  return store.transaction(()=>{
   const current=candidateContext(store,id);
@@ -53,7 +80,7 @@ export function externalResearchBrief(store,id){
  const context=candidateContext(store,id),current=externalResearchStatus(store,id);
  return {candidateId:id,current:current.record&&current.record.candidateFingerprint===context.fingerprint,
    stale:!!current.record&&current.record.candidateFingerprint!==context.fingerprint,
-   results:current.record?.results||[],queries:current.record?.queries||[],
+   results:current.record?.results||[],queries:current.record?.queries||[],sourceStatus:current.record?.sourceStatus||[],
    searchedAt:current.record?.searchedAt||null,revision:current.revision,
    notice:'匹配结果只能用于进一步调查；不能自动认定为相同问题、独立需求或有效竞品。'};
 }
