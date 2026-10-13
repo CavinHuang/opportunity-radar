@@ -1,3 +1,4 @@
+import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -118,7 +119,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/operations/readiness'&&req.method==='GET')return send(res,200,readinessSummary(store,{ownerProtected:Boolean(process.env.RADAR_OWNER_TOKEN)}));
     if(pathname==='/api/source-operations'&&req.method==='GET')return send(res,200,sourceOperations(store));
     if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
-    if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    if(pathname==='/api/home/problem-quality'&&req.method==='GET')return send(res,200,problemDiscoveryQualityReport(store));
     if(pathname==='/api/discovery/clusters'&&req.method==='GET'){
       return send(res,200,discoveryClusters(store,{includeDismissed:u.searchParams.get('include_dismissed')==='1'}));
     }
@@ -150,6 +151,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    const qualityLabel=/^\/api\/home\/problem-quality\/([^/]+)$/.exec(pathname);
+    if(qualityLabel&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>labelDiscoveryExample(store,decodeURIComponent(qualityLabel[1]),d))});
     if(pathname==='/api/home/source-diagnostics'&&req.method==='GET')return send(res,200,problemSourceDiagnostics(store));
     if(pathname==='/api/home/work-queue'&&req.method==='GET')return send(res,200,problemWorkQueue(store));
     if(pathname==='/api/decision-center'&&req.method==='GET')return send(res,200,decisionReviewCenter(store));
