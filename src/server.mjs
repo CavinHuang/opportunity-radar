@@ -20,6 +20,7 @@ import {draftOpportunityResearch,recordResearchReview} from './opportunity-resea
 import {opportunityStage} from './opportunity-stages.mjs';
 import {opportunityResearchWorkbench} from './opportunity-research-workbench.mjs';
 import {evidenceReviewBoard,reviewExternalEvidence} from './opportunity-evidence-review.mjs';
+import {alternativeResearchBoard,recordAlternativeResearch} from './opportunity-alternative-research.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
