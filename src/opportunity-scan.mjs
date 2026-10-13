@@ -39,7 +39,13 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
  if(!Number.isInteger(limit)||limit<1||limit>50)throw Object.assign(new Error('invalid limit'),{code:'BAD_LIMIT',status:400});
  const candidates=store.list('sources').filter(s=>['new','saved'].includes(s.status)&&isHttps(s.url)&&s.title).slice(0,maxSignals);
  const qualifiedIds=new Set(candidates.filter(s=>selectProductionProblem(store,s).qualified).map(s=>s.id));
- const groups=discoveryClusters(store,{limit:300,maxSignals}).items.filter(x=>x.state!=='dismissed');
+ const allGroups=discoveryClusters(store,{includeDismissed:true,limit:300,maxSignals}).items;
+ const groups=allGroups.filter(x=>x.state!=='dismissed');
+ // An owner-dismissed "different problem" grouping must not silently reform
+ // as a task/action cluster. Restore qualifying members as separate review cards.
+ // Fingerprint matching inside discoveryClusters makes the override expire after source edits.
+ const splitRecoveryIds=new Set(allGroups.filter(x=>x.state==='dismissed'&&x.reviewClass==='different_problem')
+  .flatMap(x=>x.signals.map(s=>s.id)));
  const groupedIds=new Set();
  const collected=[];
  for(const g of groups){
@@ -51,7 +57,7 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
  }
  // Second pass finds task/action similarities missed by near-identical title grouping.
  // Previously reviewed title groups keep their own fingerprints and owner decisions.
- for(const group of taskPainClusters(candidates.filter(s=>!groupedIds.has(s.id)),{assess:s=>selectProductionProblem(store,s)})){
+ for(const group of taskPainClusters(candidates.filter(s=>!groupedIds.has(s.id)&&!splitRecoveryIds.has(s.id)),{assess:s=>selectProductionProblem(store,s)})){
   const row=explain(group.members,null,s=>selectProductionProblem(store,s));
   row.id='task:'+group.task+':'+group.members.map(s=>s.id).sort().join(',');
   row.clusterMethod=group.matchingBasis;
@@ -60,7 +66,7 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
   collected.push(row);
   group.members.forEach(m=>groupedIds.add(m.id));
  }
- for(const signal of candidates){if(groupedIds.has(signal.id)||!qualifiedIds.has(signal.id)||(problemTokens(signal.title).size<3&&(!descriptionFallback||problemTokens(signal.title+' '+String(signal.description||'')).size<3)))continue;const row=explain([signal],null,s=>selectProductionProblem(store,s));if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
+ for(const signal of candidates){if(groupedIds.has(signal.id)||!qualifiedIds.has(signal.id)||(problemTokens(signal.title).size<3&&(!descriptionFallback||problemTokens(signal.title+' '+String(signal.description||'')).size<3)))continue;const row=explain([signal],null,s=>selectProductionProblem(store,s));if(splitRecoveryIds.has(signal.id)){row.clusterMethod='owner_recovered_different_problem';row.recoveryReason='人工确认原聚合包含不同问题，已独立恢复待核查候选';}if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
  const scored=collected.map(item=>({...item,qualityReview:opportunityQualityReview(item),priority:item.evidencePriority.priority,status:'unverified_candidate'}));
  scored.sort((a,b)=>b.priority-a.priority||b.evidencePriority.qualifiedSources-a.evidencePriority.qualifiedSources||a.id.localeCompare(b.id));
  // Offline-only round-robin by source host. Does not change eligibility, priority or live ranking.
@@ -80,6 +86,6 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
   }
   scored.splice(0,scored.length,...diversified);
  }
- return {items:scored.slice(0,limit),total:scored.length,examined:candidates.length,insufficientEvidence:candidates.length-qualifiedIds.size,generatedAt:new Date().toISOString(),productionRule:productionRuleStatus(store),strategy:sourceDiversityTrial?'source_diversity_trial':descriptionFallback?'description_fallback_trial':'production_baseline',
+ return {items:scored.slice(0,limit),total:scored.length,examined:candidates.length,insufficientEvidence:candidates.length-qualifiedIds.size,recoveredSplitSources:splitRecoveryIds.size,generatedAt:new Date().toISOString(),productionRule:productionRuleStatus(store),strategy:sourceDiversityTrial?'source_diversity_trial':descriptionFallback?'description_fallback_trial':'production_baseline',
   note:'依据具体工作障碍、替代做法及可去重来源安排人工核查优先级；不把热度、转载数或话题关键词当成需求。必须进一步确认原帖、独立用户和真实成本。'};
 }
