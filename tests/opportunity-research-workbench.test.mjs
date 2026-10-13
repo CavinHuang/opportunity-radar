@@ -43,3 +43,29 @@ test('workbench fences stale external search, manual verification and LLM resear
   assert.equal(stale.aiResearch.sections,null);
  }finally{db.close();}
 });
+
+test('actionable workbench gates interviews and experiments behind current owner decisions',async()=>{
+ const db=openDatabase();try{
+  const id=setup(db);
+  let r=opportunityResearchWorkbench(db,id);
+  assert.equal(r.actions.find(x=>x.id==='external-research').available,true);
+  assert.equal(r.actions.find(x=>x.id==='verify-problem').available,true);
+  assert.equal(r.actions.find(x=>x.id==='problem-interviews').available,false);
+  assert.equal(r.actions.find(x=>x.id==='experiment-design').available,false);
+  const {verificationContext}=await import('../src/problem-verification.mjs');
+  const ctx=verificationContext(db,id);
+  const review=db.put('problem_verifications',{id,fingerprint:ctx.fingerprint,decision:'worth_interviewing',
+   firsthandConfirmed:true,impactConfirmed:true,alternativeAdequacy:'inadequate',actualWorkaround:'Manual reconciliation'});
+  r=opportunityResearchWorkbench(db,id);
+  assert.equal(r.actions.find(x=>x.id==='problem-interviews').available,true);
+  db.put('problem_interview_plans',{id:'plan-1',problemId:id,status:'closed',
+   decision:'low_cost_test',verificationRevision:review.revision});
+  r=opportunityResearchWorkbench(db,id);
+  assert.equal(r.actions.find(x=>x.id==='experiment-design').available,true);
+  const source=db.get('sources','source-1');
+  db.put('sources',{...source,description:source.description+' changed'},source.revision);
+  r=opportunityResearchWorkbench(db,id);
+  assert.equal(r.actions.find(x=>x.id==='problem-interviews').available,false);
+  assert.equal(r.actions.find(x=>x.id==='experiment-design').available,false);
+ }finally{db.close();}
+});
