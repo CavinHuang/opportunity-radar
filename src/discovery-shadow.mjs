@@ -10,7 +10,7 @@ const rowId='real_problem_rule_shadow';
 export function shadowStatus(store){
  const row=store.get('discovery_rule_decisions',rowId);
  return {revision:row?.revision||0,active:row?.active||false,policyId:row?.policyId||null,percentage:row?.percentage||0,
-  history:row?.history||[],lastRun:row?.lastRun||null,productionChanged:false};
+  history:row?.history||[],lastRun:row?.lastRun||null,snapshots:row?.snapshots||[],productionChanged:false};
 }
 export function setShadowStatus(store,{action,policy_id,percentage,reason,expected_revision}={}){
  const prev=shadowStatus(store),approved=ruleTrialLedger(store);
@@ -26,7 +26,7 @@ export function setShadowStatus(store,{action,policy_id,percentage,reason,expect
  if(action==='stop'&&!prev.active)throw fail('NOT_ACTIVE','影子测试未启动',409);
  return store.transaction(()=>{
   const next=store.put('discovery_rule_decisions',{id:rowId,active:action==='start',policyId:action==='start'?policy_id:null,
-   percentage:action==='start'?percentage:0,lastRun:prev.lastRun,
+   percentage:action==='start'?percentage:0,lastRun:prev.lastRun,snapshots:prev.snapshots,
    history:[...prev.history,{action,policyId:action==='start'?policy_id:prev.policyId,reason:note,at:new Date().toISOString()}].slice(-100)},expected_revision);
   store.event('discovery.shadow.changed',rowId,'owner',{action,revision:next.revision});
   return shadowStatus(store);
@@ -38,6 +38,8 @@ export function evaluateShadow(store,{limit=500}={}){
  if(!state.active||state.policyId!==approval.selectedTrial) return {active:false,staleApproval:state.active,productionChanged:false,examined:0,selected:0,changes:[]};
  const samples=store.list('sources').filter(s=>s.id&&s.title).slice(0,limit);
  let selected=0,baselineAccepted=0,shadowAccepted=0;
+ const labels=new Map(store.list('discovery_quality_labels').map(x=>[x.id,x]));
+ let reviewed=0,baselineFalseNegative=0,shadowFalseNegative=0,baselineFalsePositive=0,shadowFalsePositive=0;
  const changes=[];
  for(const source of samples){
   if(stableBucket(source.id)>=state.percentage)continue;
@@ -46,22 +48,42 @@ export function evaluateShadow(store,{limit=500}={}){
   selected++;
   baselineAccepted+=Number(original.qualified);
   shadowAccepted+=Number(alternative);
+  const label=labels.get(source.id);
+  if(label&&label.sourceRevision===source.revision&&['real_problem','not_problem'].includes(label.label)){
+   reviewed++;
+   if(label.label==='real_problem'){baselineFalseNegative+=Number(!original.qualified);shadowFalseNegative+=Number(!alternative);}
+   else{baselineFalsePositive+=Number(original.qualified);shadowFalsePositive+=Number(alternative);}
+  }
   if(original.qualified!==alternative)changes.push({sourceId:source.id,title:source.title,url:source.url,baseline:original.qualified,shadow:alternative});
  }
  return {active:true,policyId:state.policyId,percentage:state.percentage,examined:samples.length,selected,baselineAccepted,shadowAccepted,
   changedCount:changes.length,changes:changes.slice(0,30),productionChanged:false,
+  reviewed,baselineFalseNegative,shadowFalseNegative,baselineFalsePositive,shadowFalsePositive,
+  deltaFalseNegative:shadowFalseNegative-baselineFalseNegative,deltaFalsePositive:shadowFalsePositive-baselineFalsePositive,
   note:'只读影子比较：按原始线索ID稳定分桶，比例不是随机用户分流；没有修改正式判定或候选机会。'};
+}
+export function shadowHistory(store){
+ const state=shadowStatus(store);
+ const entries=state.snapshots.map((s,i)=>({at:s.at,policyId:s.policyId,selected:s.selected,changedCount:s.changedCount,
+  reviewed:s.reviewed,deltaFalseNegative:s.deltaFalseNegative,deltaFalsePositive:s.deltaFalsePositive,autoStopped:s.autoStopped,
+  priorChangedCount:i?state.snapshots[i-1].changedCount:null}));
+ return {active:state.active,policyId:state.policyId,entries,productionChanged:false,
+  note:'快照只覆盖有限的已收录帖子；重复样本不能视为独立观测或实际改善。'};
 }
 export function recordShadowSnapshot(store,{expected_revision}={}){
  const state=shadowStatus(store);
  if(expected_revision!==state.revision)throw fail('REVISION_CONFLICT','影子测试状态已变更，请刷新',409);
  const report=evaluateShadow(store);
  if(!report.active)throw fail('NOT_ACTIVE','无有效的已审批影子测试',409);
+ const autoStopped=report.reviewed>=5&&(report.deltaFalseNegative>0||report.deltaFalsePositive>0);
+ const at=new Date().toISOString();
+ const snapshot={...report,at,autoStopped};
  return store.transaction(()=>{
-  store.put('discovery_rule_decisions',{id:rowId,active:state.active,policyId:state.policyId,percentage:state.percentage,
-   lastRun:{...report,at:new Date().toISOString()},
-   history:[...state.history,{action:'snapshot',at:new Date().toISOString(),selected:report.selected,changedCount:report.changedCount}].slice(-100)},expected_revision);
-  store.event('discovery.shadow.snapshot',rowId,'owner',{selected:report.selected,changedCount:report.changedCount});
+  store.put('discovery_rule_decisions',{id:rowId,active:autoStopped?false:state.active,policyId:state.policyId,percentage:state.percentage,
+   lastRun:snapshot,snapshots:[...state.snapshots,snapshot].slice(-30),
+   history:[...state.history,{action:autoStopped?'auto_stop':'snapshot',at,selected:report.selected,
+    changedCount:report.changedCount,reviewed:report.reviewed,deltaFalseNegative:report.deltaFalseNegative,deltaFalsePositive:report.deltaFalsePositive}].slice(-100)},expected_revision);
+  store.event('discovery.shadow.snapshot',rowId,'owner',{selected:report.selected,changedCount:report.changedCount,autoStopped});
   return shadowStatus(store);
  });
 }
