@@ -2,6 +2,7 @@ import {assessRealProblem,problemCaseFile} from './real-problem.mjs';
 import {selectProductionProblem,productionRuleStatus} from './discovery-production-release.mjs';
 import {opportunityQualityReview} from './opportunity-quality.mjs';
 import {reviewPriority} from './opportunity-evidence-priority.mjs';
+import {taskPainClusters} from './task-pain-clusters.mjs';
 import {discoveryClusters,problemTokens} from './discovery.mjs';
 const hints=[['repetitive_work',/automati[sz]|manual(?:ly)?|repetit|tedious|time.consum|耗时|重复|手动|自动化/i,'提及重复操作或手动处理'],['workaround',/workaround|alternative|replace|instead of|looking for|recommend|替代|有没有|求推荐|找不到/i,'明确寻找替代工具或临时解决办法'],['friction',/difficult|frustrat|struggl|cannot|can't|broken|problem|pain|issue|无法|困难|麻烦|不方便/i,'描述具体使用障碍']];
 const isHttps=x=>{try{return new URL(x).protocol==='https:'}catch{return false}};
@@ -37,9 +38,26 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400}={}){
  const candidates=store.list('sources').filter(s=>['new','saved'].includes(s.status)&&isHttps(s.url)&&s.title).slice(0,maxSignals);
  const qualifiedIds=new Set(candidates.filter(s=>selectProductionProblem(store,s).qualified).map(s=>s.id));
  const groups=discoveryClusters(store,{limit:300,maxSignals}).items.filter(x=>x.state!=='dismissed');
- const groupedIds=new Set(groups.flatMap(g=>g.signals.map(x=>x.id)));
+ const groupedIds=new Set();
  const collected=[];
- for(const g of groups){const members=g.signals.map(s=>candidates.find(x=>x.id===s.id)).filter(Boolean);if(members.length>1&&members.some(m=>qualifiedIds.has(m.id)))collected.push(explain(members,g,s=>selectProductionProblem(store,s)));}
+ for(const g of groups){
+  const members=g.signals.map(s=>candidates.find(x=>x.id===s.id)).filter(Boolean);
+  if(members.length>1&&members.some(m=>qualifiedIds.has(m.id))){
+   collected.push(explain(members,g,s=>selectProductionProblem(store,s)));
+   members.forEach(m=>groupedIds.add(m.id));
+  }
+ }
+ // Second pass finds task/action similarities missed by near-identical title grouping.
+ // Previously reviewed title groups keep their own fingerprints and owner decisions.
+ for(const group of taskPainClusters(candidates.filter(s=>!groupedIds.has(s.id)),{assess:s=>selectProductionProblem(store,s)})){
+  const row=explain(group.members,null,s=>selectProductionProblem(store,s));
+  row.id='task:'+group.task+':'+group.members.map(s=>s.id).sort().join(',');
+  row.clusterMethod=group.matchingBasis;
+  row.clusterCaveat=group.caveat;
+  row.nextAction='先人工核对组内原帖是否为同一操作和同一根因，再调查现有替代方案';
+  collected.push(row);
+  group.members.forEach(m=>groupedIds.add(m.id));
+ }
  for(const signal of candidates){if(groupedIds.has(signal.id)||!qualifiedIds.has(signal.id)||problemTokens(signal.title).size<3)continue;const row=explain([signal],null,s=>selectProductionProblem(store,s));if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
  const scored=collected.map(item=>({...item,qualityReview:opportunityQualityReview(item),priority:item.evidencePriority.priority,status:'unverified_candidate'}));
  scored.sort((a,b)=>b.priority-a.priority||b.evidencePriority.qualifiedSources-a.evidencePriority.qualifiedSources||a.id.localeCompare(b.id));
