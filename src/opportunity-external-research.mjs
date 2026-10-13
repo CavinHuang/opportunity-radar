@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {candidateContext} from './opportunity-research.mjs';
+import {analyzeExternalCounterevidence} from './opportunity-gap-analysis.mjs';
 
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -64,8 +65,9 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
  }
  sourceStatus.unshift({source:'Hacker News',status:'ok',count:results.filter(x=>x.source==='Hacker News').length});
  // These are retrieval leads, not independent users, proven competitors, or verified claims.
+ const analysis=analyzeExternalCounterevidence(context.candidate.title,results.slice(0,35),sourceStatus);
  const record={id,candidateFingerprint:context.fingerprint,queryFingerprint:digest(queries),
-  queries,sourceStatus,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
+  queries,sourceStatus,analysis,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
   missing:['独立用户与原帖关系未核查','检索结果可能相关性不足','现有产品能力及收费情况未核查','不能根据没有搜索结果断言市场空白'],
   notice:'只查询固定 Hacker News 与 GitHub Issues 公开接口；部分来源失败会显式记录。命中结果不是已验证的竞争产品或独立用户证据。'};
  const previous=externalResearchStatus(store,id);
@@ -82,6 +84,7 @@ export function externalResearchBrief(store,id){
  return {candidateId:id,current:current.record&&current.record.candidateFingerprint===context.fingerprint,
    stale:!!current.record&&current.record.candidateFingerprint!==context.fingerprint,
    results:current.record?.results||[],queries:current.record?.queries||[],sourceStatus:current.record?.sourceStatus||[],
+   analysis:current.record?.candidateFingerprint===context.fingerprint?(current.record?.analysis||null):null,
    searchedAt:current.record?.searchedAt||null,revision:current.revision,
    notice:'匹配结果只能用于进一步调查；不能自动认定为相同问题、独立需求或有效竞品。'};
 }
