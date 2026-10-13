@@ -2,6 +2,7 @@ import {candidateContext} from './opportunity-research.mjs';
 import {opportunityStage} from './opportunity-stages.mjs';
 import {externalResearchStatus} from './opportunity-external-research.mjs';
 import {verificationContext} from './problem-verification.mjs';
+import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
 
 // A single read-only view of existing, versioned evidence. It creates no new
 // assertion of demand and never launches interviews, experiments or searches.
@@ -14,6 +15,8 @@ export function opportunityResearchWorkbench(store,id){
  const externalCurrent=Boolean(ext&&ext.candidateFingerprint===fingerprint);
  const research=store.get('opportunity_research',id);
  const researchCurrent=Boolean(research&&research.sourceFingerprint===fingerprint);
+ const evidenceReview=evidenceReviewBoard(store,id);
+ const timeline=store.eventsLatest(400).filter(x=>x.entity_id===id&&(String(x.kind||'').startsWith('opportunity.')||String(x.kind||'').startsWith('problem.'))).slice(-35).reverse();
  const plans=store.list('problem_interview_plans').filter(p=>p.problemId===id);
  const observations=store.list('problem_interview_observations').filter(o=>o.problemId===id);
  const experiments=store.list('problem_experiment_designs').filter(e=>e.problemId===id);
@@ -46,6 +49,8 @@ export function opportunityResearchWorkbench(store,id){
    decision:researchCurrent?research.decision:null,sections:researchCurrent?research.sections:null},
   interviews:{plans:planRows,observationCount:observations.length},
   experiments:{designCount:experiments.length,drafts:experiments.slice(0,8).map(e=>({id:e.id,status:e.status,planId:e.planId}))},
+  evidenceReview:{current:evidenceReview.current,revision:evidenceReview.revision,searchRevision:evidenceReview.searchRevision,reviews:evidenceReview.reviews},
+  timeline:timeline.map(x=>({kind:x.kind,at:x.created_at,actor:x.actor,detail:x.detail})),
   nextAction,actions,readOnly:true,validatedMarketDemand:false,
   notice:'统一视图仅汇集已有记录。外部搜索命中、人工核查及访谈数量不代表经过独立验证的商业需求；过期证据不用于当前结论。'};
 }
