@@ -643,6 +643,14 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     modal('记录机会决策 · '+r.brief.title,'<p class="subtext">系统当时建议：'+esc(r.brief.disposition)+'</p><div class="field wide"><label>实际采纳的决定</label><select name="decision">'+options+'</select></div>'+field('reason','做出这个选择的依据',{wide:true,type:'textarea',required:true})+field('plannedHours','预计投入小时',{type:'number',value:0})+field('plannedBudget','预计投入预算（按本人记账货币）',{type:'number',value:0}),async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/decisions',{method:'POST',body:{...d,plannedHours:Number(d.plannedHours),plannedBudget:Number(d.plannedBudget),briefFingerprint:r.briefFingerprint}}));
     break;
   }
+  case 'workbench-decision-effectiveness':{
+    const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/decision-effectiveness');
+    const fmt=n=>Number(n).toLocaleString('zh-CN',{maximumFractionDigits:2});
+    const metric='<p class="subtext">决策 '+r.sample.all+' · 已回填 '+r.sample.closed+' · 未回填 '+r.sample.pending+'</p><p class="subtext">已回填的计划投入 '+fmt(r.plan.hoursClosed)+' 小时，实际 '+fmt(r.actual.hoursClosed)+' 小时，偏差 '+fmt(r.delta.hoursClosed)+' 小时</p><p class="subtext">已回填的计划预算 '+fmt(r.plan.budgetClosed)+'，实际支出 '+fmt(r.actual.costClosed)+'，偏差 '+fmt(r.delta.costClosed)+'（金额需使用同一币种）</p><p class="subtext">暂无结论投入 '+fmt(r.inconclusive.hours)+' 小时 / '+fmt(r.inconclusive.cost)+'；暂停记录 '+r.stopped.records+' 条（不可视为节约金额）</p>';
+    const rows=r.records.map(x=>'<div class="source-row"><strong>'+esc(x.title)+'</strong> · '+esc(x.adopted)+'<p class="subtext">结果 '+esc(x.outcome)+' · 实际 '+fmt(x.actualHours)+' 小时 / '+fmt(x.actualCost)+'</p></div>').join('');
+    modal('决策效果 · 投入与结果',metric+(rows||'<p class="subtext">尚无完成结果回填的决策记录</p>')+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    break;
+  }
   case 'workbench-decision-outcomes':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/decisions');
     const rows=r.entries.map(x=>'<div class="source-row"><strong>'+esc(x.adopted)+'</strong> · '+esc(x.createdAt||'')+'<p class="subtext">当时建议：'+esc(x.recommended)+' · '+(x.outcome?'已归档：'+esc(x.outcome.status):'等待验证结果')+'</p>'+(!x.outcome?'<button class="btn btn-sm" data-action="workbench-outcome-edit" data-id="'+esc(id)+'" data-entry-id="'+esc(x.id)+'">记录后续结果</button>':'')+'</div>').join('');
@@ -734,6 +742,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const sourceRows=r.originalSources.map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.excerpt||'')+'</p>').join('');
     const externalRows=r.external.results.slice(0,8).map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.source)+'</p>').join('');
     const checks='<p class="subtext">外部反证：'+(r.external.current?'当前有效':r.external.stale?'已过期':'未检索')+' · 人工问题核查：'+(r.verification.current?'当前有效':r.verification.stale?'已过期':'未完成')+' · 研究笔记：'+(r.aiResearch.current?'当前有效':r.aiResearch.stale?'已过期':'暂无')+'</p>';
+    const effectivenessButton='<button class="btn btn-sm" data-action="workbench-decision-effectiveness" data-id="'+esc(id)+'">决策效果分析</button>';
     const historyButtons='<button class="btn btn-sm" data-action="workbench-decision-history" data-id="'+esc(id)+'">记录人工决策</button> <button class="btn btn-sm" data-action="workbench-decision-outcomes" data-id="'+esc(id)+'">历史与结果</button>';
     const decisionButton='<button class="btn btn-sm" data-action="workbench-decision-brief" data-id="'+esc(id)+'">机会决策报告</button>';
     const feasibilityButton='<button class="btn btn-sm" data-action="workbench-feasibility" data-id="'+esc(id)+'">可行性研究</button>';
@@ -742,7 +751,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const reviewButtons=r.external.current?'<button class="btn btn-sm" data-action="workbench-evidence-review" data-id="'+esc(id)+'">逐条核查外部证据（已审核 '+r.evidenceReview.reviews.length+'）</button>':'';
     const timelineRows='<h4>研究时间线</h4>'+(r.timeline.length?r.timeline.slice(0,15).map(t=>'<p class="subtext">'+esc(t.at||'')+' · '+esc(t.kind)+'</p>').join(''):'<p class="subtext">尚无该候选研究事件</p>');
     const actionButtons='<h4>继续研究</h4>'+r.actions.filter(a=>a.available).map(a=>'<button class="btn btn-sm" data-action="'+esc(a.id)+'" data-id="'+esc(id)+'">'+esc(a.label)+'</button>').join(' ');
-    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+alternativeButton+competitionButton+feasibilityButton+decisionButton+historyButtons+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+alternativeButton+competitionButton+feasibilityButton+decisionButton+historyButtons+effectivenessButton+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'opportunity-stage':{
