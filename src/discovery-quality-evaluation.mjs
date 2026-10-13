@@ -18,5 +18,6 @@ export function discoveryQualityReport(store,{limit=60}={}){
  const tn=eligible.filter(x=>!x.predicted&&x.label==='not_problem').length;
  return {counts:{labeled:rows.length,usable:eligible.length,stale:rows.filter(x=>x.stale).length,truePositive:tp,falsePositive:fp,falseNegative:fn,trueNegative:tn,uncertain:rows.filter(x=>x.label==='uncertain').length},
   precision:tp+fp?tp/(tp+fp):null,recall:tp+fn?tp/(tp+fn):null,
+  unlabeled:store.list('sources').filter(x=>x.title&&!labels.some(l=>l.id===x.id)).slice(0,10).map(x=>({sourceId:x.id,title:x.title,url:x.url,predicted:assessRealProblem(x).qualified})),
   items:rows.slice(0,Math.min(100,Math.max(1,limit))),notice:'只针对人工标注的小样本估算规则准确率；样本有选择偏差，不代表所有信息源或 AI 模型表现'};
 }
