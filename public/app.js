@@ -637,6 +637,20 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     toast(r.result.errors.length?'重试已完成，但来源仍存在采集异常':'重试成功，新增 '+r.result.added+' 条信号');
     break;
   }
+  case 'workbench-feasibility':{
+    const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/feasibility');
+    const d=r.inputs||{};
+    const fields=[
+      field('recurringDemand','持续需求与频率证据（未知可留空）',{wide:true,type:'textarea',value:d.recurringDemand||''}),
+      field('switchingCost','用户切换现有方案的成本（未知可留空）',{wide:true,type:'textarea',value:d.switchingCost||''}),
+      field('technicalScope','技术实现难点与风险（至少12字）',{wide:true,type:'textarea',required:true,value:d.technicalScope||''}),
+      field('operatingBurden','运营、获客与维护成本（未知可留空）',{wide:true,type:'textarea',value:d.operatingBurden||''}),
+      field('paymentEvidence','付费意愿或实际支付的证据（未知可留空）',{wide:true,type:'textarea',value:d.paymentEvidence||''}),
+      field('falsifier','什么证据会推翻这个机会假设？（至少12字）',{wide:true,type:'textarea',required:true,value:d.falsifier||''})
+    ].join('');
+    modal('机会可行性研究 · '+r.title,'<p class="subtext">人工复核 '+(r.evidence.verificationCurrent?'有效':'未完成或过期')+' · 已调查方案 '+r.evidence.alternatives+' · 访谈记录 '+r.evidence.interviews+' · 实验记录 '+r.evidence.experimentRecords+'</p>'+fields+'<h4>当前证据缺口</h4>'+r.needs.map(x=>'<p class="subtext">· '+esc(x)+'</p>').join('')+'<p class="subtext">'+esc(r.notice)+'</p>',async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/feasibility',{method:'POST',body:{...d,candidateFingerprint:r.candidateFingerprint,competitionRevision:r.competitionRevision,verificationRevision:r.verificationRevision,expected_revision:r.revision}}));
+    break;
+  }
   case 'workbench-competition-space':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/competition-space');
     const rows=r.items.map(x=>'<div class="source-row"><strong>'+esc(x.name)+'</strong> · <a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">原始证据</a><p class="subtext">功能覆盖：'+esc(x.coverage.text||'未知')+'</p><p class="subtext">定价证据：'+esc(x.pricing.text||'未知')+'</p><p class="subtext">已记录局限：'+esc(x.limitations.text||'未知')+'</p><p class="subtext">所有内容均为人工待核实笔记</p></div>').join('');
@@ -693,12 +707,13 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const sourceRows=r.originalSources.map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.excerpt||'')+'</p>').join('');
     const externalRows=r.external.results.slice(0,8).map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.source)+'</p>').join('');
     const checks='<p class="subtext">外部反证：'+(r.external.current?'当前有效':r.external.stale?'已过期':'未检索')+' · 人工问题核查：'+(r.verification.current?'当前有效':r.verification.stale?'已过期':'未完成')+' · 研究笔记：'+(r.aiResearch.current?'当前有效':r.aiResearch.stale?'已过期':'暂无')+'</p>';
+    const feasibilityButton='<button class="btn btn-sm" data-action="workbench-feasibility" data-id="'+esc(id)+'">可行性研究</button>';
     const competitionButton='<button class="btn btn-sm" data-action="workbench-competition-space" data-id="'+esc(id)+'">竞争空间分析</button>';
     const alternativeButton=r.alternatives.eligible.length?'<button class="btn btn-sm" data-action="workbench-alternatives" data-id="'+esc(id)+'">替代方案调查（已记录 '+r.alternatives.items.length+'）</button>':'';
     const reviewButtons=r.external.current?'<button class="btn btn-sm" data-action="workbench-evidence-review" data-id="'+esc(id)+'">逐条核查外部证据（已审核 '+r.evidenceReview.reviews.length+'）</button>':'';
     const timelineRows='<h4>研究时间线</h4>'+(r.timeline.length?r.timeline.slice(0,15).map(t=>'<p class="subtext">'+esc(t.at||'')+' · '+esc(t.kind)+'</p>').join(''):'<p class="subtext">尚无该候选研究事件</p>');
     const actionButtons='<h4>继续研究</h4>'+r.actions.filter(a=>a.available).map(a=>'<button class="btn btn-sm" data-action="'+esc(a.id)+'" data-id="'+esc(id)+'">'+esc(a.label)+'</button>').join(' ');
-    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+alternativeButton+competitionButton+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+alternativeButton+competitionButton+feasibilityButton+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'opportunity-stage':{
