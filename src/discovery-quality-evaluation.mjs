@@ -1,4 +1,5 @@
 import {assessRealProblem} from './real-problem.mjs';
+import {replayDiscoveryRules} from './discovery-rule-replay.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 export function labelDiscoveryExample(store,sourceId,{label,reason,expected_revision}={}){
  const s=store.get('sources',sourceId);if(!s)throw fail('SOURCE_NOT_FOUND','原始线索不存在',404);
@@ -46,6 +47,6 @@ export function discoveryQualityReport(store,{limit=60}={}){
  const review=discoveryReviewSample(store);
  return {counts:{labeled:rows.length,usable:eligible.length,stale:rows.filter(x=>x.stale).length,truePositive:tp,falsePositive:fp,falseNegative:fn,trueNegative:tn,uncertain:rows.filter(x=>x.label==='uncertain').length,remainingUnlabeled:review.remainingUnlabeled},
   precision:tp+fp?tp/(tp+fp):null,recall:tp+fn?tp/(tp+fn):null,
-  unlabeled:review.items,samplePolicy:review.samplePolicy,
+  unlabeled:review.items,samplePolicy:review.samplePolicy,offlineReplay:replayDiscoveryRules(store),
   items:rows.slice(0,Math.min(100,Math.max(1,limit))),notice:'只针对人工标注的小样本估算规则准确率；抽样队列是确定性的分层待审核列表，并非随机抽样，存在选择偏差，不代表所有信息源或 AI 模型表现'};
 }
