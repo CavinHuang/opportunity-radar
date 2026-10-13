@@ -210,6 +210,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const feasibilityRoute=/^\/api\/opportunity-scan\/([^/]+)\/feasibility$/.exec(pathname);
+    if(feasibilityRoute&&req.method==='GET')return send(res,200,opportunityFeasibilityBoard(store,decodeURIComponent(feasibilityRoute[1])));
+    if(feasibilityRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>saveOpportunityFeasibility(store,decodeURIComponent(feasibilityRoute[1]),d))});
     const competitionRoute=/^\/api\/opportunity-scan\/([^/]+)\/competition-space$/.exec(pathname);
     if(competitionRoute&&req.method==='GET')return send(res,200,opportunityCompetitionSpace(store,decodeURIComponent(competitionRoute[1])));
     const alternativeRoute=/^\/api\/opportunity-scan\/([^/]+)\/alternatives$/.exec(pathname);
