@@ -655,7 +655,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const state=await api('/discovery/production-monitor');
     if(id==='view'){
       const r=state.report;
-      modal('生产灰度效果监控','<p class="subtext">覆盖 '+r.exposed+' / '+r.examined+' 条已采集来源 · 规则差异 '+r.changed+' · 有效人工复核 '+r.reviewed+'</p><p class="subtext">误报变化 '+r.falsePositiveDelta+' · 漏报变化 '+r.falseNegativeDelta+' · 历史快照 '+state.history.snapshots.length+'</p><p class="subtext">'+esc(r.notice)+'</p>'+r.examples.slice(0,8).map(x=>'<p><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a></p>').join(''),async()=>{});break;
+      modal('生产灰度效果监控','<p class="subtext">覆盖 '+r.exposed+' / '+r.examined+' 条已采集来源 · 规则差异 '+r.changed+' · 有效人工复核 '+r.reviewed+'</p><p class="subtext">误报变化 '+r.falsePositiveDelta+' · 漏报变化 '+r.falseNegativeDelta+' · 历史快照 '+state.history.snapshots.length+'</p><p class="subtext">自动巡检每分钟检查调度状态，约每15分钟记录质量快照。回滚告警 '+(state.alerts||[]).length+' 条</p>'+(state.alerts||[]).slice(0,5).map(a=>'<p class="subtext">'+esc(a.created_at)+' · '+esc(a.detail?.code||'自动回滚')+'</p>').join('')+'<p class="subtext">'+esc(r.notice)+'</p>'+r.examples.slice(0,8).map(x=>'<p><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a></p>').join(''),async()=>{});break;
     }
     const release=await api('/discovery/production-rule');
     modal('记录生产质量快照',field('reason','人工复核依据（至少12字符）',{wide:true,type:'textarea',required:true})+'<p class="subtext">发现有效人工标注对应的新增误报或漏报，将自动回滚生产规则。</p>',async d=>api('/discovery/production-monitor',{method:'POST',body:{reason:d.reason,expected_revision:state.history.revision,expected_release_revision:release.revision}}));
