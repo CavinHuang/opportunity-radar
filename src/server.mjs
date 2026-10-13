@@ -1,6 +1,6 @@
 import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
 import {ruleTrialLedger,decideRuleTrial} from './discovery-rule-approval.mjs';
-import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot} from './discovery-shadow.mjs';
+import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from './discovery-shadow.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -156,6 +156,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
     if(pathname==='/api/discovery/rule-trials'&&req.method==='GET')return send(res,200,ruleTrialLedger(store));
     if(pathname==='/api/discovery/shadow'&&req.method==='GET')return send(res,200,{status:shadowStatus(store),preview:evaluateShadow(store)});
+    if(pathname==='/api/discovery/shadow/history'&&req.method==='GET')return send(res,200,shadowHistory(store));
     if(pathname==='/api/discovery/shadow'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>d.action==='snapshot'?recordShadowSnapshot(store,d):setShadowStatus(store,d)));
     if(pathname==='/api/discovery/rule-trials'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>decideRuleTrial(store,d)));
     const qualityLabel=/^\/api\/home\/problem-quality\/([^/]+)$/.exec(pathname);
