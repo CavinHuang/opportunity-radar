@@ -51,6 +51,6 @@ export function opportunityResearchWorkbench(store,id){
   experiments:{designCount:experiments.length,drafts:experiments.slice(0,8).map(e=>({id:e.id,status:e.status,planId:e.planId}))},
   evidenceReview:{current:evidenceReview.current,revision:evidenceReview.revision,searchRevision:evidenceReview.searchRevision,reviews:evidenceReview.reviews},
   timeline:timeline.map(x=>({kind:x.kind,at:x.created_at,actor:x.actor,detail:x.detail})),
-  nextAction,actions,readOnly:false,validatedMarketDemand:false,
+  nextAction,actions,readOnly:true,validatedMarketDemand:false,
   notice:'统一视图仅汇集已有记录。外部搜索命中、人工核查及访谈数量不代表经过独立验证的商业需求；过期证据不用于当前结论。'};
 }
