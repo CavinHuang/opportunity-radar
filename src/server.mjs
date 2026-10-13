@@ -1,3 +1,4 @@
+import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
 import {experimentExecutionBoard,recordExperimentResult,closeExperiment} from './problem-execution.mjs';
 import {problemExperimentDesigns,designProblemExperiment} from './problem-experiments.mjs';
@@ -148,6 +149,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/home/work-queue'&&req.method==='GET')return send(res,200,problemWorkQueue(store));
     if(pathname==='/api/decision-center'&&req.method==='GET')return send(res,200,decisionReviewCenter(store));
     const reviewDecision=/^\/api\/decision-center\/([^/]+)$/.exec(pathname);
     if(reviewDecision&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>saveDecisionReview(store,decodeURIComponent(reviewDecision[1]),d))});
