@@ -1,5 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
+import {candidateContext} from './opportunity-research.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const clean=(s,n=900)=>String(s??'').trim().slice(0,n);
 const choices=new Set(['continue_verification','pause_or_stop','review_small_experiment']);
@@ -8,7 +9,7 @@ const fingerprint=b=>createHash('sha256').update(JSON.stringify([b.candidateId,b
 export function decisionOutcomeLedger(store,id){
  const brief=opportunityDecisionBrief(store,id);
  const entries=store.list('opportunity_decision_history').filter(x=>x.problemId===id).sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
- const currentHash=fingerprint(brief);
+ const currentHash=createHash('sha256').update(fingerprint(brief)+candidateContext(store,id).fingerprint).digest('hex');
  return {candidateId:id,brief,briefFingerprint:currentHash,entries,revision:entries.length,readOnly:true,
   notice:'历史决策记录冻结当时证据和建议；后续观察为人工自报，不等于验证商业成功。没有实际结果不能算作命中。'};
 }
