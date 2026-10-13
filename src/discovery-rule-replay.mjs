@@ -27,7 +27,7 @@ export function replayDiscoveryRules(store){
   const after=metrics(rows.map(x=>({label:x.label,predicted:x.after})));
   return {id,description:variant.description,after,delta:{falsePositive:after.falsePositive-baseline.falsePositive,falseNegative:after.falseNegative-baseline.falseNegative},
    changed:rows.filter(x=>x.before!==x.after).map(x=>({sourceId:x.sourceId,label:x.label,before:x.before,after:x.after})).slice(0,25),
-   recommendation:eligible.length<20?'insufficient_reviewed_examples':after.falseNegative>baseline.falseNegative?'increased_misses_do_not_apply':after.falsePositive>baseline.falsePositive?'increased_false_positives_do_not_apply':'manual_review_required'};
+   recommendation:after.falseNegative>baseline.falseNegative?'increased_misses_do_not_apply':after.falsePositive>baseline.falsePositive?'increased_false_positives_do_not_apply':eligible.length<20?'insufficient_reviewed_examples':'manual_review_required'};
  });
  return {sampleSize:eligible.length,staleLabels:stale.length,baseline,policies,liveRuleChanged:false,
   notice:'仅在人工标注且原文版本未变的样本上离线回放；样本非随机，不代表总体精准率或召回率。不会自动应用任何规则。'};
