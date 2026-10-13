@@ -24,6 +24,7 @@ import {alternativeResearchBoard,recordAlternativeResearch} from './opportunity-
 import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {opportunityFeasibilityBoard,saveOpportunityFeasibility} from './opportunity-feasibility.mjs';
 import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
+import {decisionOutcomeLedger,adoptDecision,recordDecisionOutcome} from './opportunity-decision-outcomes.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
