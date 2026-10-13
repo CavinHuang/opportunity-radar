@@ -2,6 +2,7 @@ import {assessRealProblem,problemCaseFile} from './real-problem.mjs';
 import {selectProductionProblem,productionRuleStatus} from './discovery-production-release.mjs';
 import {opportunityQualityReview} from './opportunity-quality.mjs';
 import {reviewPriority} from './opportunity-evidence-priority.mjs';
+import {opportunityEvidenceDossier} from './opportunity-evidence-dossier.mjs';
 import {taskPainClusters} from './task-pain-clusters.mjs';
 import {discoveryClusters,problemTokens} from './discovery.mjs';
 const hints=[['repetitive_work',/automati[sz]|manual(?:ly)?|repetit|tedious|time.consum|耗时|重复|手动|自动化/i,'提及重复操作或手动处理'],['workaround',/workaround|alternative|replace|instead of|looking for|recommend|替代|有没有|求推荐|找不到/i,'明确寻找替代工具或临时解决办法'],['friction',/difficult|frustrat|struggl|cannot|can't|broken|problem|pain|issue|无法|困难|麻烦|不方便/i,'描述具体使用障碍']];
@@ -9,6 +10,7 @@ const isHttps=x=>{try{return new URL(x).protocol==='https:'}catch{return false}}
 const domain=s=>{try{return new URL(s.url).hostname.replace(/^www\./,'')}catch{return ''}};
 function explain(signals,cluster=null,assess=assessRealProblem){
  const evidencePriority=reviewPriority(signals,{assess,possibleRepost:Boolean(cluster?.diagnostics?.possibleRepost)});
+ const evidenceDossier=opportunityEvidenceDossier(signals.filter(x=>assess(x).qualified));
  const problemEvidence=signals.map(x=>({id:x.id,...assess(x)})).filter(x=>x.qualified);
  const cases=signals.map(x=>({id:x.id,sourceUrl:x.url,...problemCaseFile(x)})).filter(x=>x.qualified);
  const strongest=cases.sort((a,b)=>b.evidenceCompleteness-a.evidenceCompleteness)[0];
@@ -27,7 +29,7 @@ function explain(signals,cluster=null,assess=assessRealProblem){
  const counterEvidence=[competition?'提到替代工具或已有方案，需要检查竞争和切换成本':'缺少现有竞品与替代方案的独立调查','未取得独立访谈、留存或付费证据'];
  const confidence=evidence.length>=2&&siteCount>1?'needs_original_verification':'weak_signal';
  return {id:cluster?'group:'+cluster.id:'signal:'+first.id,title:first.title,summary:String(first.description||'').slice(0,260),
-  signalIds:signals.map(s=>s.id),sourceUrls:signals.map(s=>s.url),signalCount:signals.length,siteCount,evidencePriority,
+  signalIds:signals.map(s=>s.id),sourceUrls:signals.map(s=>s.url),signalCount:signals.length,siteCount,evidencePriority,evidenceDossier,
   reasons,warnings,confidence,domains,competitionMentioned:competition,counterEvidence,clusterId:cluster?.id||null,
   problemCase:strongest||null,problemEvidence:{qualifiedSignals:problemEvidence.map(x=>x.id),grade:problemEvidence.some(x=>x.grade==='concrete_workflow_with_workaround')?'concrete_workflow_with_workaround':'concrete_workflow',criteria:['使用主体','具体操作','障碍或成本'],unverified:true},
   nextAction:'打开原帖，核对真实场景、现有替代方案、独立用户与反面案例，随后进行低成本访谈'};
