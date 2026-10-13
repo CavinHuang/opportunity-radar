@@ -16,7 +16,7 @@ export function opportunityResearchWorkbench(store,id){
  const research=store.get('opportunity_research',id);
  const researchCurrent=Boolean(research&&research.sourceFingerprint===fingerprint);
  const evidenceReview=evidenceReviewBoard(store,id);
- const timeline=store.eventsLatest(400,id).filter(x=>String(x.kind||'').startsWith('opportunity.')||String(x.kind||'').startsWith('problem.')).slice(-35).reverse();
+ const timeline=store.eventsLatest(400).filter(x=>x.entity_id===id&&(String(x.kind||'').startsWith('opportunity.')||String(x.kind||'').startsWith('problem.'))).slice(-35).reverse();
  const plans=store.list('problem_interview_plans').filter(p=>p.problemId===id);
  const observations=store.list('problem_interview_observations').filter(o=>o.problemId===id);
  const experiments=store.list('problem_experiment_designs').filter(e=>e.problemId===id);
