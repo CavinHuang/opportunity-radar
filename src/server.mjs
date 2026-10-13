@@ -25,6 +25,7 @@ import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {opportunityFeasibilityBoard,saveOpportunityFeasibility} from './opportunity-feasibility.mjs';
 import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
 import {decisionOutcomeLedger,adoptDecision,recordDecisionOutcome} from './opportunity-decision-outcomes.mjs';
+import {decisionEffectivenessReport} from './opportunity-decision-effectiveness.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -212,6 +213,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    if(pathname==='/api/discovery/decision-effectiveness'&&req.method==='GET')return send(res,200,decisionEffectivenessReport(store));
+    const effectivenessRoute=/^\/api\/opportunity-scan\/([^/]+)\/decision-effectiveness$/.exec(pathname);
+    if(effectivenessRoute&&req.method==='GET')return send(res,200,decisionEffectivenessReport(store,{problemId:decodeURIComponent(effectivenessRoute[1])}));
     const outcomeRoute=/^\/api\/opportunity-scan\/([^/]+)\/decisions\/([^/]+)\/outcome$/.exec(pathname);
     if(outcomeRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>recordDecisionOutcome(store,decodeURIComponent(outcomeRoute[1]),decodeURIComponent(outcomeRoute[2]),d))});
     const decisionHistoryRoute=/^\/api\/opportunity-scan\/([^/]+)\/decisions$/.exec(pathname);
