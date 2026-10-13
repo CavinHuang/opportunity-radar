@@ -51,7 +51,8 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
   for(const issue of payload.items.slice(0,15)){
    const url=safeLink(issue.html_url);
    // Search only canonical public GitHub issue pages, never pull requests or arbitrary URLs.
-   if(!url||new URL(url).hostname!=='github.com'||!new RegExp('^/[^/]+/[^/]+/issues/[0-9]+
+   const parts=new URL(url||'https://github.com/').pathname.split('/').filter(Boolean);
+   if(!url||new URL(url).hostname!=='github.com'||parts.length!==4||parts[2]!=='issues'||!/^[0-9]+/.test(parts[3])||Number.isNaN(Number(parts[3]))||issue.pull_request||seen.has(url))continue;
    seen.add(url);count++;
    results.push({url,title:plain(issue.title)||'未命名 Issue',excerpt:plain(issue.body),
     author:plain(issue.user?.login).slice(0,80),source:'GitHub Issues',query:githubQuery,
