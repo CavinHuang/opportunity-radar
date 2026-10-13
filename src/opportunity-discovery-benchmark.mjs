@@ -35,6 +35,25 @@ export function opportunityDiscoveryBenchmark(store){
    missReason:hit?null:assessRealProblem(source).qualified?'未进入前50条候选或在聚合/排序中丢失':'原始问题门槛未通过'});
  }
  fresh.sort((a,b)=>a.sourceId.localeCompare(b.sourceId));
+ const trialScan=opportunityScanCandidates(store,{limit:50,maxSignals:400,descriptionFallback:true});
+ const trialVisible=new Set(trialScan.items.flatMap(item=>item.problemEvidence?.qualifiedSignals||[]));
+ const trialRows=fresh.map(row=>({...row,predicted:trialVisible.has(row.sourceId)}));
+ const trialMetric=counts(trialRows);
+ const rescued=fresh.filter(row=>row.label==='real_problem'&&!row.predicted&&trialVisible.has(row.sourceId))
+  .map(row=>({sourceId:row.sourceId,title:row.title,url:row.url}));
+ const addedFalsePositives=fresh.filter(row=>row.label==='not_problem'&&!row.predicted&&trialVisible.has(row.sourceId))
+  .map(row=>({sourceId:row.sourceId,title:row.title,url:row.url}));
+ const lostTruePositives=fresh.filter(row=>row.label==='real_problem'&&row.predicted&&!trialVisible.has(row.sourceId))
+  .map(row=>({sourceId:row.sourceId,title:row.title,url:row.url}));
+ const recallTrial={id:'description_fallback_trial',liveRuleChanged:false,baseline:counts(fresh),
+  trial:trialMetric,rescued:rescued.slice(0,25),addedFalsePositives:addedFalsePositives.slice(0,25),
+  lostTruePositives:lostTruePositives.slice(0,25),
+  delta:{falseNegative:trialMetric.falseNegative-counts(fresh).falseNegative,
+   falsePositive:trialMetric.falsePositive-counts(fresh).falsePositive},
+  recommendation:!fresh.length?'insufficient_labels':
+   addedFalsePositives.length||lostTruePositives.length?'review_regressions_do_not_apply':
+   rescued.length?'manual_review_required':'no_observed_recall_gain',
+  caveat:'同一批当前人工标注样本对比生产候选前50与离线候选前50。标题词数不足时允许使用描述补足，绝不绕过真实问题门槛。样本有选择偏差，不自动发布。'};
  const metric=counts(fresh);
  const missed=fresh.filter(x=>x.label==='real_problem'&&!x.predicted);
  const falsePositives=fresh.filter(x=>x.label==='not_problem'&&x.predicted);
@@ -44,7 +63,7 @@ export function opportunityDiscoveryBenchmark(store){
   negativeLabeled:fresh.filter(x=>x.label==='not_problem').length,uncertain:uncertain.length,
   stale:stale.length,outOfWindow:outOfWindow.length,examined:scan.examined,topCandidateLimit:50,
   candidateCount:scan.items.length,missed:missed.slice(0,30),falsePositives:falsePositives.slice(0,30),
-  matched:matched.slice(0,15),evidenceFingerprint,generatedAt:new Date().toISOString(),
+  matched:matched.slice(0,15),recallTrial,evidenceFingerprint,generatedAt:new Date().toISOString(),
   policy:'current_version_owner_labels_top50_candidate_visibility',
   notice:'只评估400条已收录来源窗口内，人工标注且原帖版本未变的帖子是否进入前50条机会候选；漏报可能是门槛、聚合或榜单截断造成。标注不是随机样本，指标不能推断总体表现或商业价值。'};
 }
