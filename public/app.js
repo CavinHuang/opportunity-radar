@@ -637,6 +637,29 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     toast(r.result.errors.length?'重试已完成，但来源仍存在采集异常':'重试成功，新增 '+r.result.added+' 条信号');
     break;
   }
+  case 'workbench-alternatives':{
+    const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/alternatives');
+    const rows=r.eligible.map(item=>{
+      const current=r.items.find(x=>x.url===item.url);
+      return '<div class="source-row"><a href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">'+esc(current?.name||item.title)+'</a><p class="subtext">功能：'+esc(current?.capabilities||'未知')+' · 价格：'+esc(current?.priceEvidence||'未知')+'</p><p class="subtext">局限：'+esc(current?.reportedLimitations||'尚未核实')+'</p><button class="btn btn-sm" data-action="workbench-alternative-edit" data-id="'+esc(id)+'" data-evidence-url="'+esc(item.url)+'">记录核查结果</button></div>';
+    }).join('');
+    modal('结构化替代方案调查',rows||'<p class="subtext">先把外部证据核查为「现有替代方案线索」后才能记录。</p>','');
+    break;
+  }
+  case 'workbench-alternative-edit':{
+    const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/alternatives');
+    const url=S.pendingEvidenceUrl,hit=r.eligible.find(x=>x.url===url),old=r.items.find(x=>x.url===url);
+    if(!hit)throw new Error('该链接不再是当前已审核的方案线索，请刷新');
+    modal('调查替代方案 · '+hit.title,
+      '<p class="subtext"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">打开原始证据</a></p>'+
+      field('name','方案名称',{required:true,value:old?.name||hit.title})+
+      field('capabilities','可核对的功能覆盖（无证据可留空）',{wide:true,type:'textarea',value:old?.capabilities||''})+
+      field('priceEvidence','价格与定价来源（未知可留空）',{wide:true,type:'textarea',value:old?.priceEvidence||''})+
+      field('reportedLimitations','用户报告的不足（无证据可留空）',{wide:true,type:'textarea',value:old?.reportedLimitations||''})+
+      field('notes','核查依据（至少10字）',{wide:true,type:'textarea',required:true,value:old?.notes||''}),
+      async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/alternatives',{method:'POST',body:{...d,url,candidateFingerprint:r.candidateFingerprint,searchRevision:r.searchRevision,reviewRevision:r.reviewRevision,expected_revision:r.revision}}));
+    break;
+  }
   case 'workbench-evidence-review':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     if(!r.current)throw new Error('外部检索已过期或尚未执行，请先重新检索');
@@ -664,10 +687,11 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const sourceRows=r.originalSources.map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.excerpt||'')+'</p>').join('');
     const externalRows=r.external.results.slice(0,8).map(s=>'<p class="subtext"><a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title)+'</a> · '+esc(s.source)+'</p>').join('');
     const checks='<p class="subtext">外部反证：'+(r.external.current?'当前有效':r.external.stale?'已过期':'未检索')+' · 人工问题核查：'+(r.verification.current?'当前有效':r.verification.stale?'已过期':'未完成')+' · 研究笔记：'+(r.aiResearch.current?'当前有效':r.aiResearch.stale?'已过期':'暂无')+'</p>';
+    const alternativeButton=r.alternatives.eligible.length?'<button class="btn btn-sm" data-action="workbench-alternatives" data-id="'+esc(id)+'">替代方案调查（已记录 '+r.alternatives.items.length+'）</button>':'';
     const reviewButtons=r.external.current?'<button class="btn btn-sm" data-action="workbench-evidence-review" data-id="'+esc(id)+'">逐条核查外部证据（已审核 '+r.evidenceReview.reviews.length+'）</button>':'';
     const timelineRows='<h4>研究时间线</h4>'+(r.timeline.length?r.timeline.slice(0,15).map(t=>'<p class="subtext">'+esc(t.at||'')+' · '+esc(t.kind)+'</p>').join(''):'<p class="subtext">尚无该候选研究事件</p>');
     const actionButtons='<h4>继续研究</h4>'+r.actions.filter(a=>a.available).map(a=>'<button class="btn btn-sm" data-action="'+esc(a.id)+'" data-id="'+esc(id)+'">'+esc(a.label)+'</button>').join(' ');
-    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    modal('机会研究工作台 · '+r.candidate.title,'<p><strong>'+esc(stageNames[r.stage.stage]||r.stage.stage)+'</strong></p>'+checks+'<p class="subtext">'+esc(steps[r.nextAction]||r.stage.nextAction)+'</p><h4>原始问题证据</h4>'+sourceRows+'<h4>外部反证与现有方案线索</h4>'+(externalRows||'<p class="subtext">尚无当前有效外部检索结果</p>')+'<h4>人工核查与实验准备</h4><p class="subtext">核查决定：'+esc(r.verification.decision||'未核查')+' · 访谈计划 '+r.interviews.plans.length+' · 访谈记录 '+r.interviews.observationCount+' · 实验设计 '+r.experiments.designCount+'</p>'+r.stage.gaps.map(x=>'<p class="subtext">待补齐：'+esc(x)+'</p>').join('')+reviewButtons+alternativeButton+actionButtons+timelineRows+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'opportunity-stage':{
@@ -1095,7 +1119,7 @@ document.addEventListener('submit',async e=>{if(e.target?.id==='search-signals-f
 // (the direct browser E2E depends on it), and double submits are already guarded
 // where they matter — disabled modal submit buttons plus server-side idempotency,
 // optimistic revisions and explicit 409 conflicts.
-document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(a.dataset.action==='workbench-review-item')S.pendingEvidenceUrl=a.dataset.evidenceUrl;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
+document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(a.dataset.action==='workbench-review-item'||a.dataset.action==='workbench-alternative-edit')S.pendingEvidenceUrl=a.dataset.evidenceUrl;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
 window.addEventListener('offline',()=>{S.offline=true;render();});
 window.addEventListener('online',()=>{S.offline=false;S.loadError=null;refresh();});
 applyStateFromHash();
