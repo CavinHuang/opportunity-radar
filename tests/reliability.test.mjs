@@ -62,7 +62,10 @@ test('only latest pending submission can be decided once',()=>{
     const args={project_id:p.id,milestone_id:m.id,baseline_revision:1,commit_sha:sha,evidence_ids:[e.id]};
     const a=s.tool('handoff.submit',{...args,idempotency_key:'submission-1'});
     const b=s.tool('handoff.submit',{...args,idempotency_key:'submission-2'});
-    assert.throws(()=>s.ownerDecision(p.id,{action:'reject',submissionId:a.id,reason:'Old proposal'}),{code:'SUBMISSION_SUPERSEDED'});
+    // 新交付提交时自动把同里程碑旧 pending 交付标记为 superseded：旧交付不再永久卡死。
+    assert.equal(s.getFullProject(p.id).submissions.find(x=>x.id===a.id).acceptanceState,'superseded');
+    assert.equal(s.getFullProject(p.id).submissions.find(x=>x.id===b.id).acceptanceState,'pending');
+    assert.throws(()=>s.ownerDecision(p.id,{action:'reject',submissionId:a.id,reason:'Old proposal'}),{code:'BAD_STATE'});
     s.ownerDecision(p.id,{action:'reject',submissionId:b.id,reason:'Needs work'});
     assert.throws(()=>s.ownerDecision(p.id,{action:'reject',submissionId:b.id,reason:'Retry'}),{code:'BAD_STATE'});
   }finally{db.close();}

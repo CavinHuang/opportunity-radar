@@ -209,8 +209,9 @@ export function importGrowthMetrics(store,projectId,{items}={}){
  const accepted=[],rejected=[];let duplicateCount=0;
  store.transaction(()=>{
   // 判重集合一次性构建：批量导入从 O(行数×表大小) 降为 O(行数)，不再在写事务内反复全表解析。
+  // 空 dedupKey 不参与判重（与 assertNoDuplicate 的真值守卫一致），否则无来源编号的合法行会被误判重复。
   const active=store.list('growth_metrics').filter(x=>x.projectId===projectId&&x.status==='active');
-  const seenKeys=new Set(active.map(x=>x.dedupKey)),seenPrints=new Set(active.map(x=>x.fingerprint));
+  const seenKeys=new Set(active.map(x=>x.dedupKey).filter(Boolean)),seenPrints=new Set(active.map(x=>x.fingerprint));
   items.forEach((raw,index)=>{
    try{
     const base=buildMetric(store,projectId,raw||{});
@@ -218,9 +219,9 @@ export function importGrowthMetrics(store,projectId,{items}={}){
      supersededAt:null,retractedAt:null,retractReason:null,verifiedAt:null,verifyNote:null,
      originalProvenance:base.provenance,revisionNumber:1,recordedBy:'owner',createdAt:now()};
     entry.fingerprint=fingerprintOf(entry);
-    if(seenKeys.has(entry.dedupKey))throw fail('GROWTH_DUPLICATE','已存在相同来源编号（dedupKey）的记录；如确属两条独立数据，请使用不同的来源编号',409);
+    if(entry.dedupKey&&seenKeys.has(entry.dedupKey))throw fail('GROWTH_DUPLICATE','已存在相同来源编号（dedupKey）的记录；如确属两条独立数据，请使用不同的来源编号',409);
     if(seenPrints.has(entry.fingerprint))throw fail('GROWTH_DUPLICATE','疑似重复数据（同一渠道、指标、时间与数值）。如确属两条独立记录，请补充不同的来源编号后再录入',409);
-    seenKeys.add(entry.dedupKey);seenPrints.add(entry.fingerprint);
+    if(entry.dedupKey)seenKeys.add(entry.dedupKey);seenPrints.add(entry.fingerprint);
     store.put('growth_metrics',entry);
     store.event('growth.metric.recorded',entry.id,'owner',
      {projectId,metric:entry.metric,value:entry.value,provenance:entry.provenance,imported:true},projectId);
@@ -244,6 +245,8 @@ export function reviseGrowthMetric(store,projectId,metricId,data){
  return store.transaction(()=>{
   const old=store.get('growth_metrics',metricId);
   if(!old||old.projectId!==projectId)throw fail('NOT_FOUND','增长数据不存在',404);
+  if(String(old.dedupKey||'').startsWith('ledger:'))
+   throw fail('BAD_STATE','该行是结果账本的自动镜像；请到结果账本修订原条目，增长页会随之更新',409);
   if(old.status!=='active')throw fail('BAD_STATE','已被修订或撤回的数据不能再修订；如需更正请先撤回原记录或修改最新版本',409);
   const base=buildMetric(store,projectId,{channelId:old.channelId,campaignId:old.campaignId,contentId:old.contentId,
    metric:old.metric,value:data.value??old.value,occurredAt:data.occurredAt??old.occurredAt,

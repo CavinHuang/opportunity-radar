@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import {approvedResearchBasis} from './delivery-trace.mjs';
 import {currentDiscoveryGroup} from './discovery.mjs';
 import {hasLedgerMirror,mirrorLedgerMetric} from './growth.mjs';
+import {reviewCycleDays} from './opportunity-review.mjs';
 
 const now=()=>new Date().toISOString();
 const err=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
@@ -77,7 +78,8 @@ export function createService(store, options={}){
     });
   }
   function brief(){const cutoff=Date.now()-7*86400000;const active=store.list('projects').find(x=>!['paused','stopped','archived'].includes(x.status));
-    const candidates=store.list('opportunities').filter(x=>x.status==='candidate').sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);
+    // 「本周机会」按创建时间过滤：没有时间条件时，任何历史候选都会被当作本周机会展示。
+    const candidates=store.list('opportunities').filter(x=>x.status==='candidate'&&x.createdAt>=new Date(cutoff).toISOString()).sort((a,b)=>Number(b.sources.length>0)-Number(a.sources.length>0)||b.createdAt.localeCompare(a.createdAt)).slice(0,3);
     // 跨页面待办聚合：让 owner 打开首页就能看到所有需要处理的事。
     const newSignals=store.list('sources').filter(x=>x.status==='new').length;
     const failingSources=store.list('feeds').filter(x=>x.enabled&&(x.consecutiveFailures||0)>0).length;
@@ -88,9 +90,10 @@ export function createService(store, options={}){
       overduePublications=store.list('contents').filter(c=>c.projectId===active.id&&c.plannedAt&&new Date(c.plannedAt)<new Date()&&c.reviewState!=='published').length;
       const reviews=store.list('opportunity_reviews').filter(x=>x.projectId===active.id);
       const latestReview=reviews.sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
-      reviewDue=!latestReview||(nowMs-Date.parse(latestReview.createdAt))>7*86400000;
+      // 与复盘页保持同一周期配置（RADAR_REVIEW_CYCLE_DAYS），否则两页会在错误的时间提醒。
+      reviewDue=!latestReview||(nowMs-Date.parse(latestReview.createdAt))>reviewCycleDays()*86400000;
     }
-    return {candidates,active,allCount:store.list('opportunities').length,weekStart:new Date(cutoff).toISOString(),
+    return {candidates,active,allCount:store.list('opportunities').length,
       actionItems:{newSignals,failingSources,pendingAcceptance,overduePublications,reviewDue},
       note:candidates.length?'来源仅为待核验线索，不代表已证明市场需求':'目前没有足够的机会线索，可以不推荐。'};}
   function startExperiment(data){return store.transaction(()=>{
@@ -305,7 +308,10 @@ export function createService(store, options={}){
     }
     if(hasLedgerMirror(corrected))mirrorLedgerMetric(store,id,corrected);
     return corrected;});}
-  function summaryLedger(entries){entries=entries.filter(x=>!x.retractedAt);const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost')};}
+  function summaryLedger(entries){entries=entries.filter(x=>!x.retractedAt);const sum=t=>entries.filter(x=>x.type===t&&x.actual).reduce((a,x)=>a+x.value,0);
+   // 记录了哪些实际指标：前端据此区分「0」与「从未记录」（未记录按未知展示，绝不当作零）。
+   const recordedTypes=[...new Set(entries.filter(x=>x.actual).map(x=>x.type))];
+   return {collected:sum('income'),refunds:sum('refund'),contribution:sum('income')-sum('refund')-sum('transaction_fee')-sum('service_cost'),userHours:sum('user_hours'),agentHours:sum('agent_hours'),cashSpent:sum('cash_cost'),recordedTypes};}
 
   function tool(name,p={}){
     if(name==='project.get_context'){const x=getFullProject(p.project_id);return {project:{id:x.id,name:x.name,status:x.status,stage:x.stage,agentLastSync:x.agentLastSync,milestones:x.milestones,tasks:x.tasks,evidence:x.evidence,submissions:x.submissions,decisions:x.decisions.filter(d=>['pending','approved','rejected'].includes(d.status)).map(d=>({id:d.id,kind:d.kind,summary:d.summary,status:d.status}))},baseline:baseline(p.project_id),researchBasis:x.researchBasis||{status:'unlinked'},serverTime:now()};}
@@ -379,6 +385,12 @@ export function createService(store, options={}){
       const ids=p.evidence_ids||[];if(!Array.isArray(ids)||new Set(ids).size!==ids.length)throw err('BAD_REQUEST','evidence_ids 必须唯一');for(const id of ids){const e=get('evidence',id);if(e.projectId!==p.project_id||e.milestoneId!==m.id)throw err('FORBIDDEN','evidence outside milestone',403);if(p.commit_sha&&e.commitSha&&e.commitSha!==p.commit_sha)throw err('SHA_MISMATCH','证据版本与提交版本不符',409);}
       const covered=m.acceptanceIds.every(criterionId=>ids.some(id=>get('evidence',id).criteriaIds.includes(criterionId)))&&ids.length>0;
       const sub=store.put('submissions',{id:randomUUID(),projectId:p.project_id,milestoneId:m.id,baselineRevision:b.revision,commitSha:p.commit_sha||null,evidenceIds:ids,previewLink:p.preview_link?parseHttps(p.preview_link):null,g2State:covered?'covered':'missing',acceptanceState:'pending',knownGaps:p.known_gaps||[],createdAt:now()});
+      // 新交付自动替代同里程碑的旧 pending 交付：否则旧交付既不能验收也不能退回，
+      // 永久卡在 pending 并让验收提示一直误报。
+      for(const oldSub of store.list('submissions').filter(x=>x.projectId===p.project_id&&x.milestoneId===m.id&&x.acceptanceState==='pending'&&x.id!==sub.id)){
+        store.put('submissions',{...oldSub,acceptanceState:'superseded',supersededById:sub.id,supersededAt:now()},oldSub.revision);
+        event('submission.superseded',oldSub.id,agent,{by:sub.id,milestoneId:m.id},p.project_id);
+      }
       store.put('milestones',{...m,executionState:'submitted',evidenceState:'pending',acceptanceState:'pending'},m.revision);event('submission.created',sub.id,agent,{commitSha:sub.commitSha,covered},p.project_id);return sub;});
     if(name==='collaboration.handoff')throw err('CAPABILITY_DISABLED','多 Agent 交接在 P1 启用',501);
     throw err('TOOL_NOT_FOUND',`Unknown agent tool: ${name}`,404);

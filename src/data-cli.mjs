@@ -6,7 +6,7 @@ const err=(code,message)=>Object.assign(new Error(message),{code});
 const supported=new Set(['doctor','backup','verify','restore','prune-events','export']);
 export function parseDataCommand(argv){
  const [command,...rest]=argv;
- if(!supported.has(command))throw err('BAD_COMMAND','Use doctor, backup, verify, restore or prune-events');
+ if(!supported.has(command))throw err('BAD_COMMAND','Use doctor, backup, verify, restore, prune-events or export');
  const allowed=new Set(['db','input','output','destination','confirm','before']);
  const options={command};
  for(let i=0;i<rest.length;i++){

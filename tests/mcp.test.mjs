@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -40,4 +40,17 @@ test('stdio MCP initializes and lists tools without leaking app logging to stdou
   cp.stdin.write(JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list',params:{}})+'\n');
   const list=JSON.parse((await iter.next()).value);assert.equal(list.result.tools.length,12);
  }finally{cp.stdin.end();await new Promise(r=>cp.once('exit',r));rmSync(dir,{recursive:true,force:true});}
+});
+test('tool calls validate required arguments and report disabled tools honestly',()=>{
+ const {db,service}=make();
+ try{
+  const missing=dispatchMcp(service,{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'task.claim',arguments:{project_id:'p'}}});
+  assert.equal(missing.error.code,-32602);
+  assert.match(missing.error.message,/missing required argument/);
+  const disabled=dispatchMcp(service,{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'collaboration.handoff',arguments:{}}});
+  assert.equal(disabled.result.isError,true);
+  assert.match(disabled.result.content[0].text,/CAPABILITY_DISABLED/);
+  const discover=dispatchMcp(service,{jsonrpc:'2.0',id:3,method:'server/discover'});
+  assert.equal(discover.result.serverInfo.version,JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version);
+ }finally{db.close()}
 });
