@@ -6,6 +6,7 @@ import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
 import {alternativeResearchBoard} from './opportunity-alternative-research.mjs';
 import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {opportunityFeasibilityBoard} from './opportunity-feasibility.mjs';
+import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
 
 // A single read-only view of existing, versioned evidence. It creates no new
 // assertion of demand and never launches interviews, experiments or searches.
