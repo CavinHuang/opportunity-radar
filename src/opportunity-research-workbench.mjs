@@ -21,6 +21,7 @@ export function opportunityResearchWorkbench(store,id){
  const evidenceReview=evidenceReviewBoard(store,id);
  const alternatives=alternativeResearchBoard(store,id);
  const competitionSpace=opportunityCompetitionSpace(store,id);
+ const feasibility=opportunityFeasibilityBoard(store,id);
  const timeline=store.eventsLatest(400).filter(x=>x.entity_id===id&&(String(x.kind||'').startsWith('opportunity.')||String(x.kind||'').startsWith('problem.'))).slice(-35).reverse();
  const plans=store.list('problem_interview_plans').filter(p=>p.problemId===id);
  const observations=store.list('problem_interview_observations').filter(o=>o.problemId===id);
@@ -55,6 +56,7 @@ export function opportunityResearchWorkbench(store,id){
   interviews:{plans:planRows,observationCount:observations.length},
   experiments:{designCount:experiments.length,drafts:experiments.slice(0,8).map(e=>({id:e.id,status:e.status,planId:e.planId}))},
   competitionSpace,
+  feasibility,
   alternatives:{stale:alternatives.stale,items:alternatives.items,eligible:alternatives.eligible},
   evidenceReview:{current:evidenceReview.current,revision:evidenceReview.revision,searchRevision:evidenceReview.searchRevision,reviews:evidenceReview.reviews},
   timeline:timeline.map(x=>({kind:x.kind,at:x.created_at,actor:x.actor,detail:x.detail})),
