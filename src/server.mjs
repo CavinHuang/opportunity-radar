@@ -163,7 +163,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(pathname==='/api/discovery/shadow/history'&&req.method==='GET')return send(res,200,shadowHistory(store));
     if(pathname==='/api/discovery/release-preflight'&&req.method==='GET')return send(res,200,{report:releasePreflight(store),history:releasePreflightHistory(store)});
     if(pathname==='/api/discovery/production-rule'&&req.method==='GET')return send(res,200,productionRuleStatus(store));
-    if(pathname==='/api/discovery/production-monitor'&&req.method==='GET')return send(res,200,{report:productionMonitorReport(store),history:productionMonitorHistory(store)});
+    if(pathname==='/api/discovery/production-monitor'&&req.method==='GET')return send(res,200,{report:productionMonitorReport(store),history:productionMonitorHistory(store),alerts:store.eventsLatest(100).filter(e=>e.kind==='discovery.production_guard.alert').slice(-20).reverse()});
     if(pathname==='/api/discovery/production-monitor'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>captureProductionMonitor(store,d)));
     if(pathname==='/api/discovery/production-rule'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>changeProductionRule(store,d)));
     if(pathname==='/api/discovery/release-preflight'&&req.method==='POST')return send(res,200,await ownerWrite(req,pathname,d=>captureReleasePreflight(store,d)));
