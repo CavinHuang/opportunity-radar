@@ -24,7 +24,7 @@ export function opportunityResearchWorkbench(store,id){
   {id:'verify-problem',label:verificationCurrent?'重新核查真实问题':'核查真实问题',available:true},
   {id:'problem-interviews',label:'制定或查看访谈计划',available:verificationCurrent&&review.decision==='worth_interviewing'},
   {id:'interview-decision',label:'访谈结果决策',available:plans.some(p=>p.status==='active')},
-  {id:'experiment-design',label:'低成本实验设计',available:plans.some(p=>p.decision==='low_cost_test'&&p.verificationRevision===review?.revision)},
+  {id:'experiment-design',label:'低成本实验设计',available:verificationCurrent&&review.decision==='worth_interviewing'&&plans.some(p=>p.decision==='low_cost_test'&&p.verificationRevision===review.revision)},
   {id:'research-opportunity',label:'AI 研究草稿（可选）',available:true}];
  const nextAction=!externalCurrent?'external_research':!verificationCurrent?'problem_verification':
   !plans.some(p=>p.status==='active'||p.status==='closed'&&p.decision==='low_cost_test')?'interview_plan':
