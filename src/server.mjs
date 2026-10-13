@@ -27,6 +27,7 @@ import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
 import {decisionOutcomeLedger,adoptDecision,recordDecisionOutcome} from './opportunity-decision-outcomes.mjs';
 import {decisionEffectivenessReport} from './opportunity-decision-effectiveness.mjs';
 import {opportunityPortfolioReview} from './opportunity-portfolio-review.mjs';
+import {weeklyResearchPlan,saveWeeklyResearchPlan,reviewWeeklyResearchPlan} from './opportunity-weekly-plan.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
