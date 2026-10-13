@@ -22,7 +22,7 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
   // Fixed public endpoint: never fetch an untrusted URL or follow a post URL.
   const endpoint=new URL('https://hn.algolia.com/api/v1/search');
   endpoint.searchParams.set('query',query);endpoint.searchParams.set('tags','story,comment');endpoint.searchParams.set('hitsPerPage','15');
-  const response=await fetchImpl(endpoint,{signal:AbortSignal.timeout(12000),headers:{Accept:'application/json'}});
+  const response=await fetchImpl(endpoint,{signal:AbortSignal.timeout(12000),redirect:'error',headers:{Accept:'application/json'}});
   if(!response.ok)throw fail('EXTERNAL_SEARCH_FAILED','社区检索 HTTP '+response.status,502);
   const payload=await response.json();
   if(!Array.isArray(payload?.hits))throw fail('EXTERNAL_SEARCH_INVALID','社区检索响应格式错误',502);
