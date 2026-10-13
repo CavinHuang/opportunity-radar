@@ -36,7 +36,7 @@ import { agentSetupSummary } from './agent-setup.mjs';
 import {configuredFeeds, analyzeSignal, draftLaunchContent} from './signals.mjs';
 import {seedConfiguredSources,addFeed,editFeed,scanSources,sourceHealth,sourceDiagnostics,probeFeed,retryFailedFeed,addManualSignal,triageSignal,bulkTriageSignals,querySignals} from './source-hub.mjs';
 import {applyMuteRules,createMuteRule,deleteMuteRule,muteRules} from './mute-rules.mjs';
-import {dispatchMcp,validateModernMcp} from './mcp.mjs';
+import {dispatchMcp,validateModernMcp,invalidToolArguments} from './mcp.mjs';
 import {createSourceScheduler} from './source-scheduler.mjs';
 import {catalogList,installCatalogFeed} from './source-catalog.mjs';
 import {researchReport,reviewOpportunityEvidence} from './research.mjs';
@@ -119,7 +119,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/agent/tools'&&req.method==='GET'){authorize(req,'agent');return send(res,200,{tools:service.tools});}
     const agentTool=/^\/api\/agent\/tools\/([\w.]+)$/.exec(pathname);
-    if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
+    if(agentTool&&req.method==='POST'){authorize(req,'agent');const args=await body(req);const invalid=invalidToolArguments(agentTool[1],args);if(invalid)return send(res,400,{error:'VALIDATION_ERROR',message:`Invalid arguments for ${agentTool[1]}: ${invalid}`});return send(res,200,{result:service.tool(agentTool[1],args)});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
     if(pathname==='/api/operations/readiness'&&req.method==='GET')return send(res,200,readinessSummary(store,{ownerProtected:Boolean(process.env.RADAR_OWNER_TOKEN)}));

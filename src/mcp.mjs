@@ -1,7 +1,12 @@
 // Stateless MCP 2026-07-28 transport plus legacy stdio compatibility.
 // The business owner stays the Radar service; protocol state never grants project authority.
+import {readFileSync} from 'node:fs';
 export const MCP_VERSION = '2026-07-28';
 export const LEGACY_VERSION = '2025-11-25';
+// 版本号单一来源是 package.json；此前三处硬编码互相矛盾（1.2.0 / 0.3.0 / 实际版本）。
+export const SERVER_VERSION=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
+// P0 未启用的已知工具：明确报 CAPABILITY_DISABLED，而不是伪装成 Unknown tool。
+const DISABLED_TOOLS=new Set(['collaboration.handoff']);
 const object = (properties, required=[]) => ({type:'object',properties,required,additionalProperties:true});
 const str={type:'string'};const integer={type:'integer',minimum:1};
 const definitions={
@@ -33,19 +38,28 @@ const explanations={
   'handoff.submit':'提交里程碑交付，申请证据核验和用户验收。'
 };
 export function listMcpTools(service){return service.tools.map(name=>({name,description:explanations[name],inputSchema:definitions[name]}));}
+/** 入参校验：required 字段缺失时返回可读错误，缺参不再以 undefined 直达存储层。 */
+export function invalidToolArguments(name,args){
+ const schema=definitions[name];
+ if(!schema)return null;
+ const missing=(schema.required||[]).filter(k=>args?.[k]===undefined||args?.[k]===null||args?.[k]==='');
+ return missing.length?`missing required argument(s): ${missing.join(', ')}`:null;
+}
 export function dispatchMcp(service, request,{legacy=false}={}){
   const id=request?.id;
   const rpcError=(code,message,data)=>({jsonrpc:'2.0',id:id??null,error:{code,message,...(data?{data}:{})}});
   if(!request||request.jsonrpc!=='2.0'||typeof request.method!=='string'||Array.isArray(request))return rpcError(-32600,'Invalid Request');
   const p=request.params||{};
-  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:'1.2.0'},capabilities:{tools:{listChanged:false}}}};
+  if(request.method==='initialize' && legacy) return {jsonrpc:'2.0',id,result:{protocolVersion:LEGACY_VERSION,serverInfo:{name:'opportunity-radar',version:SERVER_VERSION},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='notifications/initialized'&&legacy)return null;
-  if(request.method==='server/discover')return {jsonrpc:'2.0',id,result:{serverInfo:{name:'opportunity-radar',version:'0.3.0'},capabilities:{tools:{listChanged:false}}}};
+  if(request.method==='server/discover')return {jsonrpc:'2.0',id,result:{serverInfo:{name:'opportunity-radar',version:SERVER_VERSION},capabilities:{tools:{listChanged:false}}}};
   if(request.method==='ping')return {jsonrpc:'2.0',id,result:{}};
   if(request.method==='tools/list')return {jsonrpc:'2.0',id,result:{tools:listMcpTools(service)}};
   if(request.method==='tools/call'){
-    if(!service.tools.includes(p.name))return rpcError(-32602,'Unknown tool');
+    if(!service.tools.includes(p.name)&&!DISABLED_TOOLS.has(p.name))return rpcError(-32602,'Unknown tool');
     if(!p.arguments||typeof p.arguments!=='object'||Array.isArray(p.arguments))return rpcError(-32602,'Tool arguments must be an object');
+    const invalid=invalidToolArguments(p.name,p.arguments);
+    if(invalid)return rpcError(-32602,`Invalid arguments for ${p.name}: ${invalid}`);
     try{
       const result=service.tool(p.name,p.arguments);
       return {jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(result)}],structuredContent:{result},isError:false}};

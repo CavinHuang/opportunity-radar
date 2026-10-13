@@ -235,7 +235,8 @@ export async function scanSources(store,{ids,fetchImpl=pinnedHttpsFetch,dnsLooku
               triagedAt:(f.mute||byModel)?time():null,linkedOpportunityId:null};
             store.put('sources',entry);
             if(byModel){modelFiltered++;store.event('signal.model_filtered',f.id,'owner',{reason:mf.reason,model:mf.model},null);}
-            else if(!f.mute)added++;
+            else if(f.mute)muted++;
+            else added++;
           }
           scanResultStore(store,feed,{lastSuccessAt:new Date(nowMs).toISOString(),lastError:null,consecutiveFailures:0,
             nextScanAt:nextScan(nowMs,normal),etag:response.etag,lastModified:response.lastModified,
