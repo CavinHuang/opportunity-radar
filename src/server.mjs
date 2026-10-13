@@ -212,6 +212,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const outcomeRoute=/^\\/api\\/opportunity-scan\\/([^/]+)\\/decisions\\/([^/]+)\\/outcome$/.exec(pathname);
+    if(outcomeRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>recordDecisionOutcome(store,decodeURIComponent(outcomeRoute[1]),decodeURIComponent(outcomeRoute[2]),d))});
+    const decisionHistoryRoute=/^\\/api\\/opportunity-scan\\/([^/]+)\\/decisions$/.exec(pathname);
+    if(decisionHistoryRoute&&req.method==='GET')return send(res,200,decisionOutcomeLedger(store,decodeURIComponent(decisionHistoryRoute[1])));
+    if(decisionHistoryRoute&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>adoptDecision(store,decodeURIComponent(decisionHistoryRoute[1]),d))});
     const decisionBriefRoute=/^\/api\/opportunity-scan\/([^/]+)\/decision-brief$/.exec(pathname);
     if(decisionBriefRoute&&req.method==='GET')return send(res,200,opportunityDecisionBrief(store,decodeURIComponent(decisionBriefRoute[1])));
     const feasibilityRoute=/^\/api\/opportunity-scan\/([^/]+)\/feasibility$/.exec(pathname);
