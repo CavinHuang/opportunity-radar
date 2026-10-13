@@ -641,7 +641,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const url='/opportunity-scan/'+encodeURIComponent(id)+'/external-research';
     const res=await api(url,{method:'POST',body:{}});
     const r=res.result;
-    modal('外部反证检索 · Hacker News','<p class="subtext">本次发现 '+r.results.length+' 条未验证的相关讨论。搜索词：'+esc(r.queries.join(' / '))+'</p>'+r.results.slice(0,15).map(x=>'<div class="source-row"><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a><p class="subtext">'+esc(x.excerpt.slice(0,160))+'</p></div>').join('')+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    modal('外部反证检索 · HN / GitHub Issues','<p class="subtext">本次发现 '+r.results.length+' 条待复核外部线索。搜索词：'+esc(r.queries.join(' / '))+'</p>'+'<p class="subtext">'+(r.sourceStatus||[]).map(x=>esc(x.source)+'：'+(x.status==='ok'?'已查询 '+x.count+' 条':'失败 '+esc(x.reason||'未知错误'))).join(' · ')+'</p>'+r.results.slice(0,15).map(x=>'<div class="source-row"><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a><p class="subtext">'+esc(x.excerpt.slice(0,160))+'</p></div>').join('')+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'research-opportunity':{

@@ -30,7 +30,8 @@ test('external findings preserve provenance, dedupe HTTPS links and invalidate s
   const candidate=list.opportunityScanCandidates(db).items[0];
   assert.ok(candidate?.id);
   const saved=await investigateExternalEvidence(db,candidate.id,{fetchImpl});
-  assert.equal(calls,2);
+  assert.equal(calls,3);
+  assert.equal(saved.sourceStatus.find(x=>x.source==='GitHub Issues').status,'failed');
   assert.ok(saved.results.length>=1);
   assert.ok(saved.results.every(x=>x.url.startsWith('https://')));
   assert.equal(saved.status,'needs_owner_review');
@@ -49,5 +50,25 @@ test('network errors do not record fake research results',async()=>{
   const id=opportunityScanCandidates(db).items[0].id;
   await assert.rejects(()=>investigateExternalEvidence(db,id,{fetchImpl:async()=>({ok:false,status:429})}),{code:'EXTERNAL_SEARCH_FAILED'});
   assert.equal(db.list('opportunity_external_research').length,0);
+ }finally{db.close();}
+});
+
+test('GitHub Issues search includes only canonical issues and records per-source success',async()=>{
+ const db=openDatabase();try{
+  db.put('sources',{id:'manual-2',status:'new',url:'https://example.org/problem-2',
+   title:'I cannot reconcile invoice records manually',description:'I manually reconcile invoices every day and spend hours fixing errors'});
+  const {opportunityScanCandidates}=await import('../src/opportunity-scan.mjs');
+  const id=opportunityScanCandidates(db).items[0].id;
+  const fetchImpl=async(url)=>url.hostname==='api.github.com'
+   ?{ok:true,json:async()=>({items:[
+    {html_url:'https://github.com/example/app/issues/12',title:'Invoice import broken',body:'Issue report',user:{login:'reporter'},created_at:'2026-10-10'},
+    {html_url:'https://github.com/example/app/pull/13',title:'Pull request'},
+    {html_url:'https://evil.example/issues/14',title:'Untrusted'}
+   ]})}:{ok:true,json:async()=>({hits:[]})};
+  const saved=await investigateExternalEvidence(db,id,{fetchImpl});
+  assert.equal(saved.results.length,1);
+  assert.equal(saved.results[0].source,'GitHub Issues');
+  assert.equal(saved.sourceStatus.find(x=>x.source==='GitHub Issues').status,'ok');
+  assert.equal(saved.sourceStatus.find(x=>x.source==='Hacker News').count,0);
  }finally{db.close();}
 });
