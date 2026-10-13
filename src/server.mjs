@@ -1,3 +1,4 @@
+import {discoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -150,6 +151,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       return send(res,200,{...result,configuredFeedCount:store.list('feeds').filter(x=>x.enabled).length});
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
+    if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    const qualityLabel=/^\/api\/discovery\/quality\/([^/]+)$/.exec(pathname);
+    if(qualityLabel&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>labelDiscoveryExample(store,decodeURIComponent(qualityLabel[1]),d))});
     if(pathname==='/api/home/source-diagnostics'&&req.method==='GET')return send(res,200,problemSourceDiagnostics(store));
     if(pathname==='/api/home/work-queue'&&req.method==='GET')return send(res,200,problemWorkQueue(store));
     if(pathname==='/api/decision-center'&&req.method==='GET')return send(res,200,decisionReviewCenter(store));
