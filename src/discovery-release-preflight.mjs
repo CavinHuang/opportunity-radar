@@ -25,7 +25,8 @@ export function releasePreflight(store){
  const evidence={policyId:approval.selectedTrial,approvalRevision:approval.revision,shadowRevision:shadow.revision,
   replaySample:replay.sampleSize,ruleDelta:policy?.delta||null,shadowAt:latest?.at||null,
   shadowReviewed:latest?.reviewed||0,shadowDelta:latest?{falsePositive:latest.deltaFalsePositive,falseNegative:latest.deltaFalseNegative}:null,
-  shadowAutoStopped:Boolean(latest?.autoStopped)};
+  shadowAutoStopped:Boolean(latest?.autoStopped),
+  labeledSourceFingerprint:digest(store.list('discovery_quality_labels').map(l=>({id:l.id,label:l.label,labelRevision:l.revision,sourceRevision:store.get('sources',l.id)?.revision||null})).sort((a,b)=>a.id.localeCompare(b.id)))};
  return {ready:blockers.length===0,checks,blockers,evidence,evidenceHash:digest(evidence),
   productionChanged:false,notice:'仅为上线前材料的保守一致性核查。人工挑选样本不能证明推广效果；不会自动切换生产规则。'};
 }
