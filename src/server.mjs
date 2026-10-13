@@ -23,6 +23,7 @@ import {evidenceReviewBoard,reviewExternalEvidence} from './opportunity-evidence
 import {alternativeResearchBoard,recordAlternativeResearch} from './opportunity-alternative-research.mjs';
 import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {opportunityFeasibilityBoard,saveOpportunityFeasibility} from './opportunity-feasibility.mjs';
+import {opportunityDecisionBrief} from './opportunity-decision-brief.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
