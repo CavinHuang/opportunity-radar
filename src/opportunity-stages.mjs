@@ -18,8 +18,9 @@ export function opportunityStage(store,id){
  const existingSolutionAssessed=searched&&research.sourceStatus?.some(x=>x.status==='ok');
  const interviewPlans=store.list('problem_interview_plans').filter(x=>x.problemId===id);
  const interviewObservations=store.list('problem_interview_observations').filter(x=>x.problemId===id);
- const distinctParticipants=new Set(interviewObservations.map(x=>x.participant).filter(Boolean)).size;
- const interviewed=interviewPlans.some(p=>p.decision==='low_cost_test')&&distinctParticipants>=2;
+ const eligiblePlans=interviewPlans.filter(p=>p.decision==='low_cost_test'&&verified&&p.verificationRevision===v.revision);
+ const interviewed=eligiblePlans.some(p=>new Set(interviewObservations.filter(x=>x.planId===p.id).map(x=>x.participant).filter(Boolean)).size>=Math.max(2,p.minInterviews||2));
+ const distinctParticipants=Math.max(0,...eligiblePlans.map(p=>new Set(interviewObservations.filter(x=>x.planId===p.id).map(x=>x.participant).filter(Boolean)).size));
  const gaps=[];
  if(originalSources<1)gaps.push('缺少可核对的原始问题链接');
  if(originalSources<2)gaps.push('少于两条独立性待验证的原始来源');
