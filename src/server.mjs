@@ -4,6 +4,7 @@ import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowH
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from './discovery-release-preflight.mjs';
 import {productionRuleStatus,changeProductionRule} from './discovery-production-release.mjs';
 import {productionMonitorReport,productionMonitorHistory,captureProductionMonitor} from './discovery-production-monitor.mjs';
+import {createProductionGuard} from './discovery-production-guard.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -393,6 +394,7 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   const server=createServer();
   server.listen(port,host,()=>console.log(`Opportunity Radar running at http://${host}:${port}\nAgent API ${process.env.RADAR_AGENT_TOKEN?'enabled':'disabled'}`));
   const scheduler=createSourceScheduler(store);scheduler.start();
-  process.once('SIGINT',()=>{scheduler.stop();server.close();});
+  const productionGuard=createProductionGuard(store);productionGuard.start();
+  process.once('SIGINT',()=>{scheduler.stop();productionGuard.stop();server.close();});
   process.once('SIGTERM',()=>{scheduler.stop();server.close();});
 }
