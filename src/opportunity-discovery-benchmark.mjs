@@ -54,6 +54,18 @@ export function opportunityDiscoveryBenchmark(store){
    addedFalsePositives.length||lostTruePositives.length?'review_regressions_do_not_apply':
    rescued.length?'manual_review_required':'no_observed_recall_gain',
   caveat:'同一批当前人工标注样本对比生产候选前50与离线候选前50。标题词数不足时允许使用描述补足，绝不绕过真实问题门槛。样本有选择偏差，不自动发布。'};
+ const diversityScan=opportunityScanCandidates(store,{limit:50,maxSignals:400,sourceDiversityTrial:true});
+ const diversityVisible=new Set(diversityScan.items.flatMap(x=>x.problemEvidence?.qualifiedSignals||[]));
+ const diversityRows=fresh.map(x=>({...x,predicted:diversityVisible.has(x.sourceId)}));
+ const diversityMetric=counts(diversityRows);
+ const diversityRescued=fresh.filter(x=>x.label==='real_problem'&&!x.predicted&&diversityVisible.has(x.sourceId));
+ const diversityLost=fresh.filter(x=>x.label==='real_problem'&&x.predicted&&!diversityVisible.has(x.sourceId));
+ const diversityAddedFalsePositives=fresh.filter(x=>x.label==='not_problem'&&!x.predicted&&diversityVisible.has(x.sourceId));
+ const diversityTrial={id:'source_diversity_trial',liveRuleChanged:false,trial:diversityMetric,
+  rescued:diversityRescued.slice(0,25),lostTruePositives:diversityLost.slice(0,25),
+  addedFalsePositives:diversityAddedFalsePositives.slice(0,25),
+  recommendation:!fresh.length?'insufficient_labels':diversityLost.length||diversityAddedFalsePositives.length?'review_regressions_do_not_apply':diversityRescued.length?'manual_review_required':'no_observed_recall_gain',
+  caveat:'仅按候选首个来源域名轮询分配前50名复核位置；同域名不等于同用户，同样本上的提升不代表总体召回。生产排序保持不变。'};
  const metric=counts(fresh);
  const missed=fresh.filter(x=>x.label==='real_problem'&&!x.predicted);
  const falsePositives=fresh.filter(x=>x.label==='not_problem'&&x.predicted);
@@ -63,7 +75,7 @@ export function opportunityDiscoveryBenchmark(store){
   negativeLabeled:fresh.filter(x=>x.label==='not_problem').length,uncertain:uncertain.length,
   stale:stale.length,outOfWindow:outOfWindow.length,examined:scan.examined,topCandidateLimit:50,
   candidateCount:scan.items.length,missed:missed.slice(0,30),falsePositives:falsePositives.slice(0,30),
-  matched:matched.slice(0,15),recallTrial,evidenceFingerprint,generatedAt:new Date().toISOString(),
+  matched:matched.slice(0,15),recallTrial,diversityTrial,evidenceFingerprint,generatedAt:new Date().toISOString(),
   policy:'current_version_owner_labels_top50_candidate_visibility',
   notice:'只评估400条已收录来源窗口内，人工标注且原帖版本未变的帖子是否进入前50条机会候选；漏报可能是门槛、聚合或榜单截断造成。标注不是随机样本，指标不能推断总体表现或商业价值。'};
 }

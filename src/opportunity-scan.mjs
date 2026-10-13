@@ -35,7 +35,7 @@ function explain(signals,cluster=null,assess=assessRealProblem){
   nextAction:'打开原帖，核对真实场景、现有替代方案、独立用户与反面案例，随后进行低成本访谈'};
 }
 /** Deterministic, non-LLM candidate read model. Never creates approved opportunities. */
-export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descriptionFallback=false}={}){
+export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descriptionFallback=false,sourceDiversityTrial=false}={}){
  if(!Number.isInteger(limit)||limit<1||limit>50)throw Object.assign(new Error('invalid limit'),{code:'BAD_LIMIT',status:400});
  const candidates=store.list('sources').filter(s=>['new','saved'].includes(s.status)&&isHttps(s.url)&&s.title).slice(0,maxSignals);
  const qualifiedIds=new Set(candidates.filter(s=>selectProductionProblem(store,s).qualified).map(s=>s.id));
@@ -63,6 +63,23 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
  for(const signal of candidates){if(groupedIds.has(signal.id)||!qualifiedIds.has(signal.id)||(problemTokens(signal.title).size<3&&(!descriptionFallback||problemTokens(signal.title+' '+String(signal.description||'')).size<3)))continue;const row=explain([signal],null,s=>selectProductionProblem(store,s));if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
  const scored=collected.map(item=>({...item,qualityReview:opportunityQualityReview(item),priority:item.evidencePriority.priority,status:'unverified_candidate'}));
  scored.sort((a,b)=>b.priority-a.priority||b.evidencePriority.qualifiedSources-a.evidencePriority.qualifiedSources||a.id.localeCompare(b.id));
- return {items:scored.slice(0,limit),total:scored.length,examined:candidates.length,insufficientEvidence:candidates.length-qualifiedIds.size,generatedAt:new Date().toISOString(),productionRule:productionRuleStatus(store),strategy:descriptionFallback?'description_fallback_trial':'production_baseline',
+ // Offline-only round-robin by source host. Does not change eligibility, priority or live ranking.
+ // Spread limited review slots across communities instead of filling the entire top 50 from one host.
+ if(sourceDiversityTrial){
+  const buckets=new Map();
+  for(const item of scored){
+   let host='unknown';try{host=new URL(item.sourceUrls[0]).hostname.toLowerCase().replace(/^www\\./,'')}catch{}
+   if(!buckets.has(host))buckets.set(host,[]);
+   buckets.get(host).push(item);
+  }
+  const diversified=[];
+  while(diversified.length<scored.length){
+   let progressed=false;
+   for(const bucket of buckets.values())if(bucket.length){diversified.push(bucket.shift());progressed=true;}
+   if(!progressed)break;
+  }
+  scored.splice(0,scored.length,...diversified);
+ }
+ return {items:scored.slice(0,limit),total:scored.length,examined:candidates.length,insufficientEvidence:candidates.length-qualifiedIds.size,generatedAt:new Date().toISOString(),productionRule:productionRuleStatus(store),strategy:sourceDiversityTrial?'source_diversity_trial':descriptionFallback?'description_fallback_trial':'production_baseline',
   note:'依据具体工作障碍、替代做法及可去重来源安排人工核查优先级；不把热度、转载数或话题关键词当成需求。必须进一步确认原帖、独立用户和真实成本。'};
 }
