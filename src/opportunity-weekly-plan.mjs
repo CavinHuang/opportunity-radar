@@ -13,8 +13,11 @@ export function weeklyResearchPlan(store,{now=new Date()}={}){
  const portfolio=opportunityPortfolioReview(store);
  const current=new Set(portfolio.rows.map(x=>x.id));
  const items=(plan?.items||[]).map(x=>({...x,available:current.has(x.candidateId)}));
+ const priorDate=new Date(weekStart+'T00:00:00Z');priorDate.setUTCDate(priorDate.getUTCDate()-7);
+ const prior=store.get('opportunity_weekly_plans','week:'+priorDate.toISOString().slice(0,10));
+ const previousTasks=(prior?.items||[]).map(x=>({candidateId:x.candidateId,title:x.title,task:x.task,hours:x.hours,budget:x.budget,available:current.has(x.candidateId)}));
  return {id,weekStart,revision:plan?.revision||0,status:plan?.status||'draft',items,
-  review:plan?.review||null,progress:plan?.progress||[],portfolioSuggestions:portfolio.suggested.map(x=>({id:x.id,title:x.title,reason:x.nextAction})),
+  review:plan?.review||null,progress:plan?.progress||[],previousTasks,portfolioSuggestions:portfolio.suggested.map(x=>({id:x.id,title:x.title,reason:x.nextAction})),
   notice:'本周计划由用户手动选择；旧候选若不再符合筛选，只保留历史，不自动恢复。时间和预算均为规划/自报数据。'};
 }
 export function saveWeeklyResearchPlan(store,data={},options={}){
