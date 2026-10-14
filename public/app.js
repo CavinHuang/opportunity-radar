@@ -397,7 +397,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
     <div class="card card-pad"><p class="subtext">扫描已启用来源并根据真实公开内容寻找工具缺口、重复劳动和使用摩擦。理由是文本线索，不是用户需求或收入的证明。</p>
     ${S.opportunityScan?`<p class="subtext">分析 ${Number(S.opportunityScan.examined||0)} 条线索，发现 ${Number(S.opportunityScan.total||0)} 项待核查候选。无匹配时不会制造机会。</p>`:''}
     ${opportunityResults.map(o=>`<div class="source-row"><div class="grow"><strong>${esc(o.title)}</strong><p class="subtext">${esc(o.summary)}</p><p class="subtext">发现理由：${esc(o.reasons.join('；'))}</p>${o.clusterMethod==='owner_recovered_different_problem'?'<p class="subtext">'+esc(o.recoveryReason)+'</p>':''}<p class="subtext">风险：${esc(o.warnings.join('；'))}</p><p class="subtext">关联领域：${esc((o.domains||[]).join("、")||"尚未识别")} · 竞品提及：${o.competitionMentioned?"有":"未发现"}</p><p class="subtext">待验证反证：${esc((o.counterEvidence||[]).join("；"))}</p><p class="subtext">建议验证：${esc(o.nextAction)} · ${o.signalCount} 条公开线索 · ${o.siteCount} 个域名</p><p class="subtext">领域：${esc(o.qualityReview?.domains?.map(x=>x.name).join('、')||'待识别')} · 发生频率：${o.qualityReview?.problemFrequency==='multiple_posts_unverified'?'多帖线索，独立性未核实':'单帖线索'} · 开发可行性：待调查 · 最小验证成本：待估算</p><p class="subtext">关键反证/证据缺口：${esc(o.qualityReview?.concerns?.slice(0,4).join('；')||'待核查')}</p><p class="subtext">验证步骤：${esc(o.qualityReview?.nextSteps?.slice(0,2).join('；')||'打开原帖核查')}</p><button class="btn btn-sm" data-action="research-opportunity" data-id="${esc(o.id)}">AI 深度研究（可选）</button> <button class="btn btn-sm" data-action="external-research" data-id="${esc(o.id)}">外部反证搜索</button> <button class="btn btn-sm" data-action="opportunity-stage" data-id="${esc(o.id)}">证据分级</button> <button class="btn btn-sm" data-action="opportunity-workbench" data-id="${esc(o.id)}">研究工作台</button><a class="external" href="${esc(o.sourceUrls[0])}" target="_blank" rel="noopener noreferrer">查看原始帖子</a></div></div>`).join('')||'<p class="subtext">暂无匹配候选。可先订阅信息源并扫描，不会生成虚假的机会。</p>'}</div></section>`;
-  const discoveryDesk=`<div class="toolbar"><button class="btn btn-sm" data-action="opportunity-portfolio">机会组合与研究优先级</button> <button class="btn btn-sm" data-action="weekly-research-plan">本周研究计划</button> <button class="btn btn-sm" data-action="weekly-research-review">本周复盘</button></div>`+`<section class="discovery-desk"><div class="section-heading"><h2>重复问题候选</h2><span>仅标题相似 · 需要人工核查</span><button class="btn btn-sm" data-action="toggle-cluster-history">${S.showDismissedClusters?'仅看待核查':'查看已忽略'}</button></div>
+  const discoveryDesk=`<div class="toolbar"><button class="btn btn-sm" data-action="opportunity-portfolio">机会组合与研究优先级</button> <button class="btn btn-sm" data-action="weekly-research-plan">本周研究计划</button> <button class="btn btn-sm" data-action="weekly-research-review">本周复盘</button> <button class="btn btn-sm" data-action="weekly-research-progress">执行进度</button> <button class="btn btn-sm" data-action="weekly-research-carry">跨周延续</button> <button class="btn btn-sm" data-action="weekly-research-trend">多周趋势</button></div>`+`<section class="discovery-desk"><div class="section-heading"><h2>重复问题候选</h2><span>仅标题相似 · 需要人工核查</span><button class="btn btn-sm" data-action="toggle-cluster-history">${S.showDismissedClusters?'仅看待核查':'查看已忽略'}</button></div>
   <div class="card card-pad"><p class="subtext">已检查最近 ${cs.examinedSignals||0} 条信号，找到 ${cs.proposedGroups||0} 组候选；其中 ${cs.withMultipleDomains||0} 组来自多个站点，${cs.dismissedGroups||0} 组已人工忽略。${cs.unexaminedSignals?' 较早的 '+cs.unexaminedSignals+' 条线索尚未参与本次聚合。':''}</p>
   <p class="subtext">仅进行保守的词汇匹配，不使用 AI 补写经历。多个帖子可能是转载、同作者或者不同问题；绝不代表独立消费者或已经证明的需求。</p>
   <div class="discovery-metrics"><span>疑似重复转发 ${dq.possibleReposts||0} 组</span><span>已人工标注 ${dq.currentLabeledGroups||0} 组</span><span>同一问题待验证 ${dq.ownerMarkedRelated||0} 组</span><span>人工排除 ${dq.ownerDismissed||0} 组</span><span>不同问题误报 ${dq.classificationCounts?.different_problem||0} 组</span></div>
@@ -641,6 +641,33 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/decisions');
     const options=[['continue_verification','继续核实'],['pause_or_stop','暂停或停止'],['review_small_experiment','人工评审实验']].map(([v,t])=>'<option value="'+v+'" '+(r.brief.disposition===v?'selected':'')+'>'+t+'</option>').join('');
     modal('记录机会决策 · '+r.brief.title,'<p class="subtext">系统当时建议：'+esc(r.brief.disposition)+'</p><div class="field wide"><label>实际采纳的决定</label><select name="decision">'+options+'</select></div>'+field('reason','做出这个选择的依据',{wide:true,type:'textarea',required:true})+field('plannedHours','预计投入小时',{type:'number',value:0})+field('plannedBudget','预计投入预算（按本人记账货币）',{type:'number',value:0}),async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/decisions',{method:'POST',body:{...d,plannedHours:Number(d.plannedHours),plannedBudget:Number(d.plannedBudget),briefFingerprint:r.briefFingerprint}}));
+    break;
+  }
+  case 'weekly-research-progress':{
+    const plan=await api('/discovery/weekly-research-plan');
+    if(plan.status!=='planned'||!plan.items.length)throw new Error('请先创建本周研究计划');
+    const options=plan.items.map(x=>'<option value="'+esc(x.candidateId)+'">'+esc(x.title)+'</option>').join('');
+    const latest=plan.progress.slice(-8).reverse().map(x=>'<p class="subtext">'+esc(x.candidateId)+' · '+esc(x.status)+' · '+esc(x.actualHours)+'h · '+esc(x.note)+'</p>').join('');
+    modal('记录本周执行进度','<div class="field wide"><label>研究任务</label><select name="candidateId">'+options+'</select></div><div class="field wide"><label>进度</label><select name="status"><option value="in_progress">进行中</option><option value="blocked">受阻</option><option value="completed">已完成</option></select></div>'+field('actualHours','已累计投入小时',{type:'number',value:0})+field('note','本次进度、阻碍或观察（至少10字）',{wide:true,type:'textarea',required:true})+'<h4>最近进展</h4>'+(latest||'<p class="subtext">尚无进度</p>'),async d=>api('/discovery/weekly-research-plan/progress',{method:'POST',body:{candidateId:d.candidateId,status:d.status,actualHours:Number(d.actualHours),note:d.note,expected_revision:plan.revision}}));
+    break;
+  }
+  case 'weekly-research-trend':{
+    const report=await api('/discovery/weekly-research-trend');
+    const rows=report.weeks.slice().reverse().map(w=>'<div class="source-row"><strong>'+esc(w.weekStart)+'</strong> · '+(w.status==='reviewed'?'已复盘':'进行中')+'<p class="subtext">计划 '+w.planned+' 项 / '+w.plannedHours+'h · 实际 '+(w.actualHours===null?'未复盘':w.actualHours+'h')+' · 完成 '+w.completed+' · 无结论 '+w.inconclusive+' · 受阻 '+w.blocked+'</p></div>').join('');
+    modal('多周研究趋势','<p class="subtext">已复盘 '+report.closedWeeks+' 周。未复盘计划不计实际投入。</p>'+(rows||'<p class="subtext">尚无历史周计划</p>')+'<p class="subtext">'+esc(report.notice)+'</p>',async()=>{});
+    break;
+  }
+  case 'weekly-research-carry':{
+    const plan=await api('/discovery/weekly-research-plan');
+    if(plan.status!=='draft')throw new Error('本周已有计划，请人工编辑，不自动覆盖');
+    const previous=plan.previousTasks||[];
+    if(!previous.length)throw new Error('上周没有可延续的研究任务');
+    const rows=previous.map((x,i)=>'<div class="source-row"><label><input type="checkbox" name="carry'+i+'" '+(!x.available?'disabled':'')+'/> '+esc(x.title)+'</label><p class="subtext">'+esc(x.task)+' · '+x.hours+'h · 预算 '+x.budget+(x.available?'':' · 候选已失效')+'</p></div>').join('');
+    modal('从上周延续研究任务','<p class="subtext">勾选最多三个仍有效的研究任务。不会覆盖上周历史，也不会自动执行。</p>'+rows,async d=>{
+      const candidateIds=previous.filter((x,i)=>x.available&&(d['carry'+i]==='on'||d['carry'+i]===true)).map(x=>x.candidateId);
+      if(!candidateIds.length)throw new Error('请选择至少一个可延续的任务');
+      await api('/discovery/weekly-research-plan/carry',{method:'POST',body:{candidateIds,expected_revision:plan.revision}});
+    });
     break;
   }
   case 'weekly-research-plan':{
