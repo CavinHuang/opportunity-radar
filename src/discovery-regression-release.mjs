@@ -4,7 +4,7 @@ import {replayFrozenRegressionSuite,frozenRegressionReviewHistory} from './disco
 
 const ID='real_problem_frozen_regression_suite';
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
-const host=url=>{try{return new URL(url).hostname.toLowerCase().replace(/^www\\./,'')}catch{return null;}};
+const host=url=>{try{return new URL(url).hostname.toLowerCase().replace(/^www\./,'')}catch{return null;}};
 const allowed='require_workaround';
 const sorted=(rows)=>rows.sort((a,b)=>String(a.sourceId).localeCompare(String(b.sourceId)));
 
