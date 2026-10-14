@@ -60,9 +60,10 @@ export function frozenRegressionSuiteBoard(store){
  const row=store.get('discovery_rule_decisions',SUITE_ID);
  const {counts,ready}=sampleForFreeze(store);
  const snapshots=row?.snapshots||[];
- return {revision:row?.revision||0,snapshots:snapshots.map(s=>({
+ const summaries=snapshots.map(s=>({
   revision:s.revision,at:s.at,reason:s.reason,fingerprint:s.fingerprint,counts:s.counts,
-  baseline:s.baseline})),latest:snapshots.at(-1)||null,
+  baseline:s.baseline}));
+ return {revision:row?.revision||0,snapshots:summaries,latest:summaries.at(-1)||null,
   candidate:{counts,ready},readOnly:true,productionChanged:false,
   notice:'只冻结Owner已审核且原帖版本相同的公开文本（最多100条），保存在本地SQLite；样本为非随机人工选择，无法估算总体准确率。旧样本永不因来源编辑而重写。'};
 }
@@ -97,8 +98,9 @@ function policyPredict(id,a){
 export function replayFrozenRegressionSuite(store,{suiteRevision,policyId='require_workaround'}={}){
  if(!POLICY_IDS.has(policyId))throw fail('BAD_POLICY','未知离线规则');
  const board=frozenRegressionSuiteBoard(store);
- const snapshot=suiteRevision===undefined?board.latest:
-  (store.get('discovery_rule_decisions',SUITE_ID)?.snapshots||[]).find(x=>x.revision===suiteRevision);
+ const snapshots=store.get('discovery_rule_decisions',SUITE_ID)?.snapshots||[];
+ const snapshot=suiteRevision===undefined?snapshots.at(-1):
+  snapshots.find(x=>x.revision===suiteRevision);
  if(!snapshot)return {available:false,policyId,liveRuleChanged:false,notice:'还没有可回放的冻结人工基线'};
  const rows=snapshot.records.map(x=>{
   const assessed=assessRealProblem({title:x.title,description:x.description});
