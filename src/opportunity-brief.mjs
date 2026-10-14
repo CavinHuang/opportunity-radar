@@ -23,9 +23,18 @@ export function opportunitySignals(originals){
  const text=originals.map(s=>s.title+' '+s.text).join(' ');
  const signals={recurring:recurring.test(text),workaround:workaround.test(text),impact:impact.test(text)};
  const supportOnly=support.test(text)&&!signals.recurring&&!signals.impact;
- return {...signals,supportOnly,priority:(signals.recurring?4:0)+(signals.impact?4:0)+(signals.workaround?2:0)-(supportOnly?3:0)};
+ const freshness=opportunityFreshness(originals);
+ return {...signals,supportOnly,freshness,priority:(signals.recurring?4:0)+(signals.impact?4:0)+(signals.workaround?2:0)-(supportOnly?3:0)-(freshness.status==='historical_only'?8:0)};
 }
 const fields=['user','task','pain','workaround','recurrence','impact','existingGap'];
+export function opportunityFreshness(originals,{nowMs=Date.now(),maxAgeDays=180}={}){
+ const dates=originals.map(s=>Date.parse(s.publishedAt||'')).filter(ms=>Number.isFinite(ms)&&ms>=0&&ms<=nowMs+86400000);
+ const newest=dates.length?Math.max(...dates):null;
+ const ageDays=newest===null?null:Math.max(0,Math.floor((nowMs-newest)/86400000));
+ return {status:!dates.length?'undated':ageDays>maxAgeDays?'historical_only':'recent_feed_date_unverified',
+  newestPublishedAt:newest===null?null:new Date(newest).toISOString(),ageDays,maxAgeDays,
+  notice:'采用已收录的 feed 发布时间，不把采集时间当作原帖时间；近期时间也不能证明当前需求成立。历史帖子需要新的相关证据。'};
+}
 export function groundedOpportunityBrief(raw,originals){
  const evidence={},invalidEvidence=[];
  for(const key of fields){
@@ -46,10 +55,15 @@ export function groundedOpportunityBrief(raw,originals){
  const gaps=minimum.filter(key=>!evidence[key]);
  if(!evidence.recurrence&&!evidence.impact)gaps.push('recurrence_or_impact');
  if(!hypothesis||!validation||!counterargument)gaps.push('hypothesis_and_test');
+ // Only quoted sources can refresh a hypothesis. An unrelated newly collected
+ // source or updated scan timestamp must not rejuvenate old evidence.
+ const cited=new Set(Object.values(evidence).map(e=>e.sourceId));
+ const freshness=opportunityFreshness(originals.filter(s=>cited.has(s.sourceId)));
+ if(freshness.status==='historical_only')gaps.push('current_relevance');
  const valid=raw?.kind==='product_hypothesis'&&gaps.length===0&&invalidEvidence.length===0;
  const signals=opportunitySignals(originals);
  const kind=valid?'product_hypothesis':raw?.kind==='support_issue'||signals.supportOnly?'support_issue':'research_lead';
- return {kind,evidence,invalidEvidence,gaps,hypothesis:valid?hypothesis:null,
+ return {kind,evidence,invalidEvidence,gaps,freshness,hypothesis:valid?hypothesis:null,
   validation:valid?validation:null,counterargument:valid?counterargument:null,
   signals,originals:originals.map(({text,...metadata})=>metadata),
   state:valid?'testable_hypothesis_not_validated':'insufficient_product_evidence',
