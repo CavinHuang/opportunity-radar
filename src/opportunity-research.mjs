@@ -1,11 +1,11 @@
 import {createHash} from 'node:crypto';
-import {opportunityScanCandidates} from './opportunity-scan.mjs';
+import {homeDiscoveryCandidates} from './home-discovery-candidates.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const clean=(v,n=600)=>String(v??'').trim().slice(0,n);
 const keys=['problem','competition','counterargument','feasibility','validation'];
 export function candidateContext(store,id){
- const candidate=opportunityScanCandidates(store,{limit:50}).items.find(x=>x.id===id);
+ const candidate=homeDiscoveryCandidates(store).items.find(x=>x.id===id);
  if(!candidate)throw fail('CANDIDATE_NOT_FOUND','候选不存在、已忽略或超出当前候选窗口',404);
  const signals=candidate.signalIds.map(i=>store.get('sources',i)).filter(Boolean);
  if(signals.length!==candidate.signalIds.length)throw fail('CANDIDATE_CHANGED','原始信号已变化，请重新扫描',409);
