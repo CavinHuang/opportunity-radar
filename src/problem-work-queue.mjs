@@ -1,10 +1,10 @@
-import {HOME_DISCOVERY_MAX_SIGNALS,groundedOpportunityBrief,candidateOriginals} from './opportunity-brief.mjs';
-import {opportunityScanCandidates} from './opportunity-scan.mjs';
+import {groundedOpportunityBrief,candidateOriginals} from './opportunity-brief.mjs';
+import {homeDiscoveryCandidates} from './home-discovery-candidates.mjs';
 import {decisionReviewCenter} from './problem-decision-center.mjs';
 const time=x=>Date.parse(x||'')||0;
 /** One honest next action per eligible problem; no invented validations. */
 export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,10),limit=12}={}){
- const candidates=opportunityScanCandidates(store,{limit:50,maxSignals:HOME_DISCOVERY_MAX_SIGNALS}).items;
+ const candidates=homeDiscoveryCandidates(store).items;
  const latest=store.get('home_opportunity_scans','latest');
  const visible=new Set(latest?.status==='filtered'?(latest.items||[]).map(x=>x.id):[]);
  const pending=[],inProgress=[];

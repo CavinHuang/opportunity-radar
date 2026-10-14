@@ -31,6 +31,14 @@ test('hallucinated costs, foreign source quotes and legacy keep judgments never 
  const support=groundedOpportunityBrief({kind:'product_hypothesis'},[{sourceId:'x',title:'Browser address cannot edit',text:'I cannot edit the address. I have to click again.'}]);
  assert.equal(support.kind,'support_issue');assert.equal(support.hypothesis,null);
 });
+test('concise Chinese evidence and exact short frequency expressions are accepted without fabricated padding',()=>{
+ const original={sourceId:'cn',url:'https://forum.example/cn',title:'每天处理报销',text:'我是财务，每天手动录入票据。表格无法识别重复，现有办法需要人工逐张核对。'};
+ const quotes={user:'我是财务',task:'手动录入票据',pain:'表格无法识别重复',workaround:'人工逐张核对',existingGap:'现有办法需要人工逐张核对',recurrence:'每天'};
+ const b=groundedOpportunityBrief({...raw,evidence:Object.fromEntries(Object.entries(quotes).map(([key,quote])=>[key,{sourceId:'cn',quote}]))},[original]);
+ assert.equal(b.kind,'product_hypothesis');assert.equal(b.evidence.recurrence.quote,'每天');
+ const invalid=groundedOpportunityBrief({...raw,evidence:{...raw.evidence,user:{sourceId:'s1',quote:'I'}}},originals);
+ assert.notEqual(invalid.kind,'product_hypothesis');
+});
 test('encoded feed HTML is cleaned before extraction and preserves context beyond 500 characters',()=>{
  const xml='<rss><item><title>Invoice workflow</title><link>https://forum.example/1</link><description>&lt;p&gt;'+ 'Context '.repeat(100)+'I can&#x27;t reconcile invoices every week.&lt;/p&gt;</description></item></rss>';
  const [s]=parseFeed(xml,'https://forum.example/rss');

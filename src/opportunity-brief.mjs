@@ -34,7 +34,10 @@ export function groundedOpportunityBrief(raw,originals){
   const original=originals.find(s=>s.sourceId===proposed.sourceId);
   const quote=plainSourceText(proposed.quote).slice(0,400);
   const haystack=original?original.title+' '+original.text:'';
-  if(!original||quote.length<8||!haystack.includes(quote)){invalidEvidence.push(key);continue;}
+  // Short Chinese phrases and exact frequency terms carry meaning without
+  // eight characters. Keep literal source matching; don't invent padding.
+  const minimumLength=key==='recurrence'&&recurring.test(quote)?2:/[\u3400-\u9fff]/u.test(quote)?4:8;
+  if(!original||quote.length<minimumLength||!haystack.includes(quote)){invalidEvidence.push(key);continue;}
   evidence[key]={sourceId:original.sourceId,url:original.url,quote};
  }
  const clip=(s,n=240)=>typeof s==='string'?s.trim().slice(0,n):'';

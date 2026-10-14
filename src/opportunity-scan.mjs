@@ -5,6 +5,7 @@ import {reviewPriority} from './opportunity-evidence-priority.mjs';
 import {opportunityEvidenceDossier} from './opportunity-evidence-dossier.mjs';
 import {taskPainClusters} from './task-pain-clusters.mjs';
 import {discoveryClusters,problemTokens} from './discovery.mjs';
+import {candidateOriginals,opportunitySignals} from './opportunity-brief.mjs';
 const hints=[['repetitive_work',/automati[sz]|manual(?:ly)?|repetit|tedious|time.consum|耗时|重复|手动|自动化/i,'提及重复操作或手动处理'],['workaround',/workaround|alternative|replace|instead of|looking for|recommend|替代|有没有|求推荐|找不到/i,'明确寻找替代工具或临时解决办法'],['friction',/difficult|frustrat|struggl|cannot|can't|broken|problem|pain|issue|无法|困难|麻烦|不方便/i,'描述具体使用障碍']];
 const isHttps=x=>{try{return new URL(x).protocol==='https:'}catch{return false}};
 const domain=s=>{try{return new URL(s.url).hostname.replace(/^www\./,'')}catch{return ''}};
@@ -35,7 +36,7 @@ function explain(signals,cluster=null,assess=assessRealProblem){
   nextAction:'打开原帖，核对真实场景、现有替代方案、独立用户与反面案例，随后进行低成本访谈'};
 }
 /** Deterministic, non-LLM candidate read model. Never creates approved opportunities. */
-export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descriptionFallback=false,sourceDiversityTrial=false}={}){
+export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descriptionFallback=false,sourceDiversityTrial=false,productDiscovery=false}={}){
  if(!Number.isInteger(limit)||limit<1||limit>50)throw Object.assign(new Error('invalid limit'),{code:'BAD_LIMIT',status:400});
  const candidates=store.list('sources').filter(s=>['new','saved'].includes(s.status)&&isHttps(s.url)&&s.title).slice(0,maxSignals);
  const qualifiedIds=new Set(candidates.filter(s=>selectProductionProblem(store,s).qualified).map(s=>s.id));
@@ -69,6 +70,12 @@ export function opportunityScanCandidates(store,{limit=12,maxSignals=400,descrip
  for(const signal of candidates){if(groupedIds.has(signal.id)||!qualifiedIds.has(signal.id)||(problemTokens(signal.title).size<3&&(!descriptionFallback||problemTokens(signal.title+' '+String(signal.description||'')).size<3)))continue;const row=explain([signal],null,s=>selectProductionProblem(store,s));if(splitRecoveryIds.has(signal.id)){row.clusterMethod='owner_recovered_different_problem';row.recoveryReason='人工确认原聚合包含不同问题，已独立恢复待核查候选';}if(row.reasons.length===1&&row.reasons[0].startsWith('公开标题'))continue;collected.push(row);}
  const scored=collected.map(item=>({...item,qualityReview:opportunityQualityReview(item),priority:item.evidencePriority.priority,status:'unverified_candidate'}));
  scored.sort((a,b)=>b.priority-a.priority||b.evidencePriority.qualifiedSources-a.evidencePriority.qualifiedSources||a.id.localeCompare(b.id));
+ // Homepage review uses product-workflow clues before the top-50 cutoff. Other
+ // production/benchmark callers retain their existing evidence ordering.
+ if(productDiscovery){
+  const priorities=new Map(scored.map(x=>[x.id,opportunitySignals(candidateOriginals(x,store)).priority]));
+  scored.sort((a,b)=>priorities.get(b.id)-priorities.get(a.id));
+ }
  // Offline-only round-robin by source host. Does not change eligibility, priority or live ranking.
  // Spread limited review slots across communities instead of filling the entire top 50 from one host.
  if(sourceDiversityTrial){

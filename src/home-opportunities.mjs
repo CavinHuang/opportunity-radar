@@ -1,7 +1,7 @@
-import {HOME_DISCOVERY_MAX_SIGNALS,candidateOriginals,groundedOpportunityBrief,selectBriefCandidates,plainSourceText} from './opportunity-brief.mjs';
+import {candidateOriginals,groundedOpportunityBrief,selectBriefCandidates,plainSourceText} from './opportunity-brief.mjs';
 import {persistOpportunityIdentities} from './opportunity-identity.mjs';
 import {titleSimilarity} from './discovery.mjs';
-import {opportunityScanCandidates} from './opportunity-scan.mjs';
+import {homeDiscoveryCandidates} from './home-discovery-candidates.mjs';
 import {jevConfig,jevSystemOne,extractAnswer} from './jev.mjs';
 
 const recordId='latest';
@@ -53,7 +53,7 @@ export function homeOpportunitySnapshot(store){
  const latest=store.get('home_opportunity_scans',recordId);
  if(!latest)return {status:'never_scanned',items:[],at:null,scanned:0,reason:'尚未执行首页 AI 机会检索'};
  // A previous classification must not resurrect signals explicitly dismissed or changed since it ran.
- const available=opportunityScanCandidates(store,{limit:50,maxSignals:HOME_DISCOVERY_MAX_SIGNALS}).items;
+ const available=homeDiscoveryCandidates(store).items;
  const current=new Map(available.map(x=>[x.id,x]));
  const items=(latest.items||[]).filter(x=>{
    const candidate=current.get(x.id);
@@ -96,7 +96,7 @@ async function classifyJev(candidates,{env,fetchImpl}){
  return {engine:'jev',results:out};
 }
 export async function scanHomeOpportunities(store,{env=process.env,fetchImpl=globalThis.fetch,scanStats=null}={}){
- const all=opportunityScanCandidates(store,{limit:50,maxSignals:HOME_DISCOVERY_MAX_SIGNALS});
+ const all=homeDiscoveryCandidates(store);
  const candidates=selectBriefCandidates(all.items,store);
  const userFeedback=store.list('home_opportunity_feedback').map(f=>{
    const c=store.get('home_opportunity_scans',recordId)?.items?.find(x=>x.id===f.id);

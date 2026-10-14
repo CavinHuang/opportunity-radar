@@ -1,4 +1,4 @@
-import {opportunityScanCandidates} from './opportunity-scan.mjs';
+import {homeDiscoveryCandidates} from './home-discovery-candidates.mjs';
 import {createHash} from 'node:crypto';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const direct=/\b(?:i|my|i'm|i've|we|our)\b|我(?:们)?|自己|亲自/i;
@@ -9,7 +9,7 @@ export function firsthandHint(signal){
   note:'仅为文本来源类型提示；无法确认作者身份、真实经历或转载关系'};
 }
 export function verificationContext(store,id){
- const c=opportunityScanCandidates(store,{limit:50}).items.find(x=>x.id===id);
+ const c=homeDiscoveryCandidates(store).items.find(x=>x.id===id);
  if(!c)throw fail('CANDIDATE_NOT_FOUND','候选已变更或不存在',404);
  const evidence=c.signalIds.map(i=>store.get('sources',i)).filter(Boolean);
  const fingerprint=createHash('sha256').update(JSON.stringify(evidence.map(s=>[s.id,s.url,s.title,s.description,s.revision]))).digest('hex');
@@ -29,4 +29,4 @@ export function verifyProblem(store,id,{fingerprint,firsthandConfirmed,actualWor
  store.event('problem.verification.reviewed',id,'owner',{decision,revision:item.revision});
  return item;
 }
-export function verifiedProblemCards(store){return opportunityScanCandidates(store,{limit:50}).items.map(c=>({id:c.id,title:c.title,verification:store.get('problem_verifications',c.id)||null,firsthand:verificationContext(store,c.id).firsthand}));}
+export function verifiedProblemCards(store){return homeDiscoveryCandidates(store).items.map(c=>({id:c.id,title:c.title,verification:store.get('problem_verifications',c.id)||null,firsthand:verificationContext(store,c.id).firsthand}));}
