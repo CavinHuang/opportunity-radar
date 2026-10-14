@@ -218,6 +218,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    if(pathname==='/api/discovery/weekly-research-hypotheses'&&req.method==='GET')return send(res,200,weeklyHypothesisBoard(store));
+    if(pathname==='/api/discovery/weekly-research-hypotheses'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>saveWeeklyHypothesis(store,d))});
     if(pathname==='/api/discovery/weekly-research-evidence'&&req.method==='GET')return send(res,200,weeklyResearchEvidence(store));
     if(pathname==='/api/discovery/weekly-research-trend'&&req.method==='GET')return send(res,200,weeklyResearchTrend(store));
     if(pathname==='/api/discovery/weekly-research-plan/progress'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>updateWeeklyResearchProgress(store,d))});
