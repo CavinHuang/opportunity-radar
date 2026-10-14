@@ -79,7 +79,21 @@ test('finishing priority clues leaves weak results pending and directs a false-n
   assert.equal(summary.state,'partially_reviewed');
   assert.deepEqual(summary.progress,{total:2,reviewed:1,pending:1});
   assert.deepEqual(summary.priorityProgress,{total:1,reviewed:1,pending:0});
-  assert.equal(summary.nextAction.label,'复查弱相关与未分组结果');
+  assert.equal(summary.nextAction.label,'复查弱相关与任务不匹配线索');
   assert.equal(summary.marketValidated,false);
+ }finally{db.close();}
+});
+test('homepage excludes model task mismatches from priority references but keeps owner review fully pending',()=>{
+ const {db,context}=setup();try{
+  const ext=search(db,context);
+  db.put('opportunity_evidence_comparisons',{id:context.candidate.id,policy:'task-comparison-v1',
+   candidateFingerprint:context.fingerprint,searchRevision:ext.revision,items:[{url:ext.results[0].url,status:'unreviewed_model_draft',comparison:{taskRelation:'different_task'}}]});
+  let summary=homeResearchSummary(db,context.candidate);
+  assert.deepEqual(summary.modelComparisons,{total:1,analyzed:1,pending:0,same_task:0,different_task:1,uncertain:0});
+  assert.deepEqual(summary.progress,{total:1,reviewed:0,pending:1});assert.deepEqual(summary.references,[]);
+  assert.equal(summary.state,'needs_review');assert.equal(summary.ownerClassifications.existing_solution,0);
+  assert.equal(summary.marketValidated,false);assert.match(summary.nextAction.label,/任务不匹配/);
+  search(db,context);summary=homeResearchSummary(db,context.candidate);
+  assert.equal(summary.modelComparisons.analyzed,0);assert.equal(summary.references.length,1);
  }finally{db.close();}
 });

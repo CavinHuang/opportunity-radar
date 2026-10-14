@@ -66,6 +66,18 @@ test('stale search exposes no review queue or old priority progress',()=>{
  const db=openDatabase();try{
   const {id}=setup(db);const source=db.get('sources','source-1');
   db.put('sources',{...source,description:source.description+' New evidence'},source.revision);
-  assert.deepEqual(evidenceReviewBoard(db,id).queue,{priority:[],other:[],reviewed:[],priorityProgress:{total:0,reviewed:0,pending:0}});
+  assert.deepEqual(evidenceReviewBoard(db,id).queue,{priority:[],other:[],differentTask:[],reviewed:[],priorityProgress:{total:0,reviewed:0,pending:0}});
  }finally{db.close();}
+});
+test('model task judgments adjust priority but remain separate from owner reviews and preserve every URL',()=>{
+ const hits=[{url:'rejected',triageType:'possible_alternative'},{url:'lexical',triageType:'related_discussion'},
+  {url:'promoted',triageType:'weak_match'},{url:'unknown',triageType:'weak_match'}];
+ const drafts=[{url:'rejected',comparison:{taskRelation:'different_task'}},{url:'promoted',comparison:{taskRelation:'same_task'}}];
+ const q=evidenceReviewQueue(hits,[],drafts);
+ assert.deepEqual(q.priority.map(x=>x.url),['promoted','lexical']);assert.deepEqual(q.differentTask.map(x=>x.url),['rejected']);
+ assert.deepEqual(q.other.map(x=>x.url),['unknown']);assert.equal(q.reviewed.length,0);
+ assert.equal(new Set([...q.priority,...q.other,...q.differentTask,...q.reviewed].map(x=>x.url)).size,4);
+ assert.deepEqual(q.priorityProgress,{total:2,reviewed:0,pending:2});
+ const owner=evidenceReviewQueue(hits,[{url:'rejected',classification:'related_problem'}],drafts);
+ assert.equal(owner.reviewed[0].url,'rejected');assert.equal(owner.differentTask.length,0);
 });

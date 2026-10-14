@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {openDatabase} from '../src/db.mjs';
 import {candidateContext} from '../src/opportunity-research.mjs';
+import {evidenceReviewBoard} from '../src/opportunity-evidence-review.mjs';
 import {draftEvidenceComparison} from '../src/opportunity-evidence-comparison.mjs';
 
 const env={RADAR_LLM_BASE_URL:'https://model.example',RADAR_LLM_API_KEY:'fixture',RADAR_LLM_MODEL:'fixture'};
-function setup(){
- const db=openDatabase();db.put('sources',{id:'a',status:'new',url:'https://forum.example/1',
+function setup(path){
+ const db=openDatabase(path);db.put('sources',{id:'a',status:'new',url:'https://forum.example/1',
   title:'I cannot import CSV files into Excel',description:'I manually import CSV every day and spend 3 hours fixing errors.'});
  const ctx=candidateContext(db,'signal:a');
  const ext=db.put('opportunity_external_research',{id:'signal:a',candidateFingerprint:ctx.fingerprint,
@@ -27,7 +31,7 @@ test('task comparison uses quoted saved text, asks a falsifiable follow-up and w
   const prompt=JSON.parse(requested.body.messages[1].content);assert.equal(prompt.originals[0].sourceId,'a');
   assert.equal(prompt.external.url,input.url);assert.equal(draft.comparison.solutionCoverage,'reported_partial');
   assert.equal(draft.comparison.originalEvidence.url,'https://forum.example/1');
-  assert.equal(draft.readOnly,true);assert.equal(draft.ownerReviewed,false);assert.equal(draft.marketValidated,false);
+  assert.equal(draft.readOnly,false);assert.equal(draft.ownerReviewed,false);assert.equal(draft.marketValidated,false);
   assert.equal(db.eventsLatest(400).length,before);assert.equal(db.list('opportunity_evidence_reviews').length,0);
   assert.equal(db.list('opportunities').length,0);
  }finally{db.close();}
@@ -73,4 +77,57 @@ test('missing model config, provider failures and malformed output preserve manu
   await assert.rejects(draftEvidenceComparison(db,'signal:a',input,{env,fetchImpl:response({...verdict(),taskRelation:'validated'})}),{code:'LLM_INVALID_RESPONSE'});
   assert.equal(db.get('opportunity_external_research','signal:a').revision,1);
  }finally{db.close();}
+});
+
+test('saved drafts are reused without a model request; explicit refresh replaces only the automatic draft',async()=>{
+ const {db,input}=setup();try{
+  let calls=0;const options={env,fetchImpl:async()=>{calls++;return response(verdict())();}};
+  const first=await draftEvidenceComparison(db,'signal:a',input,options);
+  const row=db.get('opportunity_evidence_comparisons','signal:a');
+  const again=await draftEvidenceComparison(db,'signal:a',input,{env:{},fetchImpl:()=>{throw Error('no request')}});
+  assert.equal(again.cached,true);assert.equal(again.readOnly,true);assert.equal(again.generatedAt,first.generatedAt);
+  assert.equal(db.get('opportunity_evidence_comparisons','signal:a').revision,row.revision);
+  await draftEvidenceComparison(db,'signal:a',{...input,refresh:true},options);
+  assert.equal(calls,2);assert.equal(db.get('opportunity_evidence_comparisons','signal:a').revision,row.revision+1);
+  assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,0);
+  await assert.rejects(draftEvidenceComparison(db,'signal:a',{...input,refresh:true},{env,fetchImpl:response({...verdict(),coverageQuote:'fabricated support'})}),{code:'LLM_UNGROUNDED_QUOTE'});
+  assert.equal(db.get('opportunity_evidence_comparisons','signal:a').revision,row.revision+1);
+ }finally{db.close();}
+});
+test('search revisions, source changes and comparison policy changes hide old drafts without deleting history',async()=>{
+ for(const kind of ['search','source','policy']){
+  const {db,input}=setup();try{
+   await draftEvidenceComparison(db,'signal:a',input,{env,fetchImpl:response(verdict())});
+   if(kind==='search'){const r=db.get('opportunity_external_research','signal:a');db.put('opportunity_external_research',{...r,searchedAt:'new'},r.revision);}
+   if(kind==='source'){const r=db.get('sources','a');db.put('sources',{...r,description:r.description+' Changed'},r.revision);}
+   if(kind==='policy'){const r=db.get('opportunity_evidence_comparisons','signal:a');db.put('opportunity_evidence_comparisons',{...r,policy:'old-policy'},r.revision);}
+   assert.equal(evidenceReviewBoard(db,'signal:a').comparisons.length,0);
+   assert.equal(db.get('opportunity_evidence_comparisons','signal:a').items.length,1);
+  }finally{db.close();}
+ }
+});
+test('concurrent comparisons merge distinct URLs and do not erase earlier saved drafts',async()=>{
+ const {db,input}=setup();try{
+  const ext=db.get('opportunity_external_research','signal:a');
+  const second={...ext.results[0],url:'https://github.com/org/app/issues/2'};
+  const newer=db.put('opportunity_external_research',{...ext,results:[...ext.results,second]},ext.revision);
+  input.searchRevision=newer.revision;
+  const options={env,fetchImpl:response(verdict())};
+  await Promise.all([draftEvidenceComparison(db,'signal:a',input,options),draftEvidenceComparison(db,'signal:a',{...input,url:second.url},options)]);
+  assert.equal(evidenceReviewBoard(db,'signal:a').comparisons.length,2);
+  assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,0);
+ }finally{db.close();}
+});
+
+test('automatic comparison drafts survive closing and reopening SQLite without creating owner reviews',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'radar-comparison-cache-')),file=join(dir,'radar.sqlite');
+ let db;
+ try{
+  const seeded=setup(file);db=seeded.db;
+  const draft=await draftEvidenceComparison(db,'signal:a',seeded.input,{env,fetchImpl:response(verdict())});
+  db.close();db=openDatabase(file);
+  const cached=await draftEvidenceComparison(db,'signal:a',seeded.input,{env:{},fetchImpl:()=>{throw Error('must reuse')}});
+  assert.equal(cached.cached,true);assert.equal(cached.generatedAt,draft.generatedAt);
+  assert.equal(evidenceReviewBoard(db,'signal:a').comparisons.length,1);assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,0);
+ }finally{db?.close();rmSync(dir,{recursive:true,force:true});}
 });

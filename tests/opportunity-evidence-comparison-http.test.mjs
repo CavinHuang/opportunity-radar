@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {openDatabase} from '../src/db.mjs';
 import {candidateContext} from '../src/opportunity-research.mjs';
 
-test('real HTTP comparison authenticates, fences search versions and returns a read-only draft even with an idempotency header',async()=>{
+test('real HTTP comparison authenticates, fences search versions and persists only a model draft and reuses it even with an idempotency header',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'radar-comparison-http-'));
  process.env.RADAR_DB=join(directory,'radar.sqlite');process.env.RADAR_OWNER_TOKEN='comparison-test-owner';
  let modelCalls=0;
@@ -40,9 +40,13 @@ test('real HTTP comparison authenticates, fences search versions and returns a r
   const before=db.eventsLatest(400).length;
   const result=await request(payload,{'Idempotency-Key':'read-only-draft'});
   assert.equal(result.status,200);assert.equal(result.data.draft.comparison.taskRelation,'uncertain');
-  assert.equal(result.data.draft.ownerReviewed,false);assert.equal(result.data.draft.readOnly,true);
+  assert.equal(result.data.draft.ownerReviewed,false);assert.equal(result.data.draft.readOnly,false);
   assert.equal(db.eventsLatest(400).length,before);assert.equal(db.list('opportunity_evidence_reviews').length,0);
   assert.equal(db.list('opportunities').length,0);assert.equal(modelCalls,1);
+  assert.equal(db.list('opportunity_evidence_comparisons').length,1);
+  const replay=await request(payload,{'Idempotency-Key':'read-only-draft'});
+  assert.equal(replay.data.draft.cached,true);assert.equal(replay.data.draft.readOnly,true);assert.equal(modelCalls,1);
+  assert.equal(replay.data.draft.generatedAt,result.data.draft.generatedAt);
  }finally{
   db.close();await new Promise(r=>server.close(r));closeStore();await new Promise(r=>model.close(r));rmSync(directory,{recursive:true,force:true});
  }

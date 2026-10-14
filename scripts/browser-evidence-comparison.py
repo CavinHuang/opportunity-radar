@@ -78,6 +78,15 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             assert page.locator('#modal-root').get_by_text('I manually import CSV every day', exact=False).count() == 1
             assert page.locator('#dialog-form button[type="submit"]').count() == 0
             assert call(path)['reviews'] == []
+            saved = call(path)['comparisons']
+            assert len(saved) == 1
+            page.locator('#modal-root [data-action="workbench-evidence-review"]').click()
+            page.locator('#modal-root summary').filter(has_text='AI 判断任务不同').click()
+            cached_button = page.locator('#modal-root [data-action="workbench-evidence-compare"]')
+            assert cached_button.inner_text() == '查看已保存 AI 对照'
+            cached_button.click()
+            page.locator('#modal-root').get_by_text('可能是不同任务', exact=True).wait_for()
+            assert call(path)['comparisons'][0]['generatedAt'] == saved[0]['generatedAt']
             page.locator('#modal-root [data-action="workbench-review-item"]').click()
             page.locator('#dialog-form textarea[name="notes"]').wait_for()
             assert page.locator('#dialog-form textarea[name="notes"]').input_value() == ''
@@ -87,7 +96,7 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             assert not errors, errors
             browser.close()
         print(json.dumps({'synthetic': True, 'comparisonVisible': True,
-                          'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
+                          'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
     finally:
         server.terminate()
         try:
