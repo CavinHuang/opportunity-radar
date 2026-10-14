@@ -660,10 +660,12 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
   case 'weekly-research-carry':{
     const plan=await api('/discovery/weekly-research-plan');
     if(plan.status!=='draft')throw new Error('本周已有计划，请人工编辑，不自动覆盖');
-    const prior=new Date(plan.weekStart+'T00:00:00Z');prior.setUTCDate(prior.getUTCDate()-7);
-    const prev=prior.toISOString().slice(0,10);
-    modal('从上周延续研究任务','<p class="subtext">请选择要延续的机会 ID（以逗号分隔，最多3项），系统只允许上周实际计划过且仍有效的候选。</p>'+field('ids','上周候选 ID',{wide:true,required:true})+'<p class="subtext">上一周期：'+esc(prev)+'；此操作会创建本周新计划，旧计划仍保留。</p>',async d=>{
-      const candidateIds=String(d.ids||'').split(',').map(x=>x.trim()).filter(Boolean);
+    const previous=plan.previousTasks||[];
+    if(!previous.length)throw new Error('上周没有可延续的研究任务');
+    const rows=previous.map((x,i)=>'<div class="source-row"><label><input type="checkbox" name="carry'+i+'" '+(!x.available?'disabled':'')+'/> '+esc(x.title)+'</label><p class="subtext">'+esc(x.task)+' · '+x.hours+'h · 预算 '+x.budget+(x.available?'':' · 候选已失效')+'</p></div>').join('');
+    modal('从上周延续研究任务','<p class="subtext">勾选最多三个仍有效的研究任务。不会覆盖上周历史，也不会自动执行。</p>'+rows,async d=>{
+      const candidateIds=previous.filter((x,i)=>x.available&&(d['carry'+i]==='on'||d['carry'+i]===true)).map(x=>x.candidateId);
+      if(!candidateIds.length)throw new Error('请选择至少一个可延续的任务');
       await api('/discovery/weekly-research-plan/carry',{method:'POST',body:{candidateIds,expected_revision:plan.revision}});
     });
     break;
