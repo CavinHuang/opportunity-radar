@@ -1,17 +1,18 @@
+import {plainSourceText} from './opportunity-brief.mjs';
 import {createHash, randomUUID} from 'node:crypto';
 
 // Sources are operator-configured HTTPS feeds only. No arbitrary URL fetch or unbounded crawling.
 export function configuredFeeds(env=process.env.RADAR_FEED_URLS||''){
   return env.split(',').map(x=>x.trim()).filter(Boolean).slice(0,5).filter(x=>{try{return new URL(x).protocol==='https:'}catch{return false}});
 }
-const decode=s=>String(s||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/<[^>]*>/g,' ').replace(/&(?:amp|lt|gt|quot|apos|#39);/g,m=>({'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'",'&#39;':"'"}[m])).replace(/\s+/g,' ').trim();
+const decode=plainSourceText;
 function tag(block,name){return block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`,'i'))?.[1]||'';}
 export function parseFeed(xml,source){
   const blocks=[...xml.matchAll(/<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
   return blocks.slice(0,25).map(([,kind,block])=>{
     const rawLink=kind==='item'?tag(block,'link'):(block.match(/<link\b(?=[^>]*rel=["']alternate["'])[^>]*href=["']([^"']+)["']/i)?.[1]||block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1]||tag(block,'link'));
     const title=decode(tag(block,'title')).slice(0,220);
-    const description=decode(tag(block,'description')||tag(block,'summary')||tag(block,'content')).slice(0,500);
+    const description=decode(tag(block,'description')||tag(block,'summary')||tag(block,'content')).slice(0,2400);
     const author=decode(tag(block,'dc:creator')||tag(block,'author')||tag(tag(block,'author'),'name')).slice(0,100)||null;
     let url;try{url=new URL(decode(rawLink),source).href;if(!url.startsWith('https://'))return null;}catch{return null;}
     if(!title)return null;

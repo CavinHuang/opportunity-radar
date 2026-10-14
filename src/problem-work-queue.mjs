@@ -1,9 +1,10 @@
+import {HOME_DISCOVERY_MAX_SIGNALS,groundedOpportunityBrief,candidateOriginals} from './opportunity-brief.mjs';
 import {opportunityScanCandidates} from './opportunity-scan.mjs';
 import {decisionReviewCenter} from './problem-decision-center.mjs';
 const time=x=>Date.parse(x||'')||0;
 /** One honest next action per eligible problem; no invented validations. */
 export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,10),limit=12}={}){
- const candidates=opportunityScanCandidates(store,{limit:50}).items;
+ const candidates=opportunityScanCandidates(store,{limit:50,maxSignals:HOME_DISCOVERY_MAX_SIGNALS}).items;
  const latest=store.get('home_opportunity_scans','latest');
  const visible=new Set(latest?.status==='filtered'?(latest.items||[]).map(x=>x.id):[]);
  const pending=[],inProgress=[];
@@ -12,7 +13,13 @@ export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,1
   if(decision?.action==='dismiss')continue;
   const verification=store.get('problem_verifications',c.id);
   if(!verification){
-    if(visible.has(c.id))pending.push({id:c.id,title:c.title,stage:'verify',action:'verify-problem',label:'核查原帖和真实问题',reason:'还没有人工核实一手经历与实际影响',sourceUrls:c.sourceUrls});
+    if(visible.has(c.id)){
+     const stored=latest.items.find(x=>x.id===c.id);
+     const brief=groundedOpportunityBrief(stored.opportunityBrief,candidateOriginals(c,store));
+     pending.push({id:c.id,title:brief.hypothesis||c.title,kind:brief.kind,stage:'verify',action:'verify-problem',
+      label:brief.kind==='product_hypothesis'?'核查产品假设':'核查原帖和真实问题',
+      reason:brief.validation||(brief.kind==='support_issue'?'使用求助：先核对已有解决办法，尚不是产品机会':'待研究线索：缺少现有办法的不足、重复发生或实际代价'),sourceUrls:c.sourceUrls});
+    }
     continue;
   }
   if(verification.decision==='not_a_real_problem')continue;
@@ -40,5 +47,6 @@ export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,1
  const reviews=decisionReviewCenter(store).items;
  const conclusions=reviews.map(x=>({id:x.id,problemId:x.problemId,decision:x.review?.nextStep||x.decision,assessment:x.review?.assessment||null,revisitAt:x.review?.revisitAt||null,reason:x.review?.reason||x.reason,actualCost:x.actualCost,currency:x.currency,recordCount:x.recordCount})).sort((a,b)=>String(a.revisitAt||'9999').localeCompare(String(b.revisitAt||'9999')));
  const due=conclusions.filter(x=>x.revisitAt&&x.revisitAt<=today);
+ pending.sort((a,b)=>(b.kind==='product_hypothesis'?1:0)-(a.kind==='product_hypothesis'?1:0));
  return {discover:{items:pending.slice(0,limit),count:pending.length},validate:{items:inProgress.slice(0,limit),count:inProgress.length},conclude:{items:conclusions.slice(0,limit),count:conclusions.length,dueCount:due.length},notice:'只统计真实已有记录；未配置 AI 或没有合格问题时不会生成虚假任务'};
 }
