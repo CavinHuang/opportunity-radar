@@ -28,6 +28,7 @@ import {draftOpportunityResearch,recordResearchReview} from './opportunity-resea
 import {opportunityStage} from './opportunity-stages.mjs';
 import {opportunityResearchWorkbench} from './opportunity-research-workbench.mjs';
 import {evidenceReviewBoard,reviewExternalEvidence} from './opportunity-evidence-review.mjs';
+import {draftEvidenceComparison} from './opportunity-evidence-comparison.mjs';
 import {alternativeResearchBoard,recordAlternativeResearch} from './opportunity-alternative-research.mjs';
 import {opportunityCompetitionSpace} from './opportunity-competition-space.mjs';
 import {opportunityFeasibilityBoard,saveOpportunityFeasibility} from './opportunity-feasibility.mjs';
@@ -310,6 +311,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const alternativeRoute=/^\/api\/opportunity-scan\/([^/]+)\/alternatives$/.exec(pathname);
     if(alternativeRoute&&req.method==='GET')return send(res,200,alternativeResearchBoard(store,decodeURIComponent(alternativeRoute[1])));
     if(alternativeRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>recordAlternativeResearch(store,decodeURIComponent(alternativeRoute[1]),d))});
+    const comparisonRoute=/^\/api\/opportunity-scan\/([^/]+)\/evidence-comparison$/.exec(pathname);
+    if(comparisonRoute&&req.method==='POST')return send(res,200,{draft:await draftEvidenceComparison(store,decodeURIComponent(comparisonRoute[1]),await body(req))});
     const evidenceReviewRoute=/^\/api\/opportunity-scan\/([^/]+)\/evidence-review$/.exec(pathname);
     if(evidenceReviewRoute&&req.method==='GET')return send(res,200,evidenceReviewBoard(store,decodeURIComponent(evidenceReviewRoute[1])));
     if(evidenceReviewRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>reviewExternalEvidence(store,decodeURIComponent(evidenceReviewRoute[1]),d))});

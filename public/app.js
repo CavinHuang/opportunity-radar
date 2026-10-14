@@ -63,11 +63,19 @@ function renderEvidenceReviewQueue(r,id){
  const queue=r.queue||{priority:[],other:r.results||[],reviewed:[],priorityProgress:{total:0,reviewed:0}};
  const rows=items=>items.map(x=>{
   const reviewed=r.reviews.find(y=>y.url===x.url);
-  return `<div class="source-row"><div class="grow"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><p class="subtext">${esc(x.source)} · 自动初筛：${esc(labels[x.triageType]||'未分组')} · 人工：${esc(ownerLabels[reviewed?.classification]||'未审核')}</p>${x.excerpt?`<p class="subtext">检索摘要（需核对原网页）：${esc(String(x.excerpt).slice(0,420))}</p>`:''}${reviewed?.notes?`<p class="subtext">审核依据：${esc(reviewed.notes)}</p>`:''}<button class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${reviewed?'修改审核':'核查此条'}</button></div></div>`;
+  return `<div class="source-row"><div class="grow"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><p class="subtext">${esc(x.source)} · 自动初筛：${esc(labels[x.triageType]||'未分组')} · 人工：${esc(ownerLabels[reviewed?.classification]||'未审核')}</p>${x.excerpt?`<p class="subtext">检索摘要（需核对原网页）：${esc(String(x.excerpt).slice(0,420))}</p>`:''}${reviewed?.notes?`<p class="subtext">审核依据：${esc(reviewed.notes)}</p>`:''}<button type="button" class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${reviewed?'修改审核':'核查此条'}</button> <button type="button" class="btn btn-sm" data-action="workbench-evidence-compare" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">AI 对照任务与方案</button></div></div>`;
  }).join('');
  if(!r.results.length)return '<p class="subtext">当前检索没有可审核的结果</p>';
  const p=queue.priorityProgress;
  return `<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
+}
+
+function renderEvidenceComparison(draft,id){
+ const c=draft.comparison;
+ const relations={same_task:'可能是同一任务',different_task:'可能是不同任务',uncertain:'任务关系无法确认'};
+ const coverage={reported_full:'片段声称有完整覆盖的办法',reported_partial:'片段描述部分覆盖的办法',not_described:'片段未描述覆盖办法',unknown:'方案覆盖未知'};
+ const quote=(label,e)=>e?`<p class="subtext"><strong>${esc(label)}：</strong>${esc(e.quote)} <a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">核对原网页</a></p>`:'';
+ return `<p class="subtext">AI 对照草稿 · 未经人工核查</p><h4>${esc(relations[c.taskRelation]||'任务关系未知')}</h4><p>${esc(c.relationReason)}</p>${quote('原帖引用',c.originalEvidence)}${quote('外部引用',c.externalEvidence)}<h4>${esc(coverage[c.solutionCoverage]||'方案覆盖未知')}</h4><p>${esc(c.coverageReason)}</p>${quote('方案线索引用',c.coverageQuote?{quote:c.coverageQuote,url:draft.url}:null)}<p><strong>下一项核查：</strong>${esc(c.nextCheck)}</p><p class="subtext">${esc(draft.notice)}</p><button type="button" class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(draft.url)}">打开人工审核（自行填写）</button> <button type="button" class="btn btn-sm" data-action="workbench-evidence-review" data-id="${esc(id)}">返回复核列表</button>`;
 }
 
 function failingSourceItem(h){const n=h?.failing||0;if(!n)return'';return `<div class="note-box" style="border-color:#eed7d4;background:#fdf4f2;flex:1;min-width:180px"><strong style="color:#b1514b">${n} 个来源异常</strong><p class="subtext" style="margin:4px 0 0">连续采集失败，请检查</p><button class="btn btn-sm" data-action="manage-sources" style="margin-top:8px">查看来源</button></div>`;}
@@ -957,6 +965,16 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     modal('外部证据逐条核查',renderEvidenceReviewQueue(r,id),async()=>{});
     break;
   }
+  case 'workbench-evidence-compare':{
+    const url=S.pendingEvidenceUrl;
+    const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
+    if(!board.current||!board.results.some(x=>x.url===url))throw new Error('证据已变化，请重新打开复核列表');
+    toast('正在对照原帖任务与外部线索');
+    const {draft}=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-comparison',{method:'POST',body:{url,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision}});
+    modal('AI 证据对照 · '+draft.title,renderEvidenceComparison(draft,id),async()=>{});
+    document.querySelector('#dialog-form button[type="submit"]').hidden=true;
+    break;
+  }
   case 'workbench-review-item':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     const url=S.pendingEvidenceUrl;
@@ -1680,7 +1698,7 @@ document.addEventListener('submit',async e=>{if(e.target?.id==='search-signals-f
 // (the direct browser E2E depends on it), and double submits are already guarded
 // where they matter — disabled modal submit buttons plus server-side idempotency,
 // optimistic revisions and explicit 409 conflicts.
-document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(a.dataset.action==='workbench-review-item'||a.dataset.action==='workbench-alternative-edit')S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;if(a.dataset.action==='research-guidance-followup')S.pendingGuidanceEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
+document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(['workbench-review-item','workbench-alternative-edit','workbench-evidence-compare'].includes(a.dataset.action))S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;if(a.dataset.action==='research-guidance-followup')S.pendingGuidanceEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
 window.addEventListener('offline',()=>{S.offline=true;render();});
 window.addEventListener('online',()=>{S.offline=false;S.loadError=null;refresh();});
 applyStateFromHash();
