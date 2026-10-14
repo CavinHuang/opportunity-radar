@@ -10,6 +10,10 @@ on:
     - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
+      production_url:
+        description: 'Optional HTTPS site origin for a one-time manual check; overrides Actions variable'
+        required: false
+        type: string
       expected_sha:
         description: 'Optional 40-character deployed SHA; overrides Actions variable'
         required: false
@@ -64,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      RADAR_PRODUCTION_URL: ${{ vars.RADAR_PRODUCTION_URL }}
+      RADAR_PRODUCTION_URL: ${{ inputs.production_url || vars.RADAR_PRODUCTION_URL }}
       RADAR_EXPECTED_DEPLOY_SHA: ${{ inputs.expected_sha || vars.RADAR_EXPECTED_DEPLOY_SHA }}
       RADAR_WATCH_TOKEN: ${{ secrets.RADAR_WATCH_TOKEN }}
       RADAR_WATCH_REPORT: watch-result.json
@@ -80,7 +84,7 @@ jobs:
       - name: Fail manual acceptance when production URL is not configured
         if: github.event_name == 'workflow_dispatch' && env.RADAR_PRODUCTION_URL == ''
         run: |
-          echo "::error::Set repository Actions Variable RADAR_PRODUCTION_URL to a deployed HTTPS origin."
+          echo "::error::Provide production_url on Run workflow, or set RADAR_PRODUCTION_URL in Actions Variables."
           exit 1
       - name: Require complete production evidence for manual acceptance
         if: github.event_name == 'workflow_dispatch' && env.RADAR_PRODUCTION_URL != ''
@@ -100,8 +104,10 @@ jobs:
         if: env.RADAR_PRODUCTION_URL != ''
         run: |
           node scripts/production-watch.mjs || test -s "$RADAR_WATCH_REPORT"
-      - name: Upsert incident issue on failure or rollback; close outage after recovery
-        if: env.RADAR_PRODUCTION_URL != ''
+      - name: Reconcile production incidents (scheduled canonical monitor only)
+        # Manual checks may override the site URL, so they must never create or
+        # close incidents for the canonical configured production target.
+        if: github.event_name == 'schedule' && env.RADAR_PRODUCTION_URL != ''
         run: node scripts/production-watch-issues.mjs
       - name: Evaluate acceptance evidence (full / limited / failure)
         if: env.RADAR_PRODUCTION_URL != ''
