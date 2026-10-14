@@ -35,6 +35,7 @@ import {weeklyConclusionQualityReview} from './opportunity-weekly-conclusion-qua
 import {weeklyEvidenceProvenance,reviewWeeklyEvidenceProvenance} from './opportunity-weekly-provenance.mjs';
 import {weeklyIndependentEvidenceCoverage} from './opportunity-weekly-independent-coverage.mjs';
 import {crossWeekResearchDossier} from './opportunity-cross-week-dossier.mjs';
+import {researchDecisionGuidance} from './opportunity-research-guidance.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -222,6 +223,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const guidanceRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-guidance$/.exec(pathname);
+    if(guidanceRoute&&req.method==='GET')return send(res,200,researchDecisionGuidance(store,decodeURIComponent(guidanceRoute[1])));
     const dossierRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-dossier$/.exec(pathname);
     if(dossierRoute&&req.method==='GET')return send(res,200,crossWeekResearchDossier(store,decodeURIComponent(dossierRoute[1])));
     if(pathname==='/api/discovery/weekly-independent-coverage'&&req.method==='GET')return send(res,200,weeklyIndependentEvidenceCoverage(store));
