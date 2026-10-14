@@ -7,10 +7,18 @@ const keys=['problem','competition','counterargument','feasibility','validation'
 export function candidateContext(store,id){
  const candidate=homeDiscoveryCandidates(store).items.find(x=>x.id===id);
  if(!candidate)throw fail('CANDIDATE_NOT_FOUND','候选不存在、已忽略或超出当前候选窗口',404);
+ return researchContextForCandidate(store,candidate);
+}
+export function researchContextForCandidate(store,candidate){
  const signals=candidate.signalIds.map(i=>store.get('sources',i)).filter(Boolean);
  if(signals.length!==candidate.signalIds.length)throw fail('CANDIDATE_CHANGED','原始信号已变化，请重新扫描',409);
  const sources=signals.slice(0,8).map(s=>({id:s.id,url:s.url,title:clean(s.title,220),excerpt:clean(s.description,350)}));
- return {candidate,sources,fingerprint:digest(JSON.stringify(sources))};
+ // Short excerpts are for display/model input, not the freshness boundary.
+ // Version the fingerprint and include complete source text and revisions so
+ // edits beyond the excerpt cannot silently keep old research current.
+ const evidence=signals.map(s=>({id:s.id,url:s.url,title:s.title,description:s.description,
+  revision:s.revision||0,publishedAt:s.publishedAt||null}));
+ return {candidate,sources,fingerprint:digest('research-source-v2:'+JSON.stringify(evidence))};
 }
 export async function draftOpportunityResearch(store,id,{fetchImpl=globalThis.fetch,env=process.env}={}){
  const base=env.RADAR_LLM_BASE_URL,key=env.RADAR_LLM_API_KEY,model=env.RADAR_LLM_MODEL;
