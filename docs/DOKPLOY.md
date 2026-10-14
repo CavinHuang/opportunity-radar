@@ -8,12 +8,27 @@
 - 本仓库的 Git 地址（公开仓库直接填；私有仓库在 Dokploy 里配置 GitHub 凭据）
 - 域名一个（可选，用于自动 HTTPS）
 
+## 推荐：使用已验证、带提交 SHA 的 GHCR 镜像（免手动注入发布身份）
+
+`main` 的 **CI 成功**后，[Verified GHCR release image](https://github.com/CavinHuang/opportunity-radar/actions/workflows/publish-release-image.yml) 会针对**刚通过 CI 的确切 Git SHA**构建 `linux/amd64` Docker 镜像。工作流先在隔离环境启动同一镜像，验证 `/api/health`、`/api/release`、`/app.js`，成功后才使用仓库级 `GITHUB_TOKEN` 发布到 GHCR（无需填写个人 PAT）。镜像自带正确的 `RADAR_RELEASE_SHA`，从此不必依赖 Dokploy Dockerfile 构建阶段手工传入 Git SHA。
+
+首次使用时：
+1. 打开 [Verified GHCR release image Actions](https://github.com/CavinHuang/opportunity-radar/actions/workflows/publish-release-image.yml)，找到最新**已成功发布**的运行记录，复制 Job Summary 中的 **镜像完整 digest 引用**（形如 `ghcr.io/cavinhuang/opportunity-radar@sha256:...`，使用真实输出，不要把示例当实际值）。
+2. 在 Dokploy 创建/编辑 **Application → General → Source: Docker**，Docker Image 填入上一步的完整镜像引用，Registry 为 `ghcr.io`。若 GHCR 包私有，需先在 Dokploy 配置只用于拉取的包读取凭据；公有包则按 Dokploy 支持的公开拉取方式设置。不要假定 GitHub 仓库公开就表示镜像已经可以匿名拉取。参见 [Dokploy Docker Registry 官方指南](https://docs.dokploy.com/docs/core/Docker)。
+3. 配置端口 `4177`、健康路径 `/api/health`、公网域名和 HTTPS，以及**必须持久化**的 `/app/.data`。在 Dokploy Environment 设置强随机 `RADAR_OWNER_TOKEN`，有需要再设置独立的 `RADAR_WATCH_TOKEN`；**不要再设置固定的运行时 `RADAR_RELEASE_SHA`**，否则会覆盖镜像原有身份。
+4. 部署前备份当前 SQLite；实际运行后，`GET /api/release` 应返回你选中的 40 位 SHA，不能只凭镜像推送成功断言线上已更新。继续运行 [Independent production watch](https://github.com/CavinHuang/opportunity-radar/actions/workflows/production-watch.yml) 的一次性 `production_url` / `expected_sha` 验收，再填写仓库中持久化的生产 URL 和 SHA。
+5. 升级需要显式选取**新的已验证镜像 digest**再重新部署；这条流水线**不自动修改 Dokploy**、也不改变用户的数据库。要回滚应用，请回到先前已经验证过的镜像 digest 并执行数据库兼容性与备份检查。镜像为 `linux/amd64`，ARM64 服务器需要另行构建并核验对应架构。
+
+**状态边界**：GHCR 包发布成功表示可部署的镜像已准备好，**不表示 Dokploy 已使用该镜像**；`/api/release` 的 SHA 仍是镜像构建器写入的部署声明，而不是远程安全证明。还需和 Dokploy 的运行中镜像 digest 对照。
+
 ## 两种部署类型怎么选
 
 | | Dockerfile（应用类型） | Docker Compose（组合类型） |
 |---|---|---|
 | 反代/域名 | Dokploy Domain 标签页自动接通 Traefik | **需手动接网络与路由标签**（仓库 compose 已预置） |
 | 适用 | 单容器最简路径，推荐 | 想把编排文件纳入版本控制的场景 |
+
+> 若由 Docker Compose 使用**预构建 GHCR 镜像**，请把 `build:` 替换为 `image: ghcr.io/cavinhuang/opportunity-radar@sha256:<真实digest>`。Compose 现已删除原有的空运行时 `RADAR_RELEASE_SHA` 覆盖项，避免将预构建镜像中写入的 SHA 清空。完整 Docker Compose 文件仍使用示例域名 `radar.example.com`；必须先换成实际域名才能正常通过 Traefik HTTPS 路由。
 
 ## Compose 部署的反代接线（404 page not found 的原因与解法）
 
@@ -89,7 +104,7 @@ Dokploy → Domain → 添加你的域名 → 勾选 HTTPS（Let's Encrypt 自�
 
 ### 发布版本确认
 
-如果 Dokploy 支持为本次 Dockerfile 构建动态传入 Git commit，可将**对应的完整 40 位 SHA**设置为 Docker build arg `RADAR_RELEASE_SHA`。也可以在发布流程中使用动态生成的运行时同名环境变量（但不能把一个固定值留在后台用于所有后续版本）。如果没有可靠的动态注入能力，版本会返回 `identified:false`，请先通过部署详情确认 Git commit，不要伪造通过结果。
+选择上文已验证的 GHCR 镜像时，发布 SHA 已被写入镜像（推荐方式）。如果仍选择在 Dokploy 里直接按 Dockerfile 构建，则，可将**对应的完整 40 位 SHA**设置为 Docker build arg `RADAR_RELEASE_SHA`。也可以在发布流程中使用动态生成的运行时同名环境变量（但不能把一个固定值留在后台用于所有后续版本）。如果没有可靠的动态注入能力，版本会返回 `identified:false`，请先通过部署详情确认 Git commit，不要伪造通过结果。
 
 仓库有手动 GitHub Action **Production release verification**；先配置仓库 Actions 变量 `RADAR_PRODUCTION_URL` 为实际 HTTPS 地址，然后手动在 main 上运行。验证脚本 `scripts/verify-release.mjs` 只做公开接口只读检查，不会读取数据库或调用部署 API。详情见 [DEPLOY.md](DEPLOY.md)。
 
