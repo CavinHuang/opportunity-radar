@@ -36,6 +36,7 @@ import {weeklyEvidenceProvenance,reviewWeeklyEvidenceProvenance} from './opportu
 import {weeklyIndependentEvidenceCoverage} from './opportunity-weekly-independent-coverage.mjs';
 import {crossWeekResearchDossier} from './opportunity-cross-week-dossier.mjs';
 import {researchDecisionGuidance} from './opportunity-research-guidance.mjs';
+import {researchGuidanceFeedbackBoard,recordResearchGuidanceFeedback,recordResearchGuidanceFollowup} from './opportunity-research-guidance-feedback.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -223,6 +224,11 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    const guidanceFollowupRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-guidance\/feedback\/([^/]+)\/followup$/.exec(pathname);
+    if(guidanceFollowupRoute&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>recordResearchGuidanceFollowup(store,decodeURIComponent(guidanceFollowupRoute[1]),decodeURIComponent(guidanceFollowupRoute[2]),d))});
+    const guidanceFeedbackRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-guidance\/feedback$/.exec(pathname);
+    if(guidanceFeedbackRoute&&req.method==='GET')return send(res,200,researchGuidanceFeedbackBoard(store,decodeURIComponent(guidanceFeedbackRoute[1])));
+    if(guidanceFeedbackRoute&&req.method==='POST')return send(res,201,{item:await ownerWrite(req,pathname,d=>recordResearchGuidanceFeedback(store,decodeURIComponent(guidanceFeedbackRoute[1]),d))});
     const guidanceRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-guidance$/.exec(pathname);
     if(guidanceRoute&&req.method==='GET')return send(res,200,researchDecisionGuidance(store,decodeURIComponent(guidanceRoute[1])));
     const dossierRoute=/^\/api\/opportunity-scan\/([^/]+)\/research-dossier$/.exec(pathname);
