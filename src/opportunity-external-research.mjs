@@ -9,6 +9,13 @@ const safeLink=raw=>{try{const u=new URL(raw);return u.protocol==='https:'?u.hre
 const shortTerms=new Set(['ai','ui','ux','usb','csv','pdf','sql','api','crm','erp','sso','dns','nas','vm']);
 const queryStop=new Set(['cannot','unable','every','with','from','have','need','problem','workflow','manually','records','how','what','over','control','automatic','does','there','that','this','into','between']);
 const platforms=new Set(['windows','macos','linux','android','iphone','lightroom','excel']);
+export function prioritizeExternalHits(title,records){
+ const priority={solution_with_reported_limits:4,possible_alternative:3,related_problem_report:2,related_discussion:1,weak_match:0};
+ return records.map((hit,index)=>{
+  const triage=analyzeExternalCounterevidence(title,[hit]).items[0]?.type||'weak_match';
+  return {hit:{...hit,triageType:triage},index,priority:priority[triage]||0};
+ }).sort((a,b)=>b.priority-a.priority||a.index-b.index).map(x=>x.hit).slice(0,35);
+}
 export function externalResearchQueries(title){
  const words=String(title||'').normalize('NFKC').toLowerCase().match(/[a-z]{2,}|[\p{Script=Han}]{2,}/gu)||[];
  const tokens=[...new Set(words.filter(x=>(x.length>=4||shortTerms.has(x))&&!queryStop.has(x)))];
@@ -75,9 +82,10 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
  const statuses=[{source:'Hacker News',status:hnStatus,count:results.filter(x=>x.source==='Hacker News').length,queries:hnQueries},...sourceStatus.filter(x=>x.source!=='Hacker News')];
  if(statuses.every(x=>x.status==='failed'))throw fail('EXTERNAL_SEARCH_FAILED','全部外部来源查询失败，未更新研究记录',502);
  // These are retrieval leads, not independent users, proven competitors, or verified claims.
- const analysis=analyzeExternalCounterevidence(context.candidate.title,results.slice(0,35),statuses);
+ const retained=prioritizeExternalHits(context.candidate.title,results);
+ const analysis=analyzeExternalCounterevidence(context.candidate.title,retained,statuses);
  const record={id,candidateFingerprint:context.fingerprint,queryFingerprint:digest(queries),
-  queries,sourceStatus:statuses,analysis,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
+  queries,sourceStatus:statuses,analysis,results:retained,searchedAt:now(),status:'needs_owner_review',
   missing:['独立用户与原帖关系未核查','检索结果可能相关性不足','现有产品能力及收费情况未核查','不能根据没有搜索结果断言市场空白'],
   notice:'只查询固定 Hacker News 与 GitHub Issues 公开接口；部分来源失败会显式记录。命中结果不是已验证的竞争产品或独立用户证据。'};
  const previous=externalResearchStatus(store,id);

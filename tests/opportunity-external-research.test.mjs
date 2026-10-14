@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
-import {externalResearchQueries,investigateExternalEvidence,externalResearchBrief} from '../src/opportunity-external-research.mjs';
+import {externalResearchQueries,investigateExternalEvidence,externalResearchBrief,prioritizeExternalHits} from '../src/opportunity-external-research.mjs';
 
 test('queries use bounded, task-grounded search terms',()=>{
  const q=externalResearchQueries('I cannot reconcile invoice records manually');
@@ -80,6 +80,13 @@ test('queries preserve short task acronyms and remove generic question phrasing'
  assert.doesNotMatch(q[0],/control|over|have/);
  assert.match(externalResearchQueries('I cannot import CSV into Excel')[0],/csv/);
  assert.match(externalResearchQueries('PDF invoice export problem')[0],/pdf/);
+});
+test('relevant alternatives from a later provider remain visible ahead of unrelated first-provider hits',()=>{
+ const noise=Array.from({length:35},(_,i)=>({url:'https://news.ycombinator.com/item?id='+i,title:'Unrelated programming discussion',source:'Hacker News'}));
+ const result=prioritizeExternalHits('CSV Excel import issue',[...noise,{url:'https://github.com/example/app/issues/1',title:'CSV Excel import plugin workaround still broken',source:'GitHub Issues'}]);
+ assert.equal(result.length,35);assert.equal(result[0].source,'GitHub Issues');
+ assert.equal(result[0].triageType,'solution_with_reported_limits');
+ assert.ok(result.every(x=>!x.verified));
 });
 
 test('HN query failure preserves a successful query and GitHub results with explicit partial status',async()=>{
