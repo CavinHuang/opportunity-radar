@@ -50,6 +50,12 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
                 page.locator('#modal-root').get_by_text('按来源域名划分（非独立用户）').wait_for(timeout=10000)
                 page.locator('#modal-root [data-modal-close]').first.click()
                 assert page.locator('#modal-root .modal').count()==0
+                page.locator('[data-action="frozen-regression-suite"][data-id="view"]').first.click()
+                page.locator('#modal-root').get_by_text('稳定回归样本与规则对照').wait_for(timeout=10000)
+                page.locator('#modal-root').get_by_text('暂无冻结回归集',exact=False).wait_for(timeout=10000)
+                assert page.locator('#modal-root [data-action="frozen-regression-suite"][data-id="review"]').count()==0
+                page.locator('#modal-root [data-modal-close]').first.click()
+                assert page.locator('#modal-root .modal').count()==0
                 page.locator('[data-action="source-trial-audit"][data-id="view"]').first.click()
                 page.locator('#modal-root').get_by_text('来源级离线规则影响核查').wait_for(timeout=10000)
                 page.locator('#modal-root').get_by_text('上线门槛').wait_for(timeout=10000)
