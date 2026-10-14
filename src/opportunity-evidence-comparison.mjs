@@ -1,6 +1,7 @@
 import {candidateContext} from './opportunity-research.mjs';
 import {candidateOriginals} from './opportunity-brief.mjs';
 import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
+import {COMPARISON_POLICY} from './opportunity-evidence-comparison-cache.mjs';
 
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const text=(value,max)=>typeof value==='string'?value.trim().slice(0,max):'';
@@ -30,14 +31,17 @@ export function validateEvidenceComparison(parsed,originals,hit){
   solutionCoverage:parsed.solutionCoverage,coverageReason,coverageQuote:coverageQuote||null,nextCheck};
 }
 
-/** Read-only model draft: never classifies owner evidence or fetches arbitrary post URLs. */
-export async function draftEvidenceComparison(store,id,{url,candidateFingerprint,searchRevision}={},
+/** Persist model drafts separately; never classify owner evidence or fetch arbitrary post URLs. */
+export async function draftEvidenceComparison(store,id,{url,candidateFingerprint,searchRevision,refresh=false}={},
  {fetchImpl=globalThis.fetch,env=process.env}={}){
  const board=evidenceReviewBoard(store,id);
  if(!board.current||candidateFingerprint!==board.candidateFingerprint||searchRevision!==board.searchRevision)
   throw fail('STALE_EVIDENCE','检索或原帖已变化，请重新打开复核列表',409);
  const hit=board.results.find(x=>x.url===url);
  if(!hit)throw fail('UNKNOWN_EVIDENCE','只能对照当前检索结果',409);
+ if(typeof refresh!=='boolean')throw fail('BAD_REQUEST','refresh 必须为布尔值');
+ const cached=board.comparisons.find(x=>x.url===url);
+ if(cached&&!refresh)return {...cached,cached:true,readOnly:true};
  const base=env.RADAR_LLM_BASE_URL,key=env.RADAR_LLM_API_KEY,model=env.RADAR_LLM_MODEL;
  if(!base||!key||!model)throw fail('LLM_NOT_CONFIGURED','尚未配置研究模型，可直接人工核查',503);
  let endpoint;try{endpoint=new URL(base.replace(/\/+$/,'')+'/chat/completions')}catch{throw fail('BAD_LLM_ENDPOINT','无效模型地址')}
@@ -56,8 +60,19 @@ export async function draftEvidenceComparison(store,id,{url,candidateFingerprint
  const current=evidenceReviewBoard(store,id);
  if(!current.current||current.candidateFingerprint!==board.candidateFingerprint||current.searchRevision!==board.searchRevision)
   throw fail('STALE_EVIDENCE','分析期间证据已变化，请重新对照',409);
- return {candidateId:id,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision,
-  url:hit.url,title:hit.title,comparison,model,generatedAt:new Date().toISOString(),readOnly:true,
+ const draft={candidateId:id,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision,
+  url:hit.url,title:hit.title,comparison,model,generatedAt:new Date().toISOString(),readOnly:false,cached:false,
   ownerReviewed:false,marketValidated:false,status:'unreviewed_model_draft',
-  notice:'模型仅对照已保存的原帖摘录与检索片段，未访问全文。引用存在不代表推断正确；任务关系和方案覆盖均须核对原网页。不会保存人工分类或批准投入。'};
+  notice:'模型草稿已保存，可复用至原帖或检索变化。模型未访问全文，引用存在不代表推断正确；须核对原网页，不会保存人工分类或批准投入。'};
+ return store.transaction(()=>{
+  const fresh=evidenceReviewBoard(store,id);
+  if(!fresh.current||fresh.candidateFingerprint!==board.candidateFingerprint||fresh.searchRevision!==board.searchRevision)
+   throw fail('STALE_EVIDENCE','保存前证据已变化，请重新对照',409);
+  const winner=fresh.comparisons.find(x=>x.url===url);
+  if(winner&&!refresh)return {...winner,cached:true,readOnly:true};
+  const row=store.get('opportunity_evidence_comparisons',id);
+  store.put('opportunity_evidence_comparisons',{id,policy:COMPARISON_POLICY,candidateFingerprint:board.candidateFingerprint,
+   searchRevision:board.searchRevision,items:[...fresh.comparisons.filter(x=>x.url!==url),draft]},row?.revision||0);
+  return draft;
+ });
 }

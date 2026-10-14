@@ -1,14 +1,20 @@
 import {candidateContext} from './opportunity-research.mjs';
 import {externalResearchStatus} from './opportunity-external-research.mjs';
+import {currentEvidenceComparisons} from './opportunity-evidence-comparison-cache.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const choices=new Set(['related_problem','existing_solution','not_relevant','uncertain']);
 const priorityTypes=new Set(['related_discussion','related_problem_report','possible_alternative','solution_with_reported_limits']);
-export function evidenceReviewQueue(results,reviews){
+export function evidenceReviewQueue(results,reviews,comparisons=[]){
  const reviewed=new Set(reviews.map(x=>x.url));
- const priority=results.filter(x=>priorityTypes.has(x.triageType));
+ const relation=new Map(comparisons.map(x=>[x.url,x.comparison.taskRelation]));
+ const priority=results.filter(x=>relation.get(x.url)!=='different_task'&&
+  (relation.get(x.url)==='same_task'||priorityTypes.has(x.triageType)));
+ const priorityUrls=new Set(priority.map(x=>x.url));
  const pending=priority.filter(x=>!reviewed.has(x.url));
+ pending.sort((a,b)=>Number(relation.get(b.url)==='same_task')-Number(relation.get(a.url)==='same_task'));
  return {priority:pending,
-  other:results.filter(x=>!priorityTypes.has(x.triageType)&&!reviewed.has(x.url)),
+  other:results.filter(x=>!priorityUrls.has(x.url)&&relation.get(x.url)!=='different_task'&&!reviewed.has(x.url)),
+  differentTask:results.filter(x=>relation.get(x.url)==='different_task'&&!reviewed.has(x.url)),
   reviewed:results.filter(x=>reviewed.has(x.url)),
   priorityProgress:{total:priority.length,reviewed:priority.length-pending.length,pending:pending.length}};
 }
@@ -19,9 +25,10 @@ export function evidenceReviewBoard(store,id,context=null){
  const valid=Boolean(current&&saved?.candidateFingerprint===ctx.fingerprint&&saved?.searchRevision===external.revision);
  const results=current?(external.record.results||[]).slice(0,35):[];
  const reviews=valid?saved.items||[]:[];
+ const comparisons=currentEvidenceComparisons(store,id,{current,candidateFingerprint:ctx.fingerprint,searchRevision:external.revision,results});
  return {candidateId:id,candidateFingerprint:ctx.fingerprint,searchRevision:external.revision,
   current,revision:saved?.revision||0,stale:!!saved&&!valid,
-  reviews,results,queue:evidenceReviewQueue(results,reviews),
+  reviews,results,comparisons,queue:evidenceReviewQueue(results,reviews,comparisons),
   notice:'逐条分类是人工判断，不是独立核实的竞争产品、需求或付费数据；重新检索后旧审核必须重做。'};
 }
 export function reviewExternalEvidence(store,id,{candidateFingerprint,searchRevision,url,classification,notes,expected_revision}={}){

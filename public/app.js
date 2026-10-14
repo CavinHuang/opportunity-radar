@@ -54,8 +54,9 @@ function renderHypothesisResearch(x){
  const states={not_searched:'尚未检索外部反证',stale:'外部证据已过期',needs_review:'外部线索待复核',partially_reviewed:'外部线索部分已分类',reviewed:'外部分类已记录',no_hits:'当前查询没有命中',incomplete_search:'外部检索未完整完成'};
  const automatic=r.automatic?`<p class="subtext">自动初筛：相似问题 ${Number(r.automatic.related_problem_report)} · 潜在方案 ${Number(r.automatic.possible_alternative)+Number(r.automatic.solution_with_reported_limits)} · 关联较弱 ${Number(r.automatic.weak_match)}。均待复核。</p>`:'';
  const progress=r.progress?`<p class="subtext">人工分类 ${Number(r.progress.reviewed)}/${Number(r.progress.total)} · 待核查 ${Number(r.progress.pending)}${r.priorityProgress?` · 重点线索 ${Number(r.priorityProgress.reviewed)}/${Number(r.priorityProgress.total)}`:''}${r.ownerClassifications?` · 标记为已有方案 ${Number(r.ownerClassifications.existing_solution)}`:''}</p>`:'';
+ const models=r.modelComparisons?`<p class="subtext">AI 任务对照 ${Number(r.modelComparisons.analyzed)}/${Number(r.modelComparisons.total)} · 可能同一任务 ${Number(r.modelComparisons.same_task)} · 可能不同任务 ${Number(r.modelComparisons.different_task)} · 无法确认 ${Number(r.modelComparisons.uncertain)}。均为未审核草稿。</p>`:'';
  const links=(r.references||[]).map(e=>`<li><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a> · 待复核</li>`).join('');
- return `<div class="note-box mt"><strong>${esc(states[r.state]||'研究状态未知')}</strong>${r.coverage==='partial'?'<p class="subtext">部分来源查询失败，空结果不能用于判断市场空白。</p>':''}${automatic}${progress}${links?`<details><summary>优先核查的外部线索</summary><ul>${links}</ul></details>`:''}<p class="subtext"><strong>下一步：</strong>${esc(r.nextAction?.reason||'继续核查真实证据')}</p>${r.nextAction&&!['external-research','verify-problem'].includes(r.nextAction.action)?`<button class="btn btn-sm" data-action="${esc(r.nextAction.action)}" data-id="${esc(x.id)}">${esc(r.nextAction.label)}</button>`:''}<p class="subtext">搜索命中和人工分类均不能证明独立用户或付费需求。</p></div>`;
+ return `<div class="note-box mt"><strong>${esc(states[r.state]||'研究状态未知')}</strong>${r.coverage==='partial'?'<p class="subtext">部分来源查询失败，空结果不能用于判断市场空白。</p>':''}${automatic}${models}${progress}${links?`<details><summary>优先核查的外部线索</summary><ul>${links}</ul></details>`:''}<p class="subtext"><strong>下一步：</strong>${esc(r.nextAction?.reason||'继续核查真实证据')}</p>${r.nextAction&&!['external-research','verify-problem'].includes(r.nextAction.action)?`<button class="btn btn-sm" data-action="${esc(r.nextAction.action)}" data-id="${esc(x.id)}">${esc(r.nextAction.label)}</button>`:''}<p class="subtext">搜索命中和人工分类均不能证明独立用户或付费需求。</p></div>`;
 }
 function renderEvidenceReviewQueue(r,id){
  const labels={related_discussion:'相关讨论',related_problem_report:'相似问题报告',possible_alternative:'潜在替代方案',solution_with_reported_limits:'方案及其局限',weak_match:'弱相关'};
@@ -63,11 +64,13 @@ function renderEvidenceReviewQueue(r,id){
  const queue=r.queue||{priority:[],other:r.results||[],reviewed:[],priorityProgress:{total:0,reviewed:0}};
  const rows=items=>items.map(x=>{
   const reviewed=r.reviews.find(y=>y.url===x.url);
-  return `<div class="source-row"><div class="grow"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><p class="subtext">${esc(x.source)} · 自动初筛：${esc(labels[x.triageType]||'未分组')} · 人工：${esc(ownerLabels[reviewed?.classification]||'未审核')}</p>${x.excerpt?`<p class="subtext">检索摘要（需核对原网页）：${esc(String(x.excerpt).slice(0,420))}</p>`:''}${reviewed?.notes?`<p class="subtext">审核依据：${esc(reviewed.notes)}</p>`:''}<button type="button" class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${reviewed?'修改审核':'核查此条'}</button> <button type="button" class="btn btn-sm" data-action="workbench-evidence-compare" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">AI 对照任务与方案</button></div></div>`;
+  const draft=(r.comparisons||[]).find(y=>y.url===x.url);
+  const relationLabels={same_task:'可能同一任务',different_task:'可能不同任务',uncertain:'任务关系无法确认'};
+  return `<div class="source-row"><div class="grow"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><p class="subtext">${esc(x.source)} · 自动初筛：${esc(labels[x.triageType]||'未分组')} · 人工：${esc(ownerLabels[reviewed?.classification]||'未审核')}</p>${draft?`<p class="subtext">AI 对照（未审核）：${esc(relationLabels[draft.comparison.taskRelation])} · ${esc(draft.comparison.relationReason)}</p>`:''}${x.excerpt?`<p class="subtext">检索摘要（需核对原网页）：${esc(String(x.excerpt).slice(0,420))}</p>`:''}${reviewed?.notes?`<p class="subtext">审核依据：${esc(reviewed.notes)}</p>`:''}<button type="button" class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${reviewed?'修改审核':'核查此条'}</button> <button type="button" class="btn btn-sm" data-action="workbench-evidence-compare" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${draft?'查看已保存 AI 对照':'AI 对照任务与方案'}</button>${draft?` <button type="button" class="btn btn-sm" data-action="workbench-evidence-recompare" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">重新 AI 对照</button>`:''}</div></div>`;
  }).join('');
  if(!r.results.length)return '<p class="subtext">当前检索没有可审核的结果</p>';
  const p=queue.priorityProgress;
- return `<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
+ return `<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.differentTask?.length?`<details><summary>AI 判断任务不同 · ${queue.differentTask.length} 条待复查（可能误判）</summary>${rows(queue.differentTask)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
 }
 
 function renderEvidenceComparison(draft,id){
@@ -962,15 +965,16 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
   case 'workbench-evidence-review':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     if(!r.current)throw new Error('外部检索已过期或尚未执行，请先重新检索');
-    modal('外部证据逐条核查',renderEvidenceReviewQueue(r,id),async()=>{});
+    modal('外部证据逐条核查',renderEvidenceReviewQueue(r,id),async()=>{},{readOnly:true});
     break;
   }
-  case 'workbench-evidence-compare':{
+  case 'workbench-evidence-compare':
+  case 'workbench-evidence-recompare':{
     const url=S.pendingEvidenceUrl;
     const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     if(!board.current||!board.results.some(x=>x.url===url))throw new Error('证据已变化，请重新打开复核列表');
     toast('正在对照原帖任务与外部线索');
-    const {draft}=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-comparison',{method:'POST',body:{url,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision}});
+    const {draft}=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-comparison',{method:'POST',body:{url,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision,refresh:action==='workbench-evidence-recompare'}});
     modal('AI 证据对照 · '+draft.title,renderEvidenceComparison(draft,id),async()=>{},{readOnly:true});
     break;
   }
@@ -1697,7 +1701,7 @@ document.addEventListener('submit',async e=>{if(e.target?.id==='search-signals-f
 // (the direct browser E2E depends on it), and double submits are already guarded
 // where they matter — disabled modal submit buttons plus server-side idempotency,
 // optimistic revisions and explicit 409 conflicts.
-document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(['workbench-review-item','workbench-alternative-edit','workbench-evidence-compare'].includes(a.dataset.action))S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;if(a.dataset.action==='research-guidance-followup')S.pendingGuidanceEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
+document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(['workbench-review-item','workbench-alternative-edit','workbench-evidence-compare','workbench-evidence-recompare'].includes(a.dataset.action))S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;if(a.dataset.action==='research-guidance-followup')S.pendingGuidanceEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
 window.addEventListener('offline',()=>{S.offline=true;render();});
 window.addEventListener('online',()=>{S.offline=false;S.loadError=null;refresh();});
 applyStateFromHash();

@@ -64,3 +64,13 @@ test('AI task comparison keeps model judgments separate and requires owner to en
  assert.match(html,/自行填写/);assert.doesNotMatch(html,/<script>|name="classification"|name="notes"/);
  assert.match(html,/type="button".*data-action="workbench-review-item"/);assert.match(html,/返回复核列表/);
 });
+test('cached model mismatch stays folded and editable while homepage separates machine progress from owner progress',()=>{
+ const hit={url:'https://example.org/different',title:'Different task',triageType:'possible_alternative'};
+ const html=context.renderEvidenceReviewQueue({results:[hit],reviews:[],comparisons:[{url:hit.url,comparison:{taskRelation:'different_task',relationReason:'<script>different task</script>'}}],
+  queue:{priority:[],other:[],reviewed:[],differentTask:[hit],priorityProgress:{total:0,reviewed:0}}},'id');
+ assert.match(html,/<details><summary>AI 判断任务不同 · 1 条待复查/);assert.match(html,/可能误判/);
+ assert.match(html,/查看已保存 AI 对照/);assert.match(html,/workbench-evidence-recompare/);assert.doesNotMatch(html,/<script>/);
+ assert.match(html,/人工：未审核/);assert.match(html,/workbench-review-item/);
+ const card=context.renderHypothesisResearch({researchSummary:{modelComparisons:{analyzed:1,total:35,same_task:0,different_task:1,uncertain:0},progress:{reviewed:0,total:35,pending:35}}});
+ assert.match(card,/AI 任务对照 1\/35/);assert.match(card,/人工分类 0\/35/);assert.match(card,/未审核草稿/);
+});
