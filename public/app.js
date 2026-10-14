@@ -664,14 +664,59 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     break;
   }
   case 'research-decision-guidance':{
-    const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance');
+    const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance/feedback');
+    const r=board.guidance,summary=board.summary;
     const reasons=r.reasons.map(x=>'<p class="subtext">'+esc(x.message)+'</p>').join('');
     const steps=r.nextSteps.map((x,i)=>'<p class="subtext">'+(i+1)+'. '+esc(x)+'</p>').join('');
-    modal('研究下一步建议 · '+esc(r.title),
+    const prior=board.entries.slice(0,8).map(x=>'<div class="source-row"><strong>'+
+      esc(({accepted:'采纳',adapted:'调整后采用',declined:'不采纳'})[x.response]||x.response)+'</strong> · '+esc(x.createdAt)+
+      '<p class="subtext">当时建议：'+esc(x.recommendation.headline)+' · 理由：'+esc(x.reason)+'</p>'+
+      (x.followup?'<p class="subtext">后续反馈：'+esc(({helpful:'主观认为有帮助',not_helpful:'主观认为无帮助',uncertain:'尚无法判断'})[x.followup.assessment]||x.followup.assessment)+' · 投入 '+Number(x.followup.actualHours)+' 小时</p>':
+      '<button type="button" class="btn btn-sm" data-action="research-guidance-followup" data-id="'+esc(id)+'" data-entry-id="'+esc(x.id)+'">记录后续结果</button>')+
+      '</div>').join('');
+    const already=board.entries.some(x=>x.fingerprint===board.fingerprint);
+    modal('研究下一步建议 · '+board.title,
       '<h4>'+esc(r.headline)+'</h4><p class="subtext">基于 '+r.researchWeeks+' 周记录 · 最近结论：'+esc(r.latestFinding)+'</p>'+
-      '<h4>建议依据</h4>'+(reasons||'<p class="subtext">未识别出规则警告，但不代表完成需求验证。</p>')+
+      '<h4>建议依据</h4>'+(reasons||'<p class="subtext">没有检测到预设规则警告；不等于需求已验证。</p>')+
       '<h4>建议的下一步</h4>'+steps+
-      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+      '<h4>建议反馈</h4><p class="subtext">处理记录 '+summary.total+' 条 · 已回填后续结果 '+summary.followedUp+' 条 · 待回填 '+summary.pending+' 条。主观反馈不能计算建议准确率。</p>'+
+      (already?'<p class="subtext">当前证据版本的处理已记录；可以回填结果，新的研究证据出现后才会生成可再次记录的版本。':'<button type="button" class="btn btn-sm" data-action="research-guidance-record" data-id="'+esc(id)+'">记录采纳 / 调整 / 不采纳</button>')+
+      (prior||'<p class="subtext">尚未记录任何人工处理决定。</p>')+
+      (board.summary.total>8?'<p class="subtext">仅显示最近 8 条，更多历史仍保存在数据库中。</p>':'')+
+      '<p class="subtext">'+esc(board.notice)+'</p>',async()=>{});
+    break;
+  }
+  case 'research-guidance-record':{
+    const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance/feedback');
+    const formalOptions='<option value="">不关联既有正式机会决策</option>'+board.formalDecisions.map(x=>
+      '<option value="'+esc(x.id)+'">'+esc(x.adopted)+' · '+esc(x.createdAt||'')+'</option>').join('');
+    modal('记录对研究建议的处理 · '+board.title,
+      '<p class="subtext">本次建议：'+esc(board.guidance.headline)+'。该操作仅记录是否采纳研究建议，不替代正式投资决策。</p>'+
+      '<div class="field wide"><label>如何处理本次建议</label><select name="response">'+
+      '<option value="accepted">采纳建议</option><option value="adapted">调整后采用</option><option value="declined">不采纳</option></select></div>'+
+      field('reason','采纳或不采纳的具体原因（至少12字）',{wide:true,type:'textarea',required:true})+
+      field('chosenAction','若调整，填写实际采取的行动（至少10字）',{wide:true,type:'textarea'})+
+      '<div class="field wide"><label>关联已有正式机会决策（可选）</label><select name="linkedDecisionId">'+formalOptions+'</select></div>',
+      async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance/feedback',{
+       method:'POST',body:{fingerprint:board.fingerprint,response:d.response,reason:d.reason,
+        chosenAction:d.chosenAction,linkedDecisionId:d.linkedDecisionId}}));
+    break;
+  }
+  case 'research-guidance-followup':{
+    const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance/feedback');
+    const entry=board.entries.find(x=>x.id===S.pendingGuidanceEntry);
+    if(!entry||entry.followup)throw new Error('反馈记录不存在、未在最近列表中或已完成结果回填');
+    modal('记录研究建议的后续反馈',
+      '<p class="subtext">原建议：'+esc(entry.recommendation.headline)+' · 原处理：'+esc(entry.response)+'</p>'+
+      '<div class="field wide"><label>这条建议是否帮助了实际研究决策？</label><select name="assessment">'+
+      '<option value="uncertain">尚无法判断</option><option value="helpful">主观认为有帮助</option><option value="not_helpful">主观认为无帮助</option></select></div>'+
+      '<div class="field"><label>实际投入小时</label><input name="actualHours" type="number" step="any" min="0" max="1000" value="0" required/></div>'+
+      field('evidenceUrl','支持本次反馈的 HTTPS 原始链接（可选）',{wide:true,type:'url'})+
+      field('notes','后续实际发生了什么？（至少12字）',{wide:true,type:'textarea',required:true})+
+      '<p class="subtext">人工自报和链接都不代表独立核实；不能把评价当作模型准确率。</p>',
+      async d=>api('/opportunity-scan/'+encodeURIComponent(id)+'/research-guidance/feedback/'+encodeURIComponent(entry.id)+'/followup',{
+        method:'POST',body:{assessment:d.assessment,actualHours:Number(d.actualHours),
+         notes:d.notes,evidenceUrl:d.evidenceUrl,expected_revision:entry.revision}}));
     break;
   }
   case 'cross-week-research-dossier':{
@@ -1340,7 +1385,7 @@ document.addEventListener('submit',async e=>{if(e.target?.id==='search-signals-f
 // (the direct browser E2E depends on it), and double submits are already guarded
 // where they matter — disabled modal submit buttons plus server-side idempotency,
 // optimistic revisions and explicit 409 conflicts.
-document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(a.dataset.action==='workbench-review-item'||a.dataset.action==='workbench-alternative-edit')S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
+document.addEventListener('click',async e=>{const close=e.target.closest('[data-modal-close]');if(close){document.getElementById('modal-root').innerHTML='';return;}if(e.target.id==='modal-bg'){document.getElementById('modal-root').innerHTML='';return;}const nav=e.target.closest('[data-nav]');if(nav){S.view=nav.dataset.nav;S.tab='overview';S.selected=null;pushRoute();await refresh();return;}const tab=e.target.closest('[data-tab],[data-pipeline-tab]');if(tab){S.tab=tab.dataset.pipelineTab||tab.dataset.tab;pushRoute();if((S.tab==='growth'&&!S.growth)||(S.tab==='review'&&!S.reviews)){try{await refresh();}catch(err){toast(err.message,true);}}else{render();}return;}const a=e.target.closest('[data-action]');if(a){if(a.dataset.action==='workbench-review-item'||a.dataset.action==='workbench-alternative-edit')S.pendingEvidenceUrl=a.dataset.evidenceUrl;if(a.dataset.action==='workbench-outcome-edit')S.pendingDecisionEntry=a.dataset.entryId;if(a.dataset.action==='research-guidance-followup')S.pendingGuidanceEntry=a.dataset.entryId;try{await perform(a.dataset.action,a.dataset.id||a.dataset.status||a.dataset.preset,a.dataset.status||a.dataset.preset);}catch(err){toast(err.message,true);}}});
 window.addEventListener('offline',()=>{S.offline=true;render();});
 window.addEventListener('online',()=>{S.offline=false;S.loadError=null;refresh();});
 applyStateFromHash();
