@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {probeProduction} from '../scripts/production-watch.mjs';
+import {probeProduction,assessRolloutHeartbeat} from '../scripts/production-watch.mjs';
 import {planWatchIssues,manageWatchIssues} from '../scripts/production-watch-issues.mjs';
 
 const SHA='a'.repeat(40),TOKEN='watch-token-which-is-longer-than-32-characters';
-function server({failPath,commit=SHA,rollback=null,auth=true}={}){
+function server({failPath,commit=SHA,rollback=null,auth=true,heartbeat={}}={}){
  return async (url,opts)=>{
   assert.equal(opts.method,'GET');assert.equal(opts.redirect,'error');
   const p=new URL(url).pathname;
@@ -16,7 +16,7 @@ function server({failPath,commit=SHA,rollback=null,auth=true}={}){
    if(!auth)return new Response('denied',{status:401});
    return Response.json({application:'opportunity-radar',watchVersion:1,releaseRevision:3,
     active:false,rolloutPercent:0,lastTransition:'rollback',ownerDataIncluded:false,
-    lastGuardAlert:rollback});
+    lastGuardAlert:rollback,...heartbeat});
   }
   throw Error('Unexpected endpoint '+p);
  };
@@ -95,4 +95,63 @@ test('GitHub API issue updater handles failure, recovery and dedup without remot
  assert.equal((await manageWatchIssues(down,config))[0].action,'reopen');
  assert.equal(issues[0].state,'open');
  assert.ok(calls.some(c=>c.method==='PATCH'));
+});
+
+const T0=Date.parse('2026-10-14T12:00:00.000Z');
+const ACTIVE={active:true,rolloutPercent:5,releaseRevision:3,lastTransition:'release',
+ lastTransitionAt:'2026-10-14T11:00:00.000Z',
+ latestMonitorAt:'2026-10-14T11:55:00.000Z',latestMonitorReleaseRevision:3};
+
+test('rollout watchdog detects mismatched, absent and stale monitor snapshots without owner data',async()=>{
+ const sane=assessRolloutHeartbeat(ACTIVE,{now:T0});
+ assert.equal(sane.status,'recent');
+ assert.equal(sane.code,'OK');
+ assert.equal(sane.monitorAgeSeconds,300);
+ const good=await probeProduction({url:origin,watchToken:TOKEN,
+  fetchImpl:server({heartbeat:ACTIVE}),now:T0});
+ assert.equal(good.state,'healthy');assert.equal(good.guardStatus,'recent');
+ assert.equal(good.guardMonitorAgeSeconds,300);
+ for(const [heartbeat,code] of [
+  [{...ACTIVE,latestMonitorAt:'2026-10-14T11:20:00.000Z'},'GUARD_SNAPSHOT_STALE'],
+  [{...ACTIVE,latestMonitorAt:null},'GUARD_SNAPSHOT_MISSING'],
+  [{...ACTIVE,latestMonitorReleaseRevision:2},'GUARD_RELEASE_MISMATCH'],
+  [{...ACTIVE,lastTransitionAt:null},'GUARD_LAUNCH_UNVERIFIED'],
+  [{...ACTIVE,latestMonitorAt:'2026-10-14T12:10:00.000Z'},'GUARD_CLOCK_SKEW'],
+  [{...ACTIVE,latestMonitorAt:'2026-10-14T10:50:00.000Z'},'GUARD_SNAPSHOT_STALE']
+ ]){
+  const r=await probeProduction({url:origin,watchToken:TOKEN,
+   fetchImpl:server({heartbeat}),now:T0});
+  assert.equal(r.state,'down',code);assert.equal(r.code,code);
+  assert.equal(r.monitoring,'health_and_rollback');
+ }
+ const inactive=await probeProduction({url:origin,watchToken:TOKEN,
+  fetchImpl:server(),now:T0});
+ assert.equal(inactive.state,'healthy');
+ assert.equal(inactive.guardStatus,'inactive');
+});
+
+test('new release gets short warmup before first monitor snapshot, not indefinite green status',async()=>{
+ const transition={...ACTIVE,lastTransitionAt:'2026-10-14T11:59:00.000Z',
+  latestMonitorAt:null,latestMonitorReleaseRevision:2};
+ const warm=await probeProduction({url:origin,watchToken:TOKEN,
+  fetchImpl:server({heartbeat:transition}),now:T0});
+ assert.equal(warm.state,'healthy');
+ assert.equal(warm.guardStatus,'warming');
+ assert.equal(warm.code,'GUARD_WARMING');
+ const expired=await probeProduction({url:origin,watchToken:TOKEN,
+  fetchImpl:server({heartbeat:transition}),now:T0+4*60_000});
+ assert.equal(expired.state,'down');
+ assert.equal(expired.code,'GUARD_RELEASE_MISMATCH');
+});
+
+test('rollbacks still generate an incident when production guard also becomes stale',async()=>{
+ const alert={code:'REVIEWED_REGRESSION',releaseRevision:3,
+  at:'2026-10-14T11:59:00.000Z'};
+ const report=await probeProduction({url:origin,watchToken:TOKEN,
+  fetchImpl:server({heartbeat:{...ACTIVE,latestMonitorAt:null},rollback:alert}),now:T0});
+ assert.equal(report.state,'down');assert.deepEqual(report.rollbackAlert,alert);
+ const issues=planWatchIssues(report,[]);
+ assert.equal(issues.filter(x=>x.action==='create').length,2);
+ assert.ok(issues.some(x=>x.title?.includes('Guard rollback')));
+ assert.ok(issues.some(x=>x.title?.includes('Production endpoint unhealthy')));
 });
