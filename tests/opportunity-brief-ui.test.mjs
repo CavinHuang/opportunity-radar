@@ -26,3 +26,12 @@ test('no grounded product evidence produces an honest empty state instead of a r
  assert.match(html,/本次尚未发现原文证据足够的产品假设/);
  assert.doesNotMatch(html,/核查这个产品假设/);
 });
+test('homepage distinguishes automated clues and owner review progress and exposes the next review action',()=>{
+ const html=context.renderHypothesisResearch({id:'product',researchSummary:{state:'needs_review',coverage:'partial',
+  automatic:{related_problem_report:4,possible_alternative:2,solution_with_reported_limits:0,weak_match:25},
+  progress:{reviewed:0,total:35,pending:35},ownerClassifications:{existing_solution:0},references:[],
+  nextAction:{action:'workbench-evidence-review',label:'逐条核查外部证据',reason:'Check the original sources'}}});
+ assert.match(html,/自动初筛：相似问题 4/);assert.match(html,/人工分类 0\/35/);
+ assert.match(html,/部分来源查询失败/);assert.match(html,/data-action="workbench-evidence-review"/);
+ assert.match(html,/不能证明独立用户或付费需求/);
+});

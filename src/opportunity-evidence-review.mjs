@@ -2,8 +2,8 @@ import {candidateContext} from './opportunity-research.mjs';
 import {externalResearchStatus} from './opportunity-external-research.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const choices=new Set(['related_problem','existing_solution','not_relevant','uncertain']);
-export function evidenceReviewBoard(store,id){
- const ctx=candidateContext(store,id),external=externalResearchStatus(store,id);
+export function evidenceReviewBoard(store,id,context=null){
+ const ctx=context||candidateContext(store,id),external=externalResearchStatus(store,id);
  const current=Boolean(external.record&&external.record.candidateFingerprint===ctx.fingerprint);
  const saved=store.get('opportunity_evidence_reviews',id);
  const valid=Boolean(current&&saved?.candidateFingerprint===ctx.fingerprint&&saved?.searchRevision===external.revision);

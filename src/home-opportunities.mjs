@@ -1,3 +1,4 @@
+import {homeResearchSummary} from './home-research-summary.mjs';
 import {candidateOriginals,groundedOpportunityBrief,selectBriefCandidates,plainSourceText} from './opportunity-brief.mjs';
 import {persistOpportunityIdentities} from './opportunity-identity.mjs';
 import {titleSimilarity} from './discovery.mjs';
@@ -58,7 +59,7 @@ export function homeOpportunitySnapshot(store){
  const items=(latest.items||[]).filter(x=>{
    const candidate=current.get(x.id);
    return candidate&&candidate.sourceUrls?.every(url=>x.sourceUrls.includes(url));
- }).map(x=>({...x,opportunityBrief:groundedOpportunityBrief(x.opportunityBrief,candidateOriginals(current.get(x.id),store)),decision:store.get('home_opportunity_decisions',x.id)||null,feedback:store.get('home_opportunity_feedback',x.id)||null})).filter(x=>x.decision?.action!=='dismiss').sort((a,b)=>((b.feedback?.verdict==='useful'?2:b.feedback?.verdict==='false_positive'?-1:0)-(a.feedback?.verdict==='useful'?2:a.feedback?.verdict==='false_positive'?-1:0))||(a.novelty==='new_since_previous_scan'?-1:1)-(b.novelty==='new_since_previous_scan'?-1:1));
+ }).map(x=>({...x,researchSummary:homeResearchSummary(store,current.get(x.id)),opportunityBrief:groundedOpportunityBrief(x.opportunityBrief,candidateOriginals(current.get(x.id),store)),decision:store.get('home_opportunity_decisions',x.id)||null,feedback:store.get('home_opportunity_feedback',x.id)||null})).filter(x=>x.decision?.action!=='dismiss').sort((a,b)=>((b.feedback?.verdict==='useful'?2:b.feedback?.verdict==='false_positive'?-1:0)-(a.feedback?.verdict==='useful'?2:a.feedback?.verdict==='false_positive'?-1:0))||(a.novelty==='new_since_previous_scan'?-1:1)-(b.novelty==='new_since_previous_scan'?-1:1));
  return {...latest,items,productHypotheses:items.filter(x=>x.opportunityBrief.kind==='product_hypothesis').length,supportIssues:items.filter(x=>x.opportunityBrief.kind==='support_issue').length,researchLeads:items.filter(x=>x.opportunityBrief.kind==='research_lead').length};
 }
 async function classifyLLM(candidates,{env,fetchImpl,feedback=[],store}){
