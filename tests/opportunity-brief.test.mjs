@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {plainSourceText,groundedOpportunityBrief,selectBriefCandidates,candidateOriginals} from '../src/opportunity-brief.mjs';
+import {plainSourceText,groundedOpportunityBrief,selectBriefCandidates,candidateOriginals,opportunityFreshness} from '../src/opportunity-brief.mjs';
 import {parseFeed} from '../src/signals.mjs';
 import {openDatabase} from '../src/db.mjs';
 import {scanHomeOpportunities,homeOpportunitySnapshot} from '../src/home-opportunities.mjs';
@@ -38,6 +38,20 @@ test('concise Chinese evidence and exact short frequency expressions are accepte
  assert.equal(b.kind,'product_hypothesis');assert.equal(b.evidence.recurrence.quote,'每天');
  const invalid=groundedOpportunityBrief({...raw,evidence:{...raw.evidence,user:{sourceId:'s1',quote:'I'}}},originals);
  assert.notEqual(invalid.kind,'product_hypothesis');
+});
+test('old quoted evidence remains a historical research lead even with a newly collected unrelated source',()=>{
+ const old={...originals[0],publishedAt:'2015-06-12T14:18:59.000Z'};
+ const recent={sourceId:'new',url:'https://forum.example/new',title:'Unrelated newer source',text:'Different subject',publishedAt:new Date().toISOString()};
+ const brief=groundedOpportunityBrief(raw,[old,recent]);
+ assert.equal(brief.kind,'research_lead');assert.equal(brief.hypothesis,null);
+ assert.equal(brief.freshness.status,'historical_only');assert.ok(brief.gaps.includes('current_relevance'));
+ assert.equal(groundedOpportunityBrief(raw,[{...old,publishedAt:new Date().toISOString()}]).kind,'product_hypothesis');
+});
+test('collection timestamps cannot establish source freshness; future and invalid feed dates remain unknown',()=>{
+ const nowMs=Date.parse('2026-10-14T00:00:00Z');
+ assert.equal(opportunityFreshness([{createdAt:'2026-10-14T00:00:00Z'}],{nowMs}).status,'undated');
+ assert.equal(opportunityFreshness([{publishedAt:'not a date'},{publishedAt:'2030-01-01'}],{nowMs}).status,'undated');
+ assert.equal(opportunityFreshness([{publishedAt:'2026-10-08T20:02:18Z'}],{nowMs}).status,'recent_feed_date_unverified');
 });
 test('encoded feed HTML is cleaned before extraction and preserves context beyond 500 characters',()=>{
  const xml='<rss><item><title>Invoice workflow</title><link>https://forum.example/1</link><description>&lt;p&gt;'+ 'Context '.repeat(100)+'I can&#x27;t reconcile invoices every week.&lt;/p&gt;</description></item></rss>';

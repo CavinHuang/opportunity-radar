@@ -18,7 +18,7 @@ export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,1
      const brief=groundedOpportunityBrief(stored.opportunityBrief,candidateOriginals(c,store));
      pending.push({id:c.id,title:brief.hypothesis||c.title,kind:brief.kind,stage:'verify',action:'verify-problem',
       label:brief.kind==='product_hypothesis'?'核查产品假设':'核查原帖和真实问题',
-      reason:brief.validation||(brief.kind==='support_issue'?'使用求助：先核对已有解决办法，尚不是产品机会':'待研究线索：缺少现有办法的不足、重复发生或实际代价'),sourceUrls:c.sourceUrls});
+      reason:brief.validation||(brief.freshness.status==='historical_only'?'历史线索：需取得新的相关证据再评估当前机会':brief.kind==='support_issue'?'使用求助：先核对已有解决办法，尚不是产品机会':'待研究线索：缺少现有办法的不足、重复发生或实际代价'),sourceUrls:c.sourceUrls});
     }
     continue;
   }
