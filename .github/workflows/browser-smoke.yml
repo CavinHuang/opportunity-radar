@@ -5,6 +5,7 @@ on:
       - 'public/**'
       - 'src/**'
       - 'scripts/browser-smoke.py'
+      - 'scripts/browser-guidance-feedback.py'
       - '.github/workflows/browser-smoke.yml'
   workflow_dispatch:
 permissions:
@@ -27,6 +28,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Direct Chromium to real Node HTTP and isolated SQLite
         run: python scripts/browser-smoke.py
+      - name: Research advice response and follow-up browser journey
+        run: python scripts/browser-guidance-feedback.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
