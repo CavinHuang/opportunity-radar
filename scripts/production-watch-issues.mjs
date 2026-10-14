@@ -38,7 +38,7 @@ export function planWatchIssues(report,issues=[]){
  }
  return result;
 }
-async function manage(report,{token,repository,api='https://api.github.com',fetchImpl=fetch}={}){
+export async function manageWatchIssues(report,{token,repository,api='https://api.github.com',fetchImpl=fetch}={}){
  if(!token||!repository||!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository))
   throw Error('MISSING_GITHUB_WATCH_PERMISSIONS');
  const origin=api+'/repos/'+repository;
@@ -71,7 +71,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{
   const file=process.env.RADAR_WATCH_REPORT||'watch-result.json';
   const report=JSON.parse(readFileSync(file,'utf8'));
-  const changes=await manage(report,{token:process.env.GITHUB_TOKEN,
+  const changes=await manageWatchIssues(report,{token:process.env.GITHUB_TOKEN,
    repository:process.env.GITHUB_REPOSITORY});
   process.stdout.write(JSON.stringify({issuesUpdated:changes})+'\n');
  }catch(e){process.stderr.write(e.message+'\n');process.exitCode=1;}
