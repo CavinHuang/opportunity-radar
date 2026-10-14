@@ -33,6 +33,7 @@ import {weeklyResearchEvidence} from './opportunity-weekly-evidence.mjs';
 import {weeklyHypothesisBoard,saveWeeklyHypothesis} from './opportunity-weekly-hypotheses.mjs';
 import {weeklyConclusionQualityReview} from './opportunity-weekly-conclusion-quality.mjs';
 import {weeklyEvidenceProvenance,reviewWeeklyEvidenceProvenance} from './opportunity-weekly-provenance.mjs';
+import {weeklyIndependentEvidenceCoverage} from './opportunity-weekly-independent-coverage.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -220,6 +221,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    if(pathname==='/api/discovery/weekly-independent-coverage'&&req.method==='GET')return send(res,200,weeklyIndependentEvidenceCoverage(store));
     if(pathname==='/api/discovery/weekly-evidence-provenance'&&req.method==='GET')return send(res,200,weeklyEvidenceProvenance(store));
     if(pathname==='/api/discovery/weekly-evidence-provenance'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>reviewWeeklyEvidenceProvenance(store,d))});
     if(pathname==='/api/discovery/weekly-conclusion-quality'&&req.method==='GET')return send(res,200,weeklyConclusionQualityReview(store));
