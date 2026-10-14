@@ -3,6 +3,21 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Optional 40-character deployed SHA; overrides Actions variable'
+        required: false
+        type: string
+      require_rollback_monitoring:
+        description: 'Require protected rollout/rollback monitoring (not health-only)'
+        required: true
+        type: boolean
+        default: true
+      require_pinned_revision:
+        description: 'Require a deployed revision SHA to be explicitly pinned'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -15,7 +30,7 @@ jobs:
     timeout-minutes: 5
     env:
       RADAR_PRODUCTION_URL: ${{ vars.RADAR_PRODUCTION_URL }}
-      RADAR_EXPECTED_DEPLOY_SHA: ${{ vars.RADAR_EXPECTED_DEPLOY_SHA }}
+      RADAR_EXPECTED_DEPLOY_SHA: ${{ inputs.expected_sha || vars.RADAR_EXPECTED_DEPLOY_SHA }}
       RADAR_WATCH_TOKEN: ${{ secrets.RADAR_WATCH_TOKEN }}
       RADAR_WATCH_REPORT: watch-result.json
       GITHUB_TOKEN: ${{ github.token }}
@@ -27,6 +42,25 @@ jobs:
       - name: Explicitly disclose disabled monitoring
         if: env.RADAR_PRODUCTION_URL == ''
         run: echo "::warning::Production watch disabled. Configure the RADAR_PRODUCTION_URL Actions repository variable."
+      - name: Fail manual acceptance when production URL is not configured
+        if: github.event_name == 'workflow_dispatch' && env.RADAR_PRODUCTION_URL == ''
+        run: |
+          echo "::error::Set repository Actions Variable RADAR_PRODUCTION_URL to a deployed HTTPS origin."
+          exit 1
+      - name: Require complete production evidence for manual acceptance
+        if: github.event_name == 'workflow_dispatch' && env.RADAR_PRODUCTION_URL != ''
+        env:
+          REQUIRE_ROLLBACK: ${{ inputs.require_rollback_monitoring }}
+          REQUIRE_SHA: ${{ inputs.require_pinned_revision }}
+        run: |
+          if [ "$REQUIRE_SHA" = "true" ] && [ -z "$RADAR_EXPECTED_DEPLOY_SHA" ]; then
+            echo "::error::Set RADAR_EXPECTED_DEPLOY_SHA or provide expected_sha in the manual workflow."
+            exit 1
+          fi
+          if [ "$REQUIRE_ROLLBACK" = "true" ] && [ -z "$RADAR_WATCH_TOKEN" ]; then
+            echo "::error::Set matching RADAR_WATCH_TOKEN in Dokploy and Actions Secrets for full acceptance."
+            exit 1
+          fi
       - name: Probe public health and optional protected rollout heartbeat
         if: env.RADAR_PRODUCTION_URL != ''
         run: |
@@ -41,5 +75,6 @@ jobs:
             import {readFileSync} from 'node:fs';
             const status=JSON.parse(readFileSync(process.env.RADAR_WATCH_REPORT,'utf8'));
             if(status.monitoring==='health_only')console.log('::warning::No RADAR_WATCH_TOKEN: health/version only; rollback detection disabled.');
+            if(status.guardStatus==='warming')console.log('::warning::New rollout guard is warming up; repeat the probe after its first monitor snapshot.');
             if(status.state!=='healthy')process.exit(1);
           "

@@ -10,6 +10,8 @@
 
 1. 在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 设置 `RADAR_PRODUCTION_URL` 为完整 **HTTPS 站点根地址**，例如 `https://radar.example.com`（不要带路径、查询、认证信息）。未配置时工作流明确提示“监控未启用”，不应将绿色的跳过状态理解为已被监控。
 2. 如需要监控已启动版本是否与指定部署一致，可选设置变量 `RADAR_EXPECTED_DEPLOY_SHA` 为 **当前部署完整 40 位 Git commit**。**必须随部署同步更新**，否则会报告不一致；不设置时只检查发布身份有效、服务可达，不验证等于最新 main。
+
+**生产首次验收建议**：手动运行 **Independent production watch** 时默认开启 `require_rollback_monitoring=true` 和 `require_pinned_revision=true`。因此需同时配置有效生产 HTTPS URL、当前部署 SHA、和 GitHub/Dokploy 双端一致的专用监控密钥；否则手动验收明确失败。确实只想验证公开健康与版本时，可以主动将 `require_rollback_monitoring` 改为 `false`，但只能声明完成了有限验收。`expected_sha` 手动输入可覆盖仓库变量。
 3. 若还要获知灰度自动回滚，在 Dokploy 的 Radar 服务环境变量里设置高强度随机密钥 `RADAR_WATCH_TOKEN`（至少32字符），并在 GitHub Actions Secrets 中配置**同值** `RADAR_WATCH_TOKEN`。部署新版本并检查 `GET /api/operations/watch` 的鉴权：无密钥则返回503，错误密钥401，正确密钥仅返回当前灰度启用状态、百分比、发布 revision、最近一次巡检时间及已脱敏的最近一次回滚告警。
 4. 合并后选择 Actions → **Independent production watch** → Run workflow 执行一次手动检查。定时 cron 表达式为 `*/15 * * * *`。自动 Issue 告警需要该 workflow 的 `issues:write` 权限；如果仓库组织策略不允许，应在运行日志中明确处理权限报错，而不是默默跳过。
 5. 可在完成生产访问权限后，用 `node scripts/production-watch.mjs` 手动验证。脚本从 `RADAR_PRODUCTION_URL`、`RADAR_WATCH_TOKEN`、`RADAR_EXPECTED_DEPLOY_SHA` 读取设置，仅发起对指定 HTTPS 站点的 GET 请求。
@@ -17,8 +19,11 @@
 ## 何时建 Issue
 
 - 无法联网、健康检查异常、版本身份缺失、部署版本与可选 pinned SHA 不一致，或已配置密钥但灰度心跳不正常：保持一个标题为 `[Radar Watch] Production endpoint unhealthy` 的开放 Issue。恢复后添加说明并关闭；如果同一故障再发生，重新打开已有 Issue，不重复制造通知。
+- **新增灰度守护新鲜度核验**：当有灰度在运行、且配有监控密钥时，验证最新落库监控快照的发布 revision 是否等于当前 revision，快照是否在约25分钟内，时间是否合理、是否早于该次发布。刚开始灰度提供约3分钟的首次快照宽限期并以 `GUARD_WARMING` 明示；宽限期结束仍无对应快照将以 `GUARD_RELEASE_MISMATCH` / `GUARD_SNAPSHOT_MISSING` 报警。快照超过25分钟则 `GUARD_SNAPSHOT_STALE`。**HTTP 接口健康并不等于灰度内部巡检健康**。
+- 灰度守护状态由最近一次持久化快照推断：**不能检测刚刚发生且尚未过期的巡检线程故障**；GitHub Actions 每15分钟运行的节奏也可能延迟。此能力只减少“应用可访问却巡检失效”的盲区，不提供秒级保障。
 - 读取到 24 小时以内的进程内 `APPROVAL_REVOKED` / `REVIEWED_REGRESSION` 回滚事件：按告警代码、发布 revision、事件时间创建**独立一次性** Issue。已存在（包括关闭）的相同事件不重复创建；回滚事件不会自动被标为恢复。
 - 如果仅配置公开健康检查而没有专用密钥，状态明示 `health_only`，**不能声称具备自动回滚外部告警**。所有 Issue 均只写预定义状态码/版本号，不包含 Owner Token、原帖、标签、笔记内容或私有 URL。
+- **定时任务与首次生产验收不同**：定时任务尚未配置 URL 时依旧输出“未启用”警告且跳过探测；手动运行验收时缺少 URL 会直接失败，避免形成虚假的生产已验收结论。建议首次手动验收时明确填写部署 SHA，并复核 Actions 运行日志的健康、版本、专用密钥和（若有灰度）巡检新鲜度状态。
 
 已知限制：Issue 是告警登记，不会主动发送其他外部推送；GitHub 是否向 Owner 发送通知取决于其 Issue 订阅/通知设置。服务与 GitHub Actions 同时故障、令牌失效、工作流被禁用、定时运行延迟或轮询间发生快速故障时，可能遗漏事件。生产环境如有更严格 SLA，应额外部署外部 uptime 监测。
 
@@ -35,3 +40,7 @@
 Node/SQLite 单测检查样本分层、来源集中度、过期标签、Owner 与 Monitor Token 隔离、HTTP 未认证拒绝、发行版本与健康探测失败、24小时告警过期、GitHub Issue 去重/恢复和回滚事件编码。Chromium E2E 验证新增来源覆盖度视图。全部使用独立合成测试数据；**没有实际访问用户的生产服务器，也没有实际创建生产告警 Issue。**
 
 本轮 PR 并入 main 仅代表相关代码上线准备就绪。只有配置了真实生产 URL、部署了含 `/api/operations/watch` 的版本、启动了 workflow 并得到外部实际探测成功，才可声明“外部监控已启用”。
+
+## 实际验收状态（截至 2026-10-14）
+
+通过 GitHub 仓库 Actions 运行记录查询，尚未发现该独立巡检的 `schedule` 或 `workflow_dispatch` 实际运行。通过当前 GitHub 连接无法读取仓库变量与生产 Dokploy 配置，**不能确认生产 URL、监控密钥或真实部署已就绪**。以上核验逻辑均采用隔离合成测试；首次真实生产验收仍需部署与手动运行。
