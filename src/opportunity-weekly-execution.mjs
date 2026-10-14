@@ -1,8 +1,9 @@
 import {weeklyResearchPlan,saveWeeklyResearchPlan,weekMonday} from './opportunity-weekly-plan.mjs';
+import {weeklyResearchEvidence} from './opportunity-weekly-evidence.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const safe=(x,n=700)=>String(x??'').trim().slice(0,n);
 const states=new Set(['in_progress','blocked','completed']);
-export function updateWeeklyResearchProgress(store,{candidateId,status,note,actualHours,expected_revision}={},options={}){
+export function updateWeeklyResearchProgress(store,{candidateId,status,note,actualHours,expected_revision,acknowledgeEvidenceGap=false}={},options={}){
  const board=weeklyResearchPlan(store,options);
  if(board.status!=='planned')throw fail('NO_ACTIVE_WEEK','只有已保存且未复盘的周计划可以更新进度',409);
  if(board.revision!==expected_revision)throw fail('REVISION_CONFLICT','周计划已更新，请刷新',409);
@@ -10,12 +11,15 @@ export function updateWeeklyResearchProgress(store,{candidateId,status,note,actu
  if(!states.has(status))throw fail('INVALID_PROGRESS','不支持的任务进度');
  const detail=safe(note),hours=Number(actualHours);
  if(detail.length<10||!Number.isFinite(hours)||hours<0||hours>1000)throw fail('INVALID_PROGRESS','请输入10字以上进展和有效的累计投入小时');
+ const evidence=weeklyResearchEvidence(store,options).items.find(x=>x.candidateId===candidateId);
+ if(status==='completed'&&evidence?.completionCheck==='requires_manual_evidence_acknowledgement'&&acknowledgeEvidenceGap!==true)
+  throw fail('EVIDENCE_ACK_REQUIRED','尚无本周观察记录，若仍要标为已完成，请明确确认并说明依据',409);
  return store.transaction(()=>{
   const current=weeklyResearchPlan(store,options);
   if(current.status!=='planned'||current.revision!==expected_revision)throw fail('REVISION_CONFLICT','周计划已变更',409);
   const old=store.get('opportunity_weekly_plans',board.id);
   const progress=old.progress||[];
-  const event={candidateId,status,note:detail,actualHours:hours,at:new Date().toISOString()};
+  const event={candidateId,status,note:detail,actualHours:hours,at:new Date().toISOString(),evidenceAtDecision:{recordedObservations:evidence?.quality.recordedObservations||0,counterEvidence:evidence?.counterEvidence||0,gapAcknowledged:acknowledgeEvidenceGap===true}};
   const updated=store.put('opportunity_weekly_plans',{...old,progress:[...progress,event],updatedAt:event.at},expected_revision);
   store.event('opportunity.weekly_plan.progress_updated',board.id,'owner',{candidateId,status,revision:updated.revision});
   return updated;
