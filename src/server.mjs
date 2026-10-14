@@ -10,6 +10,8 @@ import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from '
 import {productionRuleStatus,changeProductionRule} from './discovery-production-release.mjs';
 import {productionMonitorReport,productionMonitorHistory,captureProductionMonitor} from './discovery-production-monitor.mjs';
 import {postReleaseEvidenceReport} from './discovery-post-release.mjs';
+import {productionHeartbeat} from './production-heartbeat.mjs';
+import {discoveryReviewCoverage} from './discovery-review-coverage.mjs';
 import {createProductionGuard} from './discovery-production-guard.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
@@ -136,6 +138,14 @@ export function createServer(){return http.createServer(async(req,res)=>{
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(files[pathname]&&req.method==='GET'){const filename=path.join(root,'public',files[pathname]);const content=await readFile(filename);res.writeHead(200,{'Content-Type':mime[path.extname(filename)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(content);}
     if(pathname==='/api/release'&&req.method==='GET')return send(res,200,releaseMetadata());
+    if(pathname==='/api/operations/watch'&&req.method==='GET'){
+      const expected=process.env.RADAR_WATCH_TOKEN;
+      if(!expected||expected.length<32)
+        return send(res,503,{code:'WATCH_NOT_CONFIGURED',message:'Read-only watch endpoint disabled'});
+      if(!tokenMatches(req.headers['x-radar-watch-key'],expected))
+        return send(res,401,{code:'UNAUTHORIZED'});
+      return send(res,200,productionHeartbeat(store));
+    }
     if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,sourceHealth:sourceHealth(store),llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
     protectOrigin(req);
     if(pathname==='/mcp'&&req.method==='POST'){
@@ -187,6 +197,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    if(pathname==='/api/discovery/review-coverage'&&req.method==='GET')return send(res,200,discoveryReviewCoverage(store));
     if(pathname==='/api/discovery/regression-suite/trend'&&req.method==='GET')
       return send(res,200,frozenRegressionTrend(store,u.searchParams.get('policy')||'require_workaround'));
     if(pathname==='/api/discovery/regression-suite/release-gate'&&req.method==='GET')
