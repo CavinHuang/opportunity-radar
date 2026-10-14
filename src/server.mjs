@@ -30,6 +30,7 @@ import {opportunityPortfolioReview} from './opportunity-portfolio-review.mjs';
 import {weeklyResearchPlan,saveWeeklyResearchPlan,reviewWeeklyResearchPlan} from './opportunity-weekly-plan.mjs';
 import {updateWeeklyResearchProgress,weeklyResearchTrend,carryPreviousWeekTasks} from './opportunity-weekly-execution.mjs';
 import {weeklyResearchEvidence} from './opportunity-weekly-evidence.mjs';
+import {weeklyHypothesisBoard,saveWeeklyHypothesis} from './opportunity-weekly-hypotheses.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
