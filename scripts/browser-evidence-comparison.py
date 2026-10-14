@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             comparison.click()
             page.locator('#modal-root').get_by_text('可能是不同任务', exact=True).wait_for(timeout=10000)
             assert page.locator('#modal-root').get_by_text('I manually import CSV every day', exact=False).count() == 1
-            assert page.locator('#dialog-form button[type="submit"]').is_hidden()
+            assert page.locator('#dialog-form button[type="submit"]').count() == 0
             assert call(path)['reviews'] == []
             page.locator('#modal-root [data-action="workbench-review-item"]').click()
             page.locator('#dialog-form textarea[name="notes"]').wait_for()
