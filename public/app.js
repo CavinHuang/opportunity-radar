@@ -371,7 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
-    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button> <button class="btn btn-sm" data-action="frozen-regression-trend">版本趋势与发布门槛</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -986,6 +986,54 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'frozen-regression-trend':{
+    const r=await api('/discovery/regression-suite/trend');
+    const gate=r.releaseGate,g=gate.fresh;
+    const checks={
+      supportedPolicy:'仅支持已限定的严格规则',
+      frozenSuitePresent:'缺少含20条以上正反例的冻结集',
+      noFrozenRegression:'冻结集出现已知回归、基础判定漂移或没有实际规则差异',
+      frozenOwnerReviewed:'最新版冻结集尚无对应的Owner人工提请影子评审',
+      newlyReviewedAtLeast6:'冻结后新增有效人工审核不足6条',
+      newPositivesAtLeast2:'新增人工确认的真实问题不足2条',
+      newNegativesAtLeast2:'新增人工确认的非问题不足2条',
+      newReviewAcross2Hosts:'新增审核没有覆盖至少2个原帖域名',
+      noNewEvidenceRegression:'新增审核中存在已知规则退化'
+    };
+    const summary='<p class="subtext">当前发布前证据：'+(gate.ready?'已满足冻结集与新样本条件（仍需其余门槛）':'未满足，禁止1–5%灰度')+
+      ' · 冻结版本 '+esc(gate.suite.revision??'无')+'</p>'+
+      '<p class="subtext">冻结样本 '+gate.suite.count+' · 已知新增漏报 '+esc(gate.suite.newMisses??'未评估')+
+      ' · 已知新增误报 '+esc(gate.suite.newFalsePositives??'未评估')+
+      ' · 基线算法漂移 '+esc(gate.suite.baselineDrift??'未评估')+'</p>'+
+      '<p class="subtext">冻结后新增人工审核 '+g.reviewed+' 条：正例 '+g.positive+'、负例 '+g.negative+
+      '，覆盖 '+g.hosts+' 个域名，URL去重后被排除 '+g.duplicateUrls+' 条，原帖/标签未确认 '+g.staleOrUncertain+
+      ' 条；新增漏报 '+g.newMisses+' · 新增误报 '+g.newFalsePositives+'</p>'+
+      (gate.blockers.length?'<h4>仍需完成</h4>'+gate.blockers.map(x=>
+        '<p class="subtext">· '+esc(checks[x]||x)+'</p>').join(''):
+       '<p class="subtext">冻结样本与增量复核均通过，仍需来源级签收、试验审批、影子评估及独立发布前验收。</p>');
+    const versionRows=r.versions.slice(-12).reverse().map(x=>'<div class="source-row"><div class="grow"><strong>'+
+      '冻结版本 '+x.revision+' · '+esc(x.at)+'</strong>'+
+      '<p class="subtext">样本 '+x.samples+'（正 '+x.positive+' / 负 '+x.negative+'；域名 '+x.hosts+
+      '） · 本版本变更 '+x.changed+' · 新漏报 '+x.newMisses+' · 新误报 '+x.newFalsePositives+
+      ' · 减少误报 '+x.removedFalsePositives+' · 来源改动 '+x.sourceDrift+'</p>'+
+      '<p class="subtext">'+esc(x.verdict)+' · '+esc(x.comparisonNote)+'</p></div></div>').join('');
+    const sameCorpus=r.sameCorpus.map(x=>'<div class="source-row"><div class="grow"><strong>'+esc(x.policyId)+
+      '</strong><p class="subtext">同一冻结集内：误报新增 '+x.newFalsePositives+' · 漏报新增 '+
+      x.newMisses+' · 减少误报 '+x.removedFalsePositives+' · '+esc(x.verdict)+'</p></div></div>').join('');
+    const freshExamples=g.examples.map(x=>'<div class="source-row"><div class="grow"><a href="'+esc(x.url)+
+      '" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+      '<p class="subtext">'+esc(x.host)+' · 新增人工标签 '+esc(x.label)+
+      ' · 基础 '+(x.before?'保留':'过滤')+' → 候选 '+(x.after?'保留':'过滤')+'</p></div>'+
+      '<button class="btn btn-sm" data-action="quality-label" data-id="'+esc(x.sourceId)+'">核查标签</button></div>').join('');
+    modal('冻结回归版本趋势与发布门槛',
+      summary+'<h4>冻结版本记录（不同样本不计算环比正确率）</h4>'+
+      (versionRows||'<p class="subtext">暂无冻结版本，请先完成正反例的人工审核。</p>')+
+      '<h4>在相同冻结样本上比较候选规则</h4>'+
+      (sameCorpus||'<p class="subtext">当前尚无同语料对照。</p>')+
+      '<h4>新增人工复核中的规则变化</h4>'+(freshExamples||'<p class="subtext">还没有影响结果的新增已核对原帖。</p>')+
+      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'frozen-regression-suite':{

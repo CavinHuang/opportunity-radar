@@ -3,6 +3,7 @@ import {opportunityDiscoveryBenchmark,opportunityBenchmarkHistory,captureOpportu
 import {sourceCohortQualityReview} from './source-cohort-quality.mjs';
 import {sourceTrialImpactReport,sourceTrialAuditHistory,signSourceTrialAudit} from './discovery-source-trial-audit.mjs';
 import {frozenRegressionSuiteBoard,freezeRegressionSuite,replayFrozenRegressionSuite,frozenRegressionReviewHistory,recordFrozenRegressionReview} from './discovery-regression-suite.mjs';
+import {frozenRegressionReleaseGate,frozenRegressionTrend} from './discovery-regression-release.mjs';
 import {ruleTrialLedger,decideRuleTrial} from './discovery-rule-approval.mjs';
 import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from './discovery-shadow.mjs';
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from './discovery-release-preflight.mjs';
@@ -185,6 +186,10 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    if(pathname==='/api/discovery/regression-suite/trend'&&req.method==='GET')
+      return send(res,200,frozenRegressionTrend(store,u.searchParams.get('policy')||'require_workaround'));
+    if(pathname==='/api/discovery/regression-suite/release-gate'&&req.method==='GET')
+      return send(res,200,frozenRegressionReleaseGate(store,u.searchParams.get('policy')||'require_workaround'));
     if(pathname==='/api/discovery/regression-suite'&&req.method==='GET')
       return send(res,200,{suite:frozenRegressionSuiteBoard(store),review:frozenRegressionReviewHistory(store)});
     if(pathname==='/api/discovery/regression-suite'&&req.method==='POST')
