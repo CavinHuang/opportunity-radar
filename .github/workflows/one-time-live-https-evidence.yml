@@ -53,6 +53,9 @@ jobs:
           }
           await check('/api/health','json');
           await check('/api/release','json');
+          await check('/api/operations/watch','json');
+          await check('/api/discovery/review-coverage','json');
+          await check('/app.js','asset');
           await check('/','html');
           const health=evidence.endpoints['/api/health'];
           const release=evidence.endpoints['/api/release'];
@@ -60,6 +63,9 @@ jobs:
           evidence.verifiedRelease=release.httpStatus===200&&
             release.identified===true&&/^[a-f0-9]{40}$/i.test(release.commit||'');
           evidence.verifiedHtml=evidence.endpoints['/'].httpStatus===200&&evidence.endpoints['/'].hasHtml===true;
+          evidence.frontendAssetOk=evidence.endpoints['/app.js'].httpStatus===200;
+          evidence.ownerProtected=evidence.endpoints['/api/discovery/review-coverage'].httpStatus===401;
+          evidence.protectedWatchConfigured=evidence.endpoints['/api/operations/watch'].httpStatus===401;
           console.log(JSON.stringify(evidence,null,2));
           const lines=[
             '## One-time independent HTTPS diagnostics','',
@@ -69,6 +75,9 @@ jobs:
             '| /api/release | '+(release.httpStatus??release.transportError??'unavailable')+' |',
             '| release commit | '+(evidence.verifiedRelease?release.commit:'not verified')+' |',
             '| root HTML | '+(evidence.endpoints['/'].httpStatus??evidence.endpoints['/'].transportError??'unavailable')+' |',
+            '| /app.js | '+(evidence.endpoints['/app.js'].httpStatus??evidence.endpoints['/app.js'].transportError??'unavailable')+' |',
+            '| Owner authentication enforced | '+evidence.ownerProtected+' |',
+            '| Separate watch key configured | '+evidence.protectedWatchConfigured+' |',
             '| Health/Release/HTML verified | '+[evidence.verifiedHealth,evidence.verifiedRelease,evidence.verifiedHtml].join(' / ')+' |',
             '','Read-only. No login, production token, database, or write endpoint used.',''
           ];
