@@ -14,7 +14,7 @@ export function weeklyResearchPlan(store,{now=new Date()}={}){
  const current=new Set(portfolio.rows.map(x=>x.id));
  const items=(plan?.items||[]).map(x=>({...x,available:current.has(x.candidateId)}));
  return {id,weekStart,revision:plan?.revision||0,status:plan?.status||'draft',items,
-  review:plan?.review||null,portfolioSuggestions:portfolio.suggested.map(x=>({id:x.id,title:x.title,reason:x.nextAction})),
+  review:plan?.review||null,progress:plan?.progress||[],portfolioSuggestions:portfolio.suggested.map(x=>({id:x.id,title:x.title,reason:x.nextAction})),
   notice:'本周计划由用户手动选择；旧候选若不再符合筛选，只保留历史，不自动恢复。时间和预算均为规划/自报数据。'};
 }
 export function saveWeeklyResearchPlan(store,data={},options={}){
@@ -35,7 +35,14 @@ export function saveWeeklyResearchPlan(store,data={},options={}){
  return store.transaction(()=>{
   const fresh=weeklyResearchPlan(store,options);
   if(fresh.revision!==data.expected_revision||fresh.status==='reviewed')throw fail('REVISION_CONFLICT','计划已被并发更新',409);
-  const row=store.put('opportunity_weekly_plans',{id:board.id,weekStart:board.weekStart,items,status:'planned',review:null,updatedAt:new Date().toISOString()},board.revision);
+  const previous=store.get('opportunity_weekly_plans',board.id);
+  if(previous?.progress?.length){
+   const before=new Map((previous.items||[]).map(x=>[x.candidateId,x]));
+   if(items.length!==before.size||items.some(x=>JSON.stringify(x)!==JSON.stringify(before.get(x.candidateId))))
+    throw fail('PROGRESS_EXISTS','已有执行记录的计划不可改写任务，请先复盘',409);
+  }
+  const row=store.put('opportunity_weekly_plans',{id:board.id,weekStart:board.weekStart,items,status:'planned',review:null,
+   progress:previous?.progress||[],updatedAt:new Date().toISOString()},board.revision);
   store.event('opportunity.weekly_plan.saved',board.id,'owner',{count:items.length,revision:row.revision});
   return row;
  });
