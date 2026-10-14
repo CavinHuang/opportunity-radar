@@ -28,6 +28,7 @@ import {decisionOutcomeLedger,adoptDecision,recordDecisionOutcome} from './oppor
 import {decisionEffectivenessReport} from './opportunity-decision-effectiveness.mjs';
 import {opportunityPortfolioReview} from './opportunity-portfolio-review.mjs';
 import {weeklyResearchPlan,saveWeeklyResearchPlan,reviewWeeklyResearchPlan} from './opportunity-weekly-plan.mjs';
+import {updateWeeklyResearchProgress,weeklyResearchTrend,carryPreviousWeekTasks} from './opportunity-weekly-execution.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -215,6 +216,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    if(pathname==='/api/discovery/weekly-research-trend'&&req.method==='GET')return send(res,200,weeklyResearchTrend(store));
+    if(pathname==='/api/discovery/weekly-research-plan/progress'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>updateWeeklyResearchProgress(store,d))});
+    if(pathname==='/api/discovery/weekly-research-plan/carry'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>carryPreviousWeekTasks(store,d))});
     if(pathname==='/api/discovery/weekly-research-plan'&&req.method==='GET')return send(res,200,weeklyResearchPlan(store));
     if(pathname==='/api/discovery/weekly-research-plan'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>saveWeeklyResearchPlan(store,d))});
     if(pathname==='/api/discovery/weekly-research-plan/review'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>reviewWeeklyResearchPlan(store,d))});
