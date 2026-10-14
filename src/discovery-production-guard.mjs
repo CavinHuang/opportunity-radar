@@ -1,4 +1,5 @@
 import {captureProductionMonitor,productionMonitorHistory} from './discovery-production-monitor.mjs';
+import {postReleaseEvidenceReport} from './discovery-post-release.mjs';
 import {productionRuleStatus,changeProductionRule} from './discovery-production-release.mjs';
 import {ruleTrialLedger} from './discovery-rule-approval.mjs';
 
@@ -25,7 +26,10 @@ export function createProductionGuard(store,{clock=Date.now,logger=console,inter
     logger.warn?.('[Radar production guard] revoked approval: baseline restored');
     return {autoRollback:true,reason:'APPROVAL_REVOKED'};
    }
-   if(!due(clock(),release.revision))return {skipped:'not_due'};
+   // Scan newly reviewed exposed posts at every tick; do not defer a confirmed
+   // miss to the 15-minute scheduled snapshot interval.
+   const recentRegression=postReleaseEvidenceReport(store).autoRollbackRecommended;
+   if(!recentRegression&&!due(clock(),release.revision))return {skipped:'not_due'};
    const previous=productionMonitorHistory(store);
    const result=captureProductionMonitor(store,{
     reason:'系统周期巡检：核对现有人工标注与正式规则差异',
