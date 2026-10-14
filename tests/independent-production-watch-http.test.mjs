@@ -65,7 +65,7 @@ test('real HTTP health can remain green while independent watcher rejects stoppe
  process.env.RADAR_OWNER_TOKEN='integration-owner-token';
  process.env.RADAR_WATCH_TOKEN=token;
  process.env.RADAR_RELEASE_SHA=sha;
- const {createServer,closeStore}=await import('../src/server.mjs');
+ const {createServer,closeStore}=await import('../src/server.mjs?independent-guard-watch');
  const {openDatabase}=await import('../src/db.mjs');
  const db=openDatabase(process.env.RADAR_DB);
  const server=createServer();
