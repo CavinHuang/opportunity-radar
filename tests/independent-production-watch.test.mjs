@@ -117,7 +117,7 @@ test('rollout watchdog detects mismatched, absent and stale monitor snapshots wi
   [{...ACTIVE,latestMonitorReleaseRevision:2},'GUARD_RELEASE_MISMATCH'],
   [{...ACTIVE,lastTransitionAt:null},'GUARD_LAUNCH_UNVERIFIED'],
   [{...ACTIVE,latestMonitorAt:'2026-10-14T12:10:00.000Z'},'GUARD_CLOCK_SKEW'],
-  [{...ACTIVE,latestMonitorAt:'2026-10-14T10:50:00.000Z'},'GUARD_SNAPSHOT_STALE']
+  [{...ACTIVE,latestMonitorAt:'2026-10-14T10:50:00.000Z'},'GUARD_SNAPSHOT_PRE_RELEASE']
  ]){
   const r=await probeProduction({url:origin,watchToken:TOKEN,
    fetchImpl:server({heartbeat}),now:T0});
