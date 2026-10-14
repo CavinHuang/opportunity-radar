@@ -371,7 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
-    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -986,6 +986,54 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'source-trial-audit':{
+    const {report:r,history:h}=await api('/discovery/source-trial-audit');
+    if(id==='sign'){
+      if(!r.readyForOwnerSignoff)throw new Error('仍有来源级复核缺口，不能确认灰度前材料');
+      modal('保存来源级离线核查',
+        '<p class="subtext">仅为证据版本存档；不会启动灰度、改变线上规则或表示验证了消费者需求。</p>'+
+        '<p class="subtext">审核 '+r.reviewed+' 条，涉及 '+r.reviewedHostCount+' 个域名；变更 '+r.changedCount+
+        ' 条均有当前人工标签。新增漏报 '+r.regression.newMisses+' · 新增误报 '+r.regression.newFalsePositives+'</p>'+
+        field('reason','核查原帖与灰度风险的理由（12–500字）',{wide:true,type:'textarea',required:true}),
+        async d=>api('/discovery/source-trial-audit',{method:'POST',
+          body:{policy_id:r.policyId,fingerprint:r.fingerprint,expected_revision:h.revision,reason:d.reason}}));
+      break;
+    }
+    const blockers={supportedGrayPolicy:'此离线策略不可进入生产灰度',trialApproved:'候选试验尚未获得人工批准',
+      reviewedAtLeast20:'当前有效人工标注不足20条',
+      reviewedAcross2Hosts:'有效人工标注尚未覆盖至少两个域名',
+      realObservedChange:'当前400条原帖中该策略没有实际影响',
+      everyChangedPostReviewed:'有规则会改变的原帖尚未人工复核',
+      noNewMisses:'存在人工确认的新增漏报',
+      noNewFalsePositives:'存在人工确认的新增误报'};
+    const cohort=r.cohorts.slice(0,15).map(x=>'<p class="subtext">'+esc(x.host)+
+      ' · 改变 '+x.changed+' · 已核对 '+x.changedReviewed+' · 待核对 '+x.unreviewedChanges+
+      ' · 新增漏报 '+x.newMisses+' · 新增误报 '+x.newFalsePositives+
+      ' · 减少误报 '+x.removedFalsePositives+'</p>').join('');
+    const impact=r.changedExamples.slice(0,20).map(x=>'<div class="source-row"><div class="grow">'+
+      '<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+      '<p class="subtext">'+esc(x.host)+' · 规则 '+(x.before?'保留':'过滤')+' → '+(x.after?'保留':'过滤')+
+      ' · '+esc(x.ownerLabel||x.reviewState)+'</p></div>'+
+      '<button class="btn btn-sm" data-action="quality-label" data-id="'+esc(x.sourceId)+'">人工核查</button></div>').join('');
+    const sign=h.latest&&h.latest.fingerprint===r.fingerprint?'当前证据版本已人工签收（仍须通过原有影子与发布前检查）':
+      r.readyForOwnerSignoff?'可记录本次来源复核结果；不会自动批准发布':'来源级材料不足，暂不具备灰度前签收条件';
+    modal('来源级离线规则影响核查',
+      '<p class="subtext">试验策略：'+esc(r.policyId)+' · 活跃原帖窗口 '+r.window+
+      ' · 有效人工标注 '+r.reviewed+' / '+r.reviewedHostCount+' 个来源域名</p>'+
+      '<p class="subtext">规则改变 '+r.changedCount+' 条（已人工核对 '+r.changedReviewed+
+      '，待核对 '+r.unreviewedChanges+'） · 新增漏报 '+r.regression.newMisses+
+      ' · 新增误报 '+r.regression.newFalsePositives+' · 已标注减少误报 '+r.regression.removedFalsePositives+'</p>'+
+      '<h4>上线门槛</h4>'+(r.blockers.length?r.blockers.map(x=>'<p class="subtext">未满足：'+esc(blockers[x]||x)+'</p>').join(''):
+       '<p class="subtext">来源级检查通过；仍须经过原有规则审批、影子对照及发布前证据审查。</p>')+
+      '<p class="subtext">'+esc(sign)+'</p>'+
+      (r.readyForOwnerSignoff&&(!h.latest||h.latest.fingerprint!==r.fingerprint)?
+        '<button type="button" class="btn btn-sm" data-action="source-trial-audit" data-id="sign">保存人工复核记录</button>':'')+
+      '<h4>受影响的来源</h4>'+(cohort||'<p class="subtext">暂无规则差异。</p>')+
+      '<h4>原帖变化核对</h4>'+(impact||'<p class="subtext">当前无变更原帖。</p>')+
+      (r.changedExamplesTruncated?'<p class="subtext">只展示前20条变更，更多原帖需逐批核验。</p>':'')+
+      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'source-cohort-quality':{
