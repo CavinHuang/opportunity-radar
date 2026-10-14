@@ -371,7 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
-    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button> <button class="btn btn-sm" data-action="frozen-regression-trend">版本趋势与发布门槛</button> <button class="btn btn-sm" data-action="post-release-evidence">灰度后证据与回滚</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="review-coverage">复核代表性与盲区</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button> <button class="btn btn-sm" data-action="frozen-regression-trend">版本趋势与发布门槛</button> <button class="btn btn-sm" data-action="post-release-evidence">灰度后证据与回滚</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -1146,6 +1146,37 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
       '<h4>受影响的来源</h4>'+(cohort||'<p class="subtext">暂无规则差异。</p>')+
       '<h4>原帖变化核对</h4>'+(impact||'<p class="subtext">当前无变更原帖。</p>')+
       (r.changedExamplesTruncated?'<p class="subtext">只展示前20条变更，更多原帖需逐批核验。</p>':'')+
+      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
+    break;
+  }
+  case 'review-coverage':{
+    const r=await api('/discovery/review-coverage'),n=r.totals;
+    const translate={fewer_than_20_current_labels:'当前有效人工标签不足20条',
+      single_source_domain:'目前仅覆盖一个来源域名',
+      reviewed_labels_concentrated_in_one_host:'单一来源贡献超过70%的有效标签',
+      negative_predictions_never_reviewed:'被规则过滤的帖子从未人工抽查，可能隐藏漏报',
+      positive_predictions_never_reviewed:'被规则接受的帖子从未人工抽查，可能存在误报',
+      source_edits_invalidated_labels:'存在内容更新导致的过期标签'};
+    const warning=(r.risks||[]).map(x=>'<p class="subtext">· '+esc(translate[x]||x)+'</p>').join('');
+    const hosts=r.hosts.slice(0,18).map(x=>'<div class="source-row"><div class="grow"><strong>'+
+      esc(x.host)+'</strong><p class="subtext">窗口内 '+x.total+' · 有效标注 '+x.reviewed+
+      ' · 尚待复核 '+x.shortfall+' · 正向预测 '+x.positive+' · 负向预测 '+x.negative+
+      ' · 标签覆盖 '+(x.coveragePercent===null?'无有效样本':x.coveragePercent+'%')+'</p></div></div>').join('');
+    const queue=r.queue.map(x=>'<div class="source-row"><div class="grow"><strong>'+
+      (x.predicted==='negative'?'当前规则过滤':'当前规则接受')+'</strong> · <a href="'+
+      esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+      '<p class="subtext">'+esc(x.host)+' · '+esc(x.reason)+'</p></div>'+
+      '<button class="btn btn-sm" data-action="quality-label" data-id="'+esc(x.sourceId)+'">人工核查</button></div>').join('');
+    modal('人工复核覆盖与样本盲区',
+      '<p class="subtext">最近活跃来源 '+n.sources+' · 有效人工标签 '+n.currentReviewed+
+      ' · 其中接受预测已核查 '+n.reviewedPositive+'、过滤预测已核查 '+n.reviewedNegative+
+      ' · 标签已过期 '+n.staleLabels+' · 暂不确定 '+n.uncertain+'</p>'+
+      '<p class="subtext">来源域名 '+n.distinctSourceHosts+' · 单一来源占有效标签最高比例 '+
+      (n.reviewedHostSharePercent===null?'暂无有效标签':n.reviewedHostSharePercent+'%')+
+      ' · 当前标签覆盖 '+(n.overallCoveragePercent===null?'暂无来源':n.overallCoveragePercent+'%')+'</p>'+
+      '<h4>需要留意的评估盲区</h4>'+(warning||'<p class="subtext">当前未触发内置覆盖度提醒；不代表样本随机或具有代表性。</p>')+
+      '<h4>来源级审核覆盖</h4>'+(hosts||'<p class="subtext">暂无活跃来源。</p>')+
+      '<h4>下一批建议人工复核的原帖</h4>'+(queue||'<p class="subtext">本窗口内暂无待审核的原帖。</p>')+
       '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }

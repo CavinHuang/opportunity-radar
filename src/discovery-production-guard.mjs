@@ -37,7 +37,7 @@ export function createProductionGuard(store,{clock=Date.now,logger=console,inter
    });
    if(result.snapshot.autoRollback){
     store.event('discovery.production_guard.alert','real_problem_production_release','system',
-      {code:'REVIEWED_REGRESSION',at:new Date(clock()).toISOString(),reviewed:result.snapshot.reviewed,
+      {code:'REVIEWED_REGRESSION',at:new Date(clock()).toISOString(),releaseRevision:release.revision,reviewed:result.snapshot.reviewed,
        deltaFalseNegative:result.snapshot.falseNegativeDelta,deltaFalsePositive:result.snapshot.falsePositiveDelta,
        postReleaseStatus:result.snapshot.postRelease?.status,
        evidenceHash:result.snapshot.postRelease?.evidenceHash});

@@ -1,0 +1,45 @@
+name: Independent production watch
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  external-watch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RADAR_PRODUCTION_URL: ${{ vars.RADAR_PRODUCTION_URL }}
+      RADAR_EXPECTED_DEPLOY_SHA: ${{ vars.RADAR_EXPECTED_DEPLOY_SHA }}
+      RADAR_WATCH_TOKEN: ${{ secrets.RADAR_WATCH_TOKEN }}
+      RADAR_WATCH_REPORT: watch-result.json
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Explicitly disclose disabled monitoring
+        if: env.RADAR_PRODUCTION_URL == ''
+        run: echo "::warning::Production watch disabled. Configure the RADAR_PRODUCTION_URL Actions repository variable."
+      - name: Probe public health and optional protected rollout heartbeat
+        if: env.RADAR_PRODUCTION_URL != ''
+        run: |
+          node scripts/production-watch.mjs || test -s "$RADAR_WATCH_REPORT"
+      - name: Upsert incident issue on failure or rollback; close outage after recovery
+        if: env.RADAR_PRODUCTION_URL != ''
+        run: node scripts/production-watch-issues.mjs
+      - name: Mark the external check failed when production is unhealthy
+        if: env.RADAR_PRODUCTION_URL != ''
+        run: |
+          node --input-type=module -e "
+            import {readFileSync} from 'node:fs';
+            const status=JSON.parse(readFileSync(process.env.RADAR_WATCH_REPORT,'utf8'));
+            if(status.monitoring==='health_only')console.log('::warning::No RADAR_WATCH_TOKEN: health/version only; rollback detection disabled.');
+            if(status.state!=='healthy')process.exit(1);
+          "

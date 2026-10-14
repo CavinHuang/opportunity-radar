@@ -27,6 +27,8 @@ services:
       RADAR_OWNER_TOKEN: ${RADAR_OWNER_TOKEN:?请在环境变量中设置强口令 RADAR_OWNER_TOKEN}
       RADAR_AGENT_TOKEN: ${RADAR_AGENT_TOKEN:-}
       RADAR_RELEASE_SHA: ${RADAR_RELEASE_SHA:-}
+      # 只读外部巡检凭据；不等同 Owner Token
+      RADAR_WATCH_TOKEN: ${RADAR_WATCH_TOKEN:-}
       RADAR_HOST: 0.0.0.0
       RADAR_PORT: 4177
       # 可选：信息源 / LLM 起草 / GitHub 证据核验

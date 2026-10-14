@@ -1,0 +1,37 @@
+# 外部生产巡检、回滚告警与人工样本覆盖度
+
+## 这轮解决什么
+
+此前的 `createProductionGuard` 在 Radar 的 Node 进程内部工作，每分钟检查已审核的灰度退化，必要时回滚。但如果容器宕机，内部巡检也会停止，无法自己向外界报警。
+
+新增 GitHub Actions **Independent production watch**，每 15 分钟计划触发一次独立于生产服务器的**只读**巡检，使用 GitHub Issue 记录服务故障、恢复和新自动回滚信号。GitHub Actions 调度可能延迟或停用，**不是实时高可用监控，不能替代基础设施级健康检查**。它不能替用户执行生产回滚，不持有 Owner Token，也不会复制 SQLite 数据库。
+
+## 启用步骤（必须手动配置）
+
+1. 在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 设置 `RADAR_PRODUCTION_URL` 为完整 **HTTPS 站点根地址**，例如 `https://radar.example.com`（不要带路径、查询、认证信息）。未配置时工作流明确提示“监控未启用”，不应将绿色的跳过状态理解为已被监控。
+2. 如需要监控已启动版本是否与指定部署一致，可选设置变量 `RADAR_EXPECTED_DEPLOY_SHA` 为 **当前部署完整 40 位 Git commit**。**必须随部署同步更新**，否则会报告不一致；不设置时只检查发布身份有效、服务可达，不验证等于最新 main。
+3. 若还要获知灰度自动回滚，在 Dokploy 的 Radar 服务环境变量里设置高强度随机密钥 `RADAR_WATCH_TOKEN`（至少32字符），并在 GitHub Actions Secrets 中配置**同值** `RADAR_WATCH_TOKEN`。部署新版本并检查 `GET /api/operations/watch` 的鉴权：无密钥则返回503，错误密钥401，正确密钥仅返回当前灰度启用状态、百分比、发布 revision、最近一次巡检时间及已脱敏的最近一次回滚告警。
+4. 合并后选择 Actions → **Independent production watch** → Run workflow 执行一次手动检查。定时 cron 表达式为 `*/15 * * * *`。自动 Issue 告警需要该 workflow 的 `issues:write` 权限；如果仓库组织策略不允许，应在运行日志中明确处理权限报错，而不是默默跳过。
+5. 可在完成生产访问权限后，用 `node scripts/production-watch.mjs` 手动验证。脚本从 `RADAR_PRODUCTION_URL`、`RADAR_WATCH_TOKEN`、`RADAR_EXPECTED_DEPLOY_SHA` 读取设置，仅发起对指定 HTTPS 站点的 GET 请求。
+
+## 何时建 Issue
+
+- 无法联网、健康检查异常、版本身份缺失、部署版本与可选 pinned SHA 不一致，或已配置密钥但灰度心跳不正常：保持一个标题为 `[Radar Watch] Production endpoint unhealthy` 的开放 Issue。恢复后添加说明并关闭；如果同一故障再发生，重新打开已有 Issue，不重复制造通知。
+- 读取到 24 小时以内的进程内 `APPROVAL_REVOKED` / `REVIEWED_REGRESSION` 回滚事件：按告警代码、发布 revision、事件时间创建**独立一次性** Issue。已存在（包括关闭）的相同事件不重复创建；回滚事件不会自动被标为恢复。
+- 如果仅配置公开健康检查而没有专用密钥，状态明示 `health_only`，**不能声称具备自动回滚外部告警**。所有 Issue 均只写预定义状态码/版本号，不包含 Owner Token、原帖、标签、笔记内容或私有 URL。
+
+已知限制：Issue 是告警登记，不会主动发送其他外部推送；GitHub 是否向 Owner 发送通知取决于其 Issue 订阅/通知设置。服务与 GitHub Actions 同时故障、令牌失效、工作流被禁用、定时运行延迟或轮询间发生快速故障时，可能遗漏事件。生产环境如有更严格 SLA，应额外部署外部 uptime 监测。
+
+## 人工复核代表性（只读）
+
+入口：**机会简报 → 信息源与信号 → 信息源质量反馈 → 复核代表性与盲区**。接口：`GET /api/discovery/review-coverage`（Owner 鉴权）。
+
+使用最近400条 `new/saved` 且标题有效、HTTPS URL 的来源，交叉按原帖域名与基础规则正/负预测聚合。只把与来源 revision 匹配且人工确认为 `real_problem` / `not_problem` 的标签计入“有效审核”。过期标签、不确定标注和未标注分开显示。提醒覆盖低于20、单一来源贡献有效审核超70%、规则拒绝/接受的帖子完全没有人工标注等情况，并生成**跨正负类与来源的确定性复核候选队列**，手动点开原文再标注。
+
+这只能帮助补全已知审核盲区，不能把来源域名当独立消费者，也不是统计随机抽样。该功能**不自动修改分类、生产发布门槛、灰度、来源启停或排序**；用户依然需要核实公开内容的真实性与场景。
+
+## 验收与发布
+
+Node/SQLite 单测检查样本分层、来源集中度、过期标签、Owner 与 Monitor Token 隔离、HTTP 未认证拒绝、发行版本与健康探测失败、24小时告警过期、GitHub Issue 去重/恢复和回滚事件编码。Chromium E2E 验证新增来源覆盖度视图。全部使用独立合成测试数据；**没有实际访问用户的生产服务器，也没有实际创建生产告警 Issue。**
+
+本轮 PR 并入 main 仅代表相关代码上线准备就绪。只有配置了真实生产 URL、部署了含 `/api/operations/watch` 的版本、启动了 workflow 并得到外部实际探测成功，才可声明“外部监控已启用”。
