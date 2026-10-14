@@ -50,7 +50,7 @@ test('evidence-pinned production release supports versioned atomic rollback',()=
   assert.equal(rolled.policyId,null);
   assert.equal(rolled.percentage,0);
   assert.equal(rolled.history[1].action,'rollback');
-  assert.equal(db.list('sources').length,25);
-  assert.equal(db.list('discovery_quality_labels').length,25);
+  assert.equal(db.list('sources').length,31);
+  assert.equal(db.list('discovery_quality_labels').length,31);
  }finally{db.close();}
 });
