@@ -371,7 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
-    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -986,6 +986,71 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'frozen-regression-suite':{
+    const state=await api('/discovery/regression-suite');
+    if(id==='freeze'){
+      const data=state.suite.candidate;
+      if(!data.ready)throw new Error('可冻结样本尚未满足至少20例、正反例各5例、跨两个域名的要求');
+      modal('冻结当前人工标注回归集',
+        '<p class="subtext">将当前最多100条已确认正反例的原帖文本与标签冻结到本地SQLite。旧样本不会被新的原帖编辑覆盖。</p>'+
+        '<p class="subtext">候选 '+data.counts.total+' · 正例 '+data.counts.positives+' · 负例 '+data.counts.negatives+
+        ' · 来源域名 '+data.counts.hosts+' · 因上限未纳入 '+data.counts.excludedByCap+'</p>'+
+        field('reason','冻结本批样本的依据（12–500字）',{wide:true,type:'textarea',required:true}),
+        async d=>api('/discovery/regression-suite',{method:'POST',body:{reason:d.reason,expected_revision:state.suite.revision}}));
+      break;
+    }
+    const choice=id==='alternative'?'review_promotion_block':'require_workaround';
+    const r=await api('/discovery/regression-suite/replay?policy='+encodeURIComponent(choice));
+    if(id==='review'){
+      const rr=await api('/discovery/regression-suite/replay');
+      if(!rr.available)throw new Error('没有冻结回归样本可供审核');
+      const good=rr.verdict==='manual_review_only';
+      modal('人工审阅冻结回归试验',
+        '<p class="subtext">当前建议：'+esc(rr.verdict)+' · 仅在无新增误报/漏报且真正影响案例时可以提请影子评审。审核记录不改变规则配置。</p>'+
+        '<div class="field wide"><label>人工决定</label><select name="decision">'+
+        '<option value="hold_for_more_evidence">继续取证</option>'+
+        '<option value="reject_trial">拒绝这次离线试验</option>'+
+        (good?'<option value="recommend_shadow_review">建议进入独立影子评审（不自动审批）</option>':'')+
+        '</select></div>'+
+        field('reason','本次审核依据（12–500字）',{wide:true,type:'textarea',required:true}),
+        async d=>api('/discovery/regression-suite/review',{method:'POST',
+          body:{policy_id:rr.policyId,suite_revision:rr.suiteRevision,fingerprint:rr.fingerprint,
+            decision:d.decision,reason:d.reason,expected_revision:state.review.revision}}));
+      break;
+    }
+    const suite=state.suite;
+    const counts=suite.candidate.counts;
+    const status=r.available?(
+      '<p class="subtext">冻结版本 '+r.suiteRevision+' · 样本 '+r.counts.total+
+      '（正例 '+r.counts.positives+'，负例 '+r.counts.negatives+'，域名 '+r.counts.hosts+'）</p>'+
+      '<p class="subtext">原始基线：误报 '+r.before.falsePositive+'、漏报 '+r.before.falseNegative+
+      '；试验：误报 '+r.trial.falsePositive+'、漏报 '+r.trial.falseNegative+'</p>'+
+      '<p class="subtext">新增漏报 '+r.newMisses+' · 新增误报 '+r.newFalsePositives+
+      ' · 救回正例 '+r.rescued+' · 减少误报 '+r.removedFalsePositives+
+      ' · 受影响 '+r.changedCount+' · 旧来源已更新 '+r.sourceDrift+
+      ' · 基线算法漂移 '+r.baselineDrift+'</p>'+
+      '<p class="subtext">离线结论：'+esc(r.verdict)+'</p>'+
+      '<h4>受影响原帖</h4>'+
+      (r.examples.slice(0,16).map(x=>'<div class="source-row"><div class="grow"><a href="'+esc(x.url)+
+        '" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+        '<p class="subtext">'+esc(x.host)+' · Owner标签 '+esc(x.label)+
+        ' · 基础 '+(x.before?'保留':'过滤')+' → 试验 '+(x.after?'保留':'过滤')+
+        (x.sourceDrift?' · 原帖当前已更新':'')+'</p></div></div>').join('')||
+       '<p class="subtext">本批冻结案例没有观察到分类差异。</p>')):
+       '<p class="subtext">暂无冻结回归集。需要先人工核对20条以上正反例，并覆盖不同来源。</p>';
+    modal('稳定回归样本与规则对照',
+      '<p class="subtext">当前可冻结：'+counts.total+' 条（正例 '+counts.positives+
+       '、负例 '+counts.negatives+'、域名 '+counts.hosts+'）；已保存 '+suite.snapshots.length+' 个不可改写快照。</p>'+
+      '<div class="flex mt"><button type="button" class="btn btn-sm" data-action="frozen-regression-suite" data-id="freeze">冻结新版本</button>'+
+       '<button type="button" class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">严格替代做法规则</button>'+
+       '<button type="button" class="btn btn-sm" data-action="frozen-regression-suite" data-id="alternative">营销拦截离线试验</button></div>'+
+      status+
+      (r.available?'<button type="button" class="btn btn-sm" data-action="frozen-regression-suite" data-id="review">记录人工复核意见</button>':'')+
+      '<p class="subtext">最近复核：'+esc(state.review.latest?.decision||'尚未复核')+
+        ' · 历史复核 '+state.review.records.length+'</p>'+
+      '<p class="subtext">'+esc(r.notice||suite.notice)+'</p>',async()=>{});
     break;
   }
   case 'source-trial-audit':{
