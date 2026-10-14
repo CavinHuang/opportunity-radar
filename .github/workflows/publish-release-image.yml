@@ -1,0 +1,106 @@
+name: Verified GHCR release image
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: verified-release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # A successful, same-repository push to main is the only release authority.
+    # A pull-request workflow_run must never gain registry write capability.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact CI-verified commit, not event default HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Resolve lower-case GHCR tag and verify checkout
+        id: release
+        shell: bash
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$VERIFIED_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid CI SHA'; exit 1; }
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-$VERIFIED_SHA"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "sha=$VERIFIED_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build exact release image for local verification
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ steps.release.outputs.image }}
+          build-args: |
+            RADAR_RELEASE_SHA=${{ steps.release.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
+
+      - name: Verify the same image's HTTP health, frontend and embedded SHA
+        env:
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name radar-ghcr-verified \
+            -e RADAR_OWNER_TOKEN=synthetic-publish-probe \
+            -p 127.0.0.1:4932:4177 "$RELEASE_IMAGE"
+          trap 'docker rm -f radar-ghcr-verified 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4932/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/verify-release.mjs --allow-http-loopback \
+            --url http://127.0.0.1:4932 --expected-sha "$RELEASE_SHA"
+
+      - name: Login using repository-scoped GITHUB_TOKEN
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the exact tested image under its full source SHA
+        env:
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker push "$RELEASE_IMAGE" | tee /tmp/radar-ghcr-push.log
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' /tmp/radar-ghcr-push.log | tail -n1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Missing verified GHCR digest'; exit 1; }
+          {
+            echo '## Verified container artifact — not a production deployment'
+            echo
+            echo "- Source commit: \`$RELEASE_SHA\`"
+            echo "- Tested image tag: \`$RELEASE_IMAGE\`"
+            echo "- Registry digest: \`$digest\`"
+            echo "- For Dokploy select: \`ghcr.io/${GITHUB_REPOSITORY,,}@$digest\`"
+            echo
+            echo 'The image was booted and checked by /api/health, /api/release and /app.js before publication.'
+            echo 'No production server was modified. A pinned image and mounted /app/.data plus secrets are required for actual deployment.'
+          } >> "$GITHUB_STEP_SUMMARY"
