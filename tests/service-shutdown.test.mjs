@@ -58,10 +58,10 @@ async function testActualSignal(signal){
    }});
   });
   assert.equal(child.kill(signal),true);
-  const ended=await Promise.race([
-   new Promise(resolve=>child.once('exit',(code,sig)=>resolve({code,sig}))),
-   new Promise((_,reject)=>setTimeout(()=>reject(new Error('Shutdown timed out')),6000))
-  ]);
+  const ended=await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(new Error('Shutdown timed out')),6000);
+   child.once('exit',(code,sig)=>{clearTimeout(timer);resolve({code,sig});});
+  });
   finished=true;
   assert.equal(ended.code,0,'signal='+signal+' stdout='+stdout+' stderr='+stderr);
   assert.equal(ended.sig,null);
