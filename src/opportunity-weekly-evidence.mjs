@@ -2,6 +2,11 @@ import {weeklyResearchPlan} from './opportunity-weekly-plan.mjs';
 
 // Evidence is discovered from persisted owner events; no fabricated progress or task completion.
 const supported={
+ 'opportunity.external_research.searched':'外部反证检索',
+ 'problem.verification.reviewed':'真实问题核查',
+ 'problem.interview.plan.created':'访谈计划',
+ 'problem.interview.observed':'用户访谈观察',
+ 'problem.interview.decided':'访谈结论',
  'opportunity.external_evidence.reviewed':'外部证据审核',
  'opportunity.alternative_research.reviewed':'替代方案核查',
  'opportunity.feasibility.reviewed':'可行性核查',
