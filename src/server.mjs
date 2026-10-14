@@ -13,6 +13,7 @@ import {postReleaseEvidenceReport} from './discovery-post-release.mjs';
 import {productionHeartbeat} from './production-heartbeat.mjs';
 import {discoveryReviewCoverage} from './discovery-review-coverage.mjs';
 import {createProductionGuard} from './discovery-production-guard.mjs';
+import {createServiceShutdown} from './service-shutdown.mjs';
 import {problemSourceDiagnostics} from './problem-source-diagnostics.mjs';
 import {problemWorkQueue} from './problem-work-queue.mjs';
 import {decisionReviewCenter,saveDecisionReview} from './problem-decision-center.mjs';
@@ -514,6 +515,8 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   server.listen(port,host,()=>console.log(`Opportunity Radar running at http://${host}:${port}\nAgent API ${process.env.RADAR_AGENT_TOKEN?'enabled':'disabled'}`));
   const scheduler=createSourceScheduler(store);scheduler.start();
   const productionGuard=createProductionGuard(store);productionGuard.start();
-  process.once('SIGINT',()=>{scheduler.stop();productionGuard.stop();server.close();});
-  process.once('SIGTERM',()=>{scheduler.stop();server.close();});
+  const shutdown=createServiceShutdown({server,scheduler,productionGuard,
+    onCloseError:error=>{console.error('[Radar shutdown]',error);process.exitCode=1;}});
+  process.once('SIGINT',shutdown);
+  process.once('SIGTERM',shutdown);
 }
