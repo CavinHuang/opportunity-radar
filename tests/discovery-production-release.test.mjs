@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
 import {changeProductionRule,productionRuleStatus,selectProductionProblem} from '../src/discovery-production-release.mjs';
 import {releasePreflight} from '../src/discovery-release-preflight.mjs';
+import {sourceTrialImpactReport,signSourceTrialAudit} from '../src/discovery-source-trial-audit.mjs';
 
 const reason='已经人工检查证据，批准小流量严格规则试验';
 test('production gate defaults to baseline, rejects unverified and unsafe release',()=>{
@@ -19,12 +20,19 @@ test('evidence-pinned production release supports versioned atomic rollback',()=
  const db=openDatabase();try{
   for(let i=0;i<25;i++){
    const id='negative-'+i;
-   const s=db.put('sources',{id,title:'AI news roundup',description:'Generic introduction'});
+   const changed=i===0||i===1;
+   const s=db.put('sources',{id,status:'new',url:'https://'+(i%2?'forum-two.example':'forum-one.example')+'/post/'+id,
+    title:changed?'I cannot reconcile invoice records every week':'AI news roundup',
+    description:changed?'I copy invoice records every day and spend hours fixing errors':'Generic introduction'});
    db.put('discovery_quality_labels',{id,label:'not_problem',sourceRevision:s.revision});
   }
   db.put('discovery_rule_decisions',{id:'real_problem_rule_trials',selectedTrial:'require_workaround',history:[]});
   db.put('discovery_rule_decisions',{id:'real_problem_rule_shadow',active:false,policyId:'require_workaround',percentage:5,
    snapshots:[{policyId:'require_workaround',at:'2026-10-13T00:00:00Z',reviewed:8,deltaFalsePositive:0,deltaFalseNegative:0,autoStopped:false}]});
+  assert.equal(releasePreflight(db).ready,false);
+  const audit=sourceTrialImpactReport(db);
+  assert.equal(audit.readyForOwnerSignoff,true);
+  signSourceTrialAudit(db,{policy_id:'require_workaround',fingerprint:audit.fingerprint,reason,expected_revision:0});
   const evidence=releasePreflight(db);assert.equal(evidence.ready,true);
   db.put('discovery_rule_decisions',{id:'real_problem_release_preflight',records:[{policyId:'require_workaround',evidenceHash:evidence.evidenceHash}]});
   const started=changeProductionRule(db,{action:'release',policy_id:'require_workaround',percentage:5,evidence_hash:evidence.evidenceHash,reason,expected_revision:0});

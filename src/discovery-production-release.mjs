@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {releasePreflight,releasePreflightHistory} from './discovery-release-preflight.mjs';
 import {ruleTrialLedger} from './discovery-rule-approval.mjs';
 import {assessRealProblem} from './real-problem.mjs';
+import {sourceTrialReleaseGate} from './discovery-source-trial-audit.mjs';
 const key='real_problem_production_release';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const bucket=id=>parseInt(createHash('sha256').update(String(id)).digest('hex').slice(0,8),16)%100;
@@ -29,6 +30,8 @@ export function changeProductionRule(store,{action,policy_id,percentage,evidence
   const saved=history.records.at(-1);
   if(!current.ready||!saved||saved.policyId!==policy_id||saved.evidenceHash!==current.evidenceHash||evidence_hash!==saved.evidenceHash)
    throw fail('STALE_PREFLIGHT','上线证据缺失或已变化，请重新验收',409);
+  const sourceGate=sourceTrialReleaseGate(store,policy_id);
+  if(!sourceGate.cleared)throw fail(sourceGate.reason,'来源级变化缺少有效人工复核：'+sourceGate.reason,409);
   if(prev.policyId)throw fail('ALREADY_RELEASED','生产规则已发布，请先回滚',409);
  }else if(!prev.policyId)throw fail('NOT_RELEASED','当前没有可回滚的生产规则',409);
  return store.transaction(()=>{

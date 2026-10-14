@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from '../src/discovery-release-preflight.mjs';
+import {sourceTrialImpactReport,signSourceTrialAudit} from '../src/discovery-source-trial-audit.mjs';
 
 test('release preflight fails closed without approvals and never changes production rules',()=>{
  const db=openDatabase();try{
@@ -17,12 +18,22 @@ test('release preflight fingerprints evidence, guards revisions, and never publi
  const db=openDatabase();try{
   for(let i=0;i<25;i++){
    const id='negative-'+i;
-   const s=db.put('sources',{id,title:'AI news roundup',description:'Generic introduction'});
+   const affected=i<2;
+   const s=db.put('sources',{id,status:'new',url:'https://'+(i%2?'second.example':'first.example')+'/'+id,
+    title:affected?'I cannot reconcile invoice records every week':'AI news roundup',
+    description:affected?'I copy invoice records every day and spend hours fixing errors':'Generic introduction'});
    db.put('discovery_quality_labels',{id,label:'not_problem',sourceRevision:s.revision});
   }
   db.put('discovery_rule_decisions',{id:'real_problem_rule_trials',selectedTrial:'require_workaround',history:[]});
   db.put('discovery_rule_decisions',{id:'real_problem_rule_shadow',active:false,policyId:'require_workaround',percentage:10,
    snapshots:[{policyId:'require_workaround',at:'2026-10-13T00:00:00Z',reviewed:8,deltaFalsePositive:0,deltaFalseNegative:0,autoStopped:false}]});
+  const blocked=releasePreflight(db);
+  assert.equal(blocked.ready,false);
+  assert.ok(blocked.blockers.includes('sourceTrialReviewed'));
+  const sourceAudit=sourceTrialImpactReport(db);
+  assert.equal(sourceAudit.readyForOwnerSignoff,true);
+  signSourceTrialAudit(db,{policy_id:'require_workaround',fingerprint:sourceAudit.fingerprint,
+   reason:'逐一检查变动来源后对照人工结论，确认无新增漏报',expected_revision:0});
   const p=releasePreflight(db);
   assert.equal(p.ready,true);
   assert.equal(p.evidenceHash.length,64);
