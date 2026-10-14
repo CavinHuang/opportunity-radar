@@ -19,6 +19,7 @@ test('external findings preserve provenance, dedupe HTTPS links and invalidate s
   const fetchImpl=async(url,options)=>{
    calls++;
    assert.equal(url.origin,'https://hn.algolia.com');
+   assert.equal(url.searchParams.get('tags'),'(story,comment)');
    assert.equal(options.redirect,'error');
    return {ok:true,json:async()=>({hits:[
     {objectID:'123',title:'Invoice reconciliation alternatives',url:'https://news.ycombinator.com/item?id=123',author:'example',created_at:'2025-05-02'},
@@ -70,5 +71,40 @@ test('GitHub Issues search includes only canonical issues and records per-source
   assert.equal(saved.results[0].source,'GitHub Issues');
   assert.equal(saved.sourceStatus.find(x=>x.source==='GitHub Issues').status,'ok');
   assert.equal(saved.sourceStatus.find(x=>x.source==='Hacker News').count,0);
+ }finally{db.close();}
+});
+
+test('queries preserve short task acronyms and remove generic question phrasing',()=>{
+ const q=externalResearchQueries('How to have control over the automatic mounting of USB drives on Windows?');
+ assert.match(q[0],/usb/);assert.match(q[0],/windows/);assert.match(q[0],/mounting/);
+ assert.doesNotMatch(q[0],/control|over|have/);
+ assert.match(externalResearchQueries('I cannot import CSV into Excel')[0],/csv/);
+ assert.match(externalResearchQueries('PDF invoice export problem')[0],/pdf/);
+});
+
+test('HN query failure preserves a successful query and GitHub results with explicit partial status',async()=>{
+ const db=openDatabase();try{
+  db.put('sources',{id:'partial',status:'new',url:'https://example.org/partial',title:'I cannot import CSV files into Excel',description:'I manually import CSV files every day and spend hours fixing errors'});
+  let hnCalls=0;
+  const saved=await investigateExternalEvidence(db,'signal:partial',{fetchImpl:async url=>{
+   if(url.hostname==='hn.algolia.com')return ++hnCalls===1?{ok:false,status:429}:{ok:true,json:async()=>({hits:[{objectID:'123',title:'CSV Excel import workaround',url:'https://news.ycombinator.com/item?id=123'}]})};
+   return {ok:true,json:async()=>({items:[{html_url:'https://github.com/example/app/issues/1',title:'CSV Excel import broken'}]})};
+  }});
+  assert.equal(saved.results.length,2);
+  const hn=saved.sourceStatus.find(x=>x.source==='Hacker News');
+  assert.equal(hn.status,'partial');assert.equal(hn.queries[0].status,'failed');assert.equal(hn.queries[1].status,'ok');
+  assert.equal(saved.sourceStatus.find(x=>x.source==='GitHub Issues').status,'ok');
+  assert.ok(saved.analysis.missing.some(x=>x.includes('Hacker News')));
+ }finally{db.close();}
+});
+
+test('both HN queries failing does not prevent successful GitHub-only research',async()=>{
+ const db=openDatabase();try{
+  db.put('sources',{id:'github-only',status:'new',url:'https://example.org/gh',title:'I cannot import CSV files into Excel',description:'I manually import CSV files every day and spend hours fixing errors'});
+  const saved=await investigateExternalEvidence(db,'signal:github-only',{fetchImpl:async url=>url.hostname==='hn.algolia.com'
+   ?{ok:false,status:503}:{ok:true,json:async()=>({items:[]})}});
+  assert.equal(saved.sourceStatus[0].status,'failed');assert.equal(saved.results.length,0);
+  assert.equal(saved.sourceStatus[1].status,'ok');assert.equal(saved.status,'needs_owner_review');
+  assert.equal(db.list('opportunities').length,0);
  }finally{db.close();}
 });
