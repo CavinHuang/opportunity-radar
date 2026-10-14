@@ -55,7 +55,7 @@ export function sourceCohortQualityReview(store,{limit=18}={}){
  const attention=[];
  const counts={inWindow:active.length,reviewed:0,uncertain:0,stale:0,unlabeled:0,
   truePositive:0,falsePositive:0,falseNegative:0,trueNegative:0,visible:0};
- const freshIds=new Set();
+ const activeIds=new Set(active.map(x=>x.id));
  for(const source of active){
   const h=host(source.url);
   if(!cohorts.has(h))cohorts.set(h,{host:h,inWindow:0,visible:0,reviewed:0,uncertain:0,stale:0,unlabeled:0,
@@ -68,7 +68,7 @@ export function sourceCohortQualityReview(store,{limit=18}={}){
   if(label&&!fresh){issue='stale_label';row.stale++;counts.stale++;}
   else if(fresh&&label.label==='uncertain'){issue='uncertain_label';row.uncertain++;counts.uncertain++;}
   else if(fresh&&['real_problem','not_problem'].includes(label.label)){
-   freshIds.add(source.id);row.reviewed++;counts.reviewed++;actualLabel=label.label;
+   row.reviewed++;counts.reviewed++;actualLabel=label.label;
    const kind=predicted
     ?(actualLabel==='real_problem'?'truePositive':'falsePositive')
     :(actualLabel==='real_problem'?'falseNegative':'trueNegative');
@@ -87,7 +87,7 @@ export function sourceCohortQualityReview(store,{limit=18}={}){
      '已展示的原帖还未人工审核，可能存在误报'});
   }
  }
- const excluded=store.list('discovery_quality_labels').filter(x=>!freshIds.has(x.id));
+ const outsideWindow=store.list('discovery_quality_labels').filter(x=>!activeIds.has(x.id));
  const index=[...cohorts.values()].map(row=>{
   const evidenceMin=row.reviewed>=10;
   const cids=originCandidate.get(row.host)||new Set();
@@ -111,7 +111,7 @@ export function sourceCohortQualityReview(store,{limit=18}={}){
  const queued=balancedQueue(attention,limit);
  return {scope:'current_active_https_post_window_top50',readOnly:true,liveRuleChanged:false,
   totals:{...counts,unreviewedHostCount:index.filter(x=>!x.reviewed).length,hosts:index.length,
-   labelsOutsideFreshWindow:excluded.length,unseenPending:Math.max(0,attention.length-queued.length)},
+   labelsOutsideWindow:outsideWindow.length,unseenPending:Math.max(0,attention.length-queued.length)},
   cohorts:index.slice(0,40),moreCohorts:index.length>40,queue:queued,
   queuePolicy:'errors_then_stale_then_uncertain_then_unreviewed; stable round_robin_per_host',
   evaluatedRates:counts.reviewed>=10?{
