@@ -1,0 +1,33 @@
+name: Production release verification
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Expected deployed 40-character main commit SHA (blank = selected main HEAD)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      RADAR_PRODUCTION_URL: ${{ vars.RADAR_PRODUCTION_URL }}
+      EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require explicitly configured production URL
+        run: |
+          if [ -z "$RADAR_PRODUCTION_URL" ]; then
+            echo "::error::Set GitHub Actions repository variable RADAR_PRODUCTION_URL to the HTTPS application origin"
+            exit 1
+          fi
+      - name: Check production revision, health and frontend without owner credentials
+        run: node scripts/verify-release.mjs --url "$RADAR_PRODUCTION_URL" --expected-sha "$EXPECTED_SHA"
