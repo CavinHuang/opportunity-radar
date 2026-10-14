@@ -32,6 +32,7 @@ import {updateWeeklyResearchProgress,weeklyResearchTrend,carryPreviousWeekTasks}
 import {weeklyResearchEvidence} from './opportunity-weekly-evidence.mjs';
 import {weeklyHypothesisBoard,saveWeeklyHypothesis} from './opportunity-weekly-hypotheses.mjs';
 import {weeklyConclusionQualityReview} from './opportunity-weekly-conclusion-quality.mjs';
+import {weeklyEvidenceProvenance,reviewWeeklyEvidenceProvenance} from './opportunity-weekly-provenance.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
