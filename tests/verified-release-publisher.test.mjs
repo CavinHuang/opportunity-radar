@@ -30,7 +30,7 @@ test('release tag embeds exact full source SHA, smoke-checks and only then publi
  const push=publisher.indexOf('docker push "$RELEASE_IMAGE"');
  assert.ok(check>0&&login>check&&push>login,'must test exact image before authenticated registry publication');
  assert.match(publisher,/docker push "\$RELEASE_IMAGE" \| tee/);
- assert.match(publisher,/digest: \\(sha256:/);
+ assert.match(publisher,/Missing verified GHCR digest/);
  assert.match(publisher,/For Dokploy select:/);
  assert.doesNotMatch(publisher,/\:latest/);
 });
