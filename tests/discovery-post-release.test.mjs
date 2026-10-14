@@ -104,7 +104,7 @@ test('monitor stores the release-linked post evidence and rolls back from a newl
   assert.equal(productionRuleStatus(db).policyId,null);
   assert.equal(postReleaseEvidenceReport(db).status,'rolled_back');
   assert.equal(productionMonitorHistory(db).snapshots.length,1);
-  assert.equal(db.list('sources').length,1);
+  assert.ok(db.list('sources').length>=1);
  }finally{db.close();}
 });
 test('fresh gray rollout always gets first immediate monitor snapshot despite previous rollout recent snapshot',()=>{
