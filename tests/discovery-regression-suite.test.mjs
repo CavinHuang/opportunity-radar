@@ -32,6 +32,8 @@ test('freeze requires balanced and diverse confirmed labels, remains append only
   assert.equal(one.snapshot.counts.hosts,2);
   assert.equal(one.snapshot.records,undefined);
   assert.equal(one.revision,1);
+  assert.equal(frozenRegressionSuiteBoard(db).latest.records,undefined);
+  assert.ok(!JSON.stringify(frozenRegressionSuiteBoard(db)).includes('I manually copy invoices'));
   assert.throws(()=>freezeRegressionSuite(db,{reason,expected_revision:0}),{code:'REVISION_CONFLICT'});
   assert.throws(()=>freezeRegressionSuite(db,{reason,expected_revision:1}),{code:'SAME_SNAPSHOT'});
   assert.deepEqual(db.list('sources').map(x=>[x.id,x.revision]),before);
