@@ -50,7 +50,7 @@ test('release preflight fingerprints evidence, guards revisions, and never publi
   assert.equal(saved.records[0].evidenceHash,p.evidenceHash);
   assert.throws(()=>captureReleasePreflight(db,{reason:'防止覆盖其他操作产生的最新历史',expected_revision:0}),{code:'REVISION_CONFLICT'});
   assert.equal(releasePreflight(db).productionChanged,false);
-  assert.equal(db.list('sources').length,25);
+  assert.equal(db.list('sources').length,31);
   const s=db.get('sources','negative-0');
   db.put('sources',{...s,description:'Changed source text'},s.revision);
   assert.notEqual(releasePreflight(db).evidenceHash,p.evidenceHash);
