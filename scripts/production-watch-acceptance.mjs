@@ -27,6 +27,8 @@ export function evaluateProductionAcceptance(report,{manual=false,requireRollbac
    return {status:'failed',passed:false,code:'ROLLBACK_MONITOR_NOT_VERIFIED'};
   return {status:'limited',passed:true,code:'PUBLIC_HEALTH_ONLY'};
  }
+ if(manual&&(!requireRollback||!requirePin))
+  return {status:'limited',passed:true,code:'OPERATOR_REDUCED_ACCEPTANCE_CHECKS'};
  return {status:manual?'accepted':'observed',passed:true,
   code:manual?'MANUAL_ACCEPTANCE_VERIFIED':'PRODUCTION_WATCH_HEALTHY'};
 }
