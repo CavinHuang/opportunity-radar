@@ -52,7 +52,7 @@ export function captureProductionMonitor(store,{reason,expected_revision,expecte
   postRelease.autoRollbackRecommended;
  return store.transaction(()=>{
   const at=new Date().toISOString();
-  const snapshot={...report,at,reason,autoRollback,
+  const snapshot={...report,at,reason:note,autoRollback,
    postRelease:{status:postRelease.status,launchAt:postRelease.launchAt,
     baselineVerified:postRelease.baselineVerified,baseline:postRelease.baseline,
     totals:postRelease.totals,regression:postRelease.regression,
