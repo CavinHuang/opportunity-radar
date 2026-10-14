@@ -2,14 +2,26 @@ import {candidateContext} from './opportunity-research.mjs';
 import {externalResearchStatus} from './opportunity-external-research.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const choices=new Set(['related_problem','existing_solution','not_relevant','uncertain']);
+const priorityTypes=new Set(['related_discussion','related_problem_report','possible_alternative','solution_with_reported_limits']);
+export function evidenceReviewQueue(results,reviews){
+ const reviewed=new Set(reviews.map(x=>x.url));
+ const priority=results.filter(x=>priorityTypes.has(x.triageType));
+ const pending=priority.filter(x=>!reviewed.has(x.url));
+ return {priority:pending,
+  other:results.filter(x=>!priorityTypes.has(x.triageType)&&!reviewed.has(x.url)),
+  reviewed:results.filter(x=>reviewed.has(x.url)),
+  priorityProgress:{total:priority.length,reviewed:priority.length-pending.length,pending:pending.length}};
+}
 export function evidenceReviewBoard(store,id,context=null){
  const ctx=context||candidateContext(store,id),external=externalResearchStatus(store,id);
  const current=Boolean(external.record&&external.record.candidateFingerprint===ctx.fingerprint);
  const saved=store.get('opportunity_evidence_reviews',id);
  const valid=Boolean(current&&saved?.candidateFingerprint===ctx.fingerprint&&saved?.searchRevision===external.revision);
+ const results=current?(external.record.results||[]).slice(0,35):[];
+ const reviews=valid?saved.items||[]:[];
  return {candidateId:id,candidateFingerprint:ctx.fingerprint,searchRevision:external.revision,
   current,revision:saved?.revision||0,stale:!!saved&&!valid,
-  reviews:valid?saved.items||[]:[],results:current?(external.record.results||[]).slice(0,35):[],
+  reviews,results,queue:evidenceReviewQueue(results,reviews),
   notice:'逐条分类是人工判断，不是独立核实的竞争产品、需求或付费数据；重新检索后旧审核必须重做。'};
 }
 export function reviewExternalEvidence(store,id,{candidateFingerprint,searchRevision,url,classification,notes,expected_revision}={}){

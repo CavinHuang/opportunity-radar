@@ -53,10 +53,23 @@ function renderHypothesisResearch(x){
  if(!r)return '<p class="subtext">外部研究状态尚未加载，不能判断已有方案。</p>';
  const states={not_searched:'尚未检索外部反证',stale:'外部证据已过期',needs_review:'外部线索待复核',partially_reviewed:'外部线索部分已分类',reviewed:'外部分类已记录',no_hits:'当前查询没有命中',incomplete_search:'外部检索未完整完成'};
  const automatic=r.automatic?`<p class="subtext">自动初筛：相似问题 ${Number(r.automatic.related_problem_report)} · 潜在方案 ${Number(r.automatic.possible_alternative)+Number(r.automatic.solution_with_reported_limits)} · 关联较弱 ${Number(r.automatic.weak_match)}。均待复核。</p>`:'';
- const progress=r.progress?`<p class="subtext">人工分类 ${Number(r.progress.reviewed)}/${Number(r.progress.total)} · 待核查 ${Number(r.progress.pending)}${r.ownerClassifications?` · 标记为已有方案 ${Number(r.ownerClassifications.existing_solution)}`:''}</p>`:'';
+ const progress=r.progress?`<p class="subtext">人工分类 ${Number(r.progress.reviewed)}/${Number(r.progress.total)} · 待核查 ${Number(r.progress.pending)}${r.priorityProgress?` · 重点线索 ${Number(r.priorityProgress.reviewed)}/${Number(r.priorityProgress.total)}`:''}${r.ownerClassifications?` · 标记为已有方案 ${Number(r.ownerClassifications.existing_solution)}`:''}</p>`:'';
  const links=(r.references||[]).map(e=>`<li><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a> · 待复核</li>`).join('');
  return `<div class="note-box mt"><strong>${esc(states[r.state]||'研究状态未知')}</strong>${r.coverage==='partial'?'<p class="subtext">部分来源查询失败，空结果不能用于判断市场空白。</p>':''}${automatic}${progress}${links?`<details><summary>优先核查的外部线索</summary><ul>${links}</ul></details>`:''}<p class="subtext"><strong>下一步：</strong>${esc(r.nextAction?.reason||'继续核查真实证据')}</p>${r.nextAction&&!['external-research','verify-problem'].includes(r.nextAction.action)?`<button class="btn btn-sm" data-action="${esc(r.nextAction.action)}" data-id="${esc(x.id)}">${esc(r.nextAction.label)}</button>`:''}<p class="subtext">搜索命中和人工分类均不能证明独立用户或付费需求。</p></div>`;
 }
+function renderEvidenceReviewQueue(r,id){
+ const labels={related_discussion:'相关讨论',related_problem_report:'相似问题报告',possible_alternative:'潜在替代方案',solution_with_reported_limits:'方案及其局限',weak_match:'弱相关'};
+ const ownerLabels={related_problem:'相关问题',existing_solution:'现有方案线索',not_relevant:'不相关',uncertain:'无法确认'};
+ const queue=r.queue||{priority:[],other:r.results||[],reviewed:[],priorityProgress:{total:0,reviewed:0}};
+ const rows=items=>items.map(x=>{
+  const reviewed=r.reviews.find(y=>y.url===x.url);
+  return `<div class="source-row"><div class="grow"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><p class="subtext">${esc(x.source)} · 自动初筛：${esc(labels[x.triageType]||'未分组')} · 人工：${esc(ownerLabels[reviewed?.classification]||'未审核')}</p>${x.excerpt?`<p class="subtext">检索摘要（需核对原网页）：${esc(String(x.excerpt).slice(0,420))}</p>`:''}${reviewed?.notes?`<p class="subtext">审核依据：${esc(reviewed.notes)}</p>`:''}<button class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${reviewed?'修改审核':'核查此条'}</button></div></div>`;
+ }).join('');
+ if(!r.results.length)return '<p class="subtext">当前检索没有可审核的结果</p>';
+ const p=queue.priorityProgress;
+ return `<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
+}
+
 function failingSourceItem(h){const n=h?.failing||0;if(!n)return'';return `<div class="note-box" style="border-color:#eed7d4;background:#fdf4f2;flex:1;min-width:180px"><strong style="color:#b1514b">${n} 个来源异常</strong><p class="subtext" style="margin:4px 0 0">连续采集失败，请检查</p><button class="btn btn-sm" data-action="manage-sources" style="margin-top:8px">查看来源</button></div>`;}
 function renderActionItems(ai){
  if(!ai)return '';
@@ -941,11 +954,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
   case 'workbench-evidence-review':{
     const r=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     if(!r.current)throw new Error('外部检索已过期或尚未执行，请先重新检索');
-    const rows=r.results.map(x=>{
-      const reviewed=r.reviews.find(y=>y.url===x.url);
-      return '<div class="source-row"><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a><p class="subtext">'+esc(x.source)+' · '+esc(reviewed?.classification||'未审核')+'</p><button class="btn btn-sm" data-action="workbench-review-item" data-id="'+esc(id)+'" data-evidence-url="'+esc(x.url)+'">核查此条</button></div>';
-    }).join('');
-    modal('外部证据逐条核查',rows||'<p class="subtext">当前检索没有可审核的结果</p>',async()=>{});
+    modal('外部证据逐条核查',renderEvidenceReviewQueue(r,id),async()=>{});
     break;
   }
   case 'workbench-review-item':{

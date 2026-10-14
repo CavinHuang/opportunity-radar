@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.mjs';
 import {candidateContext} from '../src/opportunity-research.mjs';
 import {opportunityScanCandidates} from '../src/opportunity-scan.mjs';
-import {evidenceReviewBoard,reviewExternalEvidence} from '../src/opportunity-evidence-review.mjs';
+import {evidenceReviewBoard,evidenceReviewQueue,reviewExternalEvidence} from '../src/opportunity-evidence-review.mjs';
 import {opportunityResearchWorkbench} from '../src/opportunity-research-workbench.mjs';
 
 function setup(db){
@@ -48,5 +48,24 @@ test('new search invalidates review and source edits expire all current claims',
  db.put('sources',{...s,description:s.description+' updated'},s.revision);
  assert.equal(evidenceReviewBoard(db,id).current,false);
  assert.equal(opportunityResearchWorkbench(db,id).evidenceReview.reviews.length,0);
+ }finally{db.close();}
+});
+
+test('review queue preserves every hit and separates automatic priority from explicit owner classification',()=>{
+ const hits=[{url:'weak',triageType:'weak_match'},{url:'problem',triageType:'related_problem_report'},
+  {url:'solution',triageType:'possible_alternative'},{url:'discussion',triageType:'related_discussion'},
+  {url:'limits',triageType:'solution_with_reported_limits'},{url:'legacy'},{url:'future',triageType:'unknown_future_type'}];
+ const q=evidenceReviewQueue(hits,[{url:'solution',classification:'uncertain'},{url:'missing'}]);
+ assert.deepEqual(q.priority.map(x=>x.url),['problem','discussion','limits']);
+ assert.deepEqual(q.other.map(x=>x.url),['weak','legacy','future']);
+ assert.deepEqual(q.reviewed.map(x=>x.url),['solution']);
+ assert.deepEqual(q.priorityProgress,{total:4,reviewed:1,pending:3});
+ assert.equal(new Set([...q.priority,...q.other,...q.reviewed].map(x=>x.url)).size,hits.length);
+});
+test('stale search exposes no review queue or old priority progress',()=>{
+ const db=openDatabase();try{
+  const {id}=setup(db);const source=db.get('sources','source-1');
+  db.put('sources',{...source,description:source.description+' New evidence'},source.revision);
+  assert.deepEqual(evidenceReviewBoard(db,id).queue,{priority:[],other:[],reviewed:[],priorityProgress:{total:0,reviewed:0,pending:0}});
  }finally{db.close();}
 });
