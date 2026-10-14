@@ -6,7 +6,7 @@ const time=x=>Date.parse(x||'')||0;
 export function problemWorkQueue(store,{today=new Date().toISOString().slice(0,10),limit=12}={}){
  const candidates=homeDiscoveryCandidates(store).items;
  const latest=store.get('home_opportunity_scans','latest');
- const visible=new Set(latest?.status==='filtered'?(latest.items||[]).map(x=>x.id):[]);
+ const visible=new Set(['filtered','filtered_partial'].includes(latest?.status)?(latest.items||[]).map(x=>x.id):[]);
  const pending=[],inProgress=[];
  for(const c of candidates){
   const decision=store.get('home_opportunity_decisions',c.id);
