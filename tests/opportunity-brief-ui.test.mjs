@@ -35,3 +35,23 @@ test('homepage distinguishes automated clues and owner review progress and expos
  assert.match(html,/部分来源查询失败/);assert.match(html,/data-action="workbench-evidence-review"/);
  assert.match(html,/不能证明独立用户或付费需求/);
 });
+
+test('review queue opens priority clues first while keeping weak hits and editable reviews folded',()=>{
+ const hit=(url,triageType)=>({url,title:url,source:'HN',triageType,excerpt:'<script>excerpt</script>'});
+ const priority=hit('https://example.org/problem','related_problem_report');
+ const weak=hit('https://example.org/weak','weak_match');const reviewed=hit('https://example.org/solution','possible_alternative');
+ const html=context.renderEvidenceReviewQueue({results:[priority,weak,reviewed],reviews:[{url:reviewed.url,classification:'uncertain',notes:'<b>owner notes</b>'}],
+  queue:{priority:[priority],other:[weak],reviewed:[reviewed],priorityProgress:{total:2,reviewed:1,pending:1}}},'id');
+ assert.match(html,/重点线索人工分类 1\/2 · 全部结果 1\/3/);
+ assert.ok(html.indexOf(priority.url)<html.indexOf('<details>'));
+ assert.match(html,/<details><summary>弱相关与未分组 · 1 条待复查/);
+ assert.match(html,/<details><summary>已人工分类 · 1 条/);
+ assert.equal((html.match(/data-action="workbench-review-item"/g)||[]).length,3);
+ assert.match(html,/修改审核/);assert.match(html,/人工：无法确认/);
+ assert.doesNotMatch(html,/<script>|<b>/);assert.match(html,/&lt;script&gt;excerpt/);assert.match(html,/&lt;b&gt;owner notes/);
+});
+test('legacy ungrouped review results remain reachable without claiming priority completion',()=>{
+ const html=context.renderEvidenceReviewQueue({results:[{url:'https://example.org/legacy',title:'Old clue'}],reviews:[]},'id');
+ assert.match(html,/暂无待核查的重点线索/);assert.match(html,/弱相关与未分组 · 1 条待复查/);
+ assert.match(html,/data-evidence-url="https:\/\/example.org\/legacy"/);
+});

@@ -68,3 +68,18 @@ test('a source change beyond the short research excerpt invalidates saved search
   assert.equal(homeResearchSummary(db,changed.candidate).state,'stale');
  }finally{db.close();}
 });
+
+test('finishing priority clues leaves weak results pending and directs a false-negative review',()=>{
+ const {db,context}=setup();try{
+  const ext=search(db,context);
+  const current=db.put('opportunity_external_research',{...ext,results:[...ext.results,{url:'https://example.org/weak',triageType:'weak_match'}]},ext.revision);
+  reviewExternalEvidence(db,context.candidate.id,{candidateFingerprint:context.fingerprint,searchRevision:current.revision,
+   expected_revision:0,url:'https://example.org/alternative',classification:'uncertain',notes:'This clue still needs actual feature verification.'});
+  const summary=homeResearchSummary(db,context.candidate);
+  assert.equal(summary.state,'partially_reviewed');
+  assert.deepEqual(summary.progress,{total:2,reviewed:1,pending:1});
+  assert.deepEqual(summary.priorityProgress,{total:1,reviewed:1,pending:0});
+  assert.equal(summary.nextAction.label,'复查弱相关与未分组结果');
+  assert.equal(summary.marketValidated,false);
+ }finally{db.close();}
+});
