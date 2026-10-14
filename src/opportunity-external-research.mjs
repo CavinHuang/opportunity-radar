@@ -6,11 +6,22 @@ const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,sta
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const plain=x=>String(x??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,450);
 const safeLink=raw=>{try{const u=new URL(raw);return u.protocol==='https:'?u.href:null;}catch{return null;}};
-const words=text=>String(text||'').normalize('NFKC').toLowerCase().match(/[a-z]{4,}|[\p{Script=Han}]{2,}/gu)||[];
+const shortTerms=new Set(['ai','ui','ux','usb','csv','pdf','sql','api','crm','erp','sso','dns','nas','vm']);
+const queryStop=new Set(['cannot','unable','every','with','from','have','need','problem','workflow','manually','records','how','what','over','control','automatic','does','there','that','this','into','between']);
+const platforms=new Set(['windows','macos','linux','android','iphone','lightroom','excel']);
+export function prioritizeExternalHits(title,records){
+ const priority={solution_with_reported_limits:4,possible_alternative:3,related_problem_report:2,related_discussion:1,weak_match:0};
+ return records.map((hit,index)=>{
+  const triage=analyzeExternalCounterevidence(title,[hit]).items[0]?.type||'weak_match';
+  return {hit:{...hit,triageType:triage},index,priority:priority[triage]||0};
+ }).sort((a,b)=>b.priority-a.priority||a.index-b.index).map(x=>x.hit).slice(0,35);
+}
 export function externalResearchQueries(title){
- const tokens=[...new Set(words(title).filter(x=>!['cannot','unable','every','with','from','have','need','problem','workflow'].includes(x)))].slice(0,6);
+ const words=String(title||'').normalize('NFKC').toLowerCase().match(/[a-z]{2,}|[\p{Script=Han}]{2,}/gu)||[];
+ const tokens=[...new Set(words.filter(x=>(x.length>=4||shortTerms.has(x))&&!queryStop.has(x)))];
  if(!tokens.length)throw fail('NO_QUERY','候选标题无法提取搜索词');
- return [tokens.join(' '),tokens.slice(0,4).join(' ')+' alternative'].filter((x,i,a)=>x&&a.indexOf(x)===i);
+ const ranked=[...tokens.filter(x=>shortTerms.has(x)),...tokens.filter(x=>platforms.has(x)),...tokens.filter(x=>!shortTerms.has(x)&&!platforms.has(x))].slice(0,6);
+ return [ranked.slice(0,4).join(' '),ranked.slice(0,3).join(' ')+' alternative'].filter((x,i,a)=>x&&a.indexOf(x)===i);
 }
 export function externalResearchStatus(store,id){
  const row=store.get('opportunity_external_research',id);
@@ -22,7 +33,8 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
  for(const query of queries){
   // Fixed public endpoint: never fetch an untrusted URL or follow a post URL.
   const endpoint=new URL('https://hn.algolia.com/api/v1/search');
-  endpoint.searchParams.set('query',query);endpoint.searchParams.set('tags','story,comment');endpoint.searchParams.set('hitsPerPage','15');
+  endpoint.searchParams.set('query',query);endpoint.searchParams.set('tags','(story,comment)');endpoint.searchParams.set('hitsPerPage','15');
+  try{
   const response=await fetchImpl(endpoint,{signal:AbortSignal.timeout(12000),redirect:'error',headers:{Accept:'application/json'}});
   if(!response.ok)throw fail('EXTERNAL_SEARCH_FAILED','社区检索 HTTP '+response.status,502);
   const payload=await response.json();
@@ -35,6 +47,8 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
     source:'Hacker News',query,createdAt:hit.created_at||null,
     classification:'unreviewed_external_search_hit'});
   }
+  sourceStatus.push({source:'Hacker News',query,status:'ok'});
+  }catch(e){sourceStatus.push({source:'Hacker News',query,status:'failed',reason:['EXTERNAL_SEARCH_FAILED','EXTERNAL_SEARCH_INVALID'].includes(e.code)?e.code:'FETCH_FAILED'});}
  }
  // GitHub issue search complements community discussion with concrete bug/friction reports.
  // Public API calls may be rate limited; preserve successful sources and report failures.
@@ -61,13 +75,17 @@ export async function investigateExternalEvidence(store,id,{fetchImpl=globalThis
   }
   sourceStatus.push({source:'GitHub Issues',status:'ok',count});
  }catch(e){
-  sourceStatus.push({source:'GitHub Issues',status:'failed',reason:String(e.code||'FETCH_FAILED')});
+  sourceStatus.push({source:'GitHub Issues',status:'failed',reason:['GITHUB_SEARCH_FAILED','GITHUB_SEARCH_INVALID'].includes(e.code)?e.code:'FETCH_FAILED'});
  }
- sourceStatus.unshift({source:'Hacker News',status:'ok',count:results.filter(x=>x.source==='Hacker News').length});
+ const hnQueries=sourceStatus.filter(x=>x.source==='Hacker News');
+ const hnStatus=hnQueries.every(x=>x.status==='ok')?'ok':hnQueries.some(x=>x.status==='ok')?'partial':'failed';
+ const statuses=[{source:'Hacker News',status:hnStatus,count:results.filter(x=>x.source==='Hacker News').length,queries:hnQueries},...sourceStatus.filter(x=>x.source!=='Hacker News')];
+ if(statuses.every(x=>x.status==='failed'))throw fail('EXTERNAL_SEARCH_FAILED','全部外部来源查询失败，未更新研究记录',502);
  // These are retrieval leads, not independent users, proven competitors, or verified claims.
- const analysis=analyzeExternalCounterevidence(context.candidate.title,results.slice(0,35),sourceStatus);
+ const retained=prioritizeExternalHits(context.candidate.title,results);
+ const analysis=analyzeExternalCounterevidence(context.candidate.title,retained,statuses);
  const record={id,candidateFingerprint:context.fingerprint,queryFingerprint:digest(queries),
-  queries,sourceStatus,analysis,results:results.slice(0,35),searchedAt:now(),status:'needs_owner_review',
+  queries,sourceStatus:statuses,analysis,results:retained,searchedAt:now(),status:'needs_owner_review',
   missing:['独立用户与原帖关系未核查','检索结果可能相关性不足','现有产品能力及收费情况未核查','不能根据没有搜索结果断言市场空白'],
   notice:'只查询固定 Hacker News 与 GitHub Issues 公开接口；部分来源失败会显式记录。命中结果不是已验证的竞争产品或独立用户证据。'};
  const previous=externalResearchStatus(store,id);
