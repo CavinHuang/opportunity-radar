@@ -29,13 +29,12 @@ test('evidence-pinned production release supports versioned atomic rollback',()=
   db.put('discovery_rule_decisions',{id:'real_problem_rule_trials',selectedTrial:'require_workaround',history:[]});
   db.put('discovery_rule_decisions',{id:'real_problem_rule_shadow',active:false,policyId:'require_workaround',percentage:5,
    snapshots:[{policyId:'require_workaround',at:'2026-10-13T00:00:00Z',reviewed:8,deltaFalsePositive:0,deltaFalseNegative:0,autoStopped:false}]});
-  const evidence=releasePreflight(db);assert.equal(evidence.ready,true);
-  db.put('discovery_rule_decisions',{id:'real_problem_release_preflight',records:[{policyId:'require_workaround',evidenceHash:evidence.evidenceHash}]});
-  assert.throws(()=>changeProductionRule(db,{action:'release',policy_id:'require_workaround',
-    percentage:5,evidence_hash:evidence.evidenceHash,reason,expected_revision:0}),{code:'SOURCE_TRIAL_NOT_SIGNED'});
+  assert.equal(releasePreflight(db).ready,false);
   const audit=sourceTrialImpactReport(db);
   assert.equal(audit.readyForOwnerSignoff,true);
   signSourceTrialAudit(db,{policy_id:'require_workaround',fingerprint:audit.fingerprint,reason,expected_revision:0});
+  const evidence=releasePreflight(db);assert.equal(evidence.ready,true);
+  db.put('discovery_rule_decisions',{id:'real_problem_release_preflight',records:[{policyId:'require_workaround',evidenceHash:evidence.evidenceHash}]});
   const started=changeProductionRule(db,{action:'release',policy_id:'require_workaround',percentage:5,evidence_hash:evidence.evidenceHash,reason,expected_revision:0});
   assert.equal(started.policyId,'require_workaround');
   assert.equal(started.percentage,5);
