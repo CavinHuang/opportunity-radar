@@ -2,6 +2,7 @@ import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryEx
 import {opportunityDiscoveryBenchmark,opportunityBenchmarkHistory,captureOpportunityBenchmark} from './opportunity-discovery-benchmark.mjs';
 import {sourceCohortQualityReview} from './source-cohort-quality.mjs';
 import {sourceTrialImpactReport,sourceTrialAuditHistory,signSourceTrialAudit} from './discovery-source-trial-audit.mjs';
+import {frozenRegressionSuiteBoard,freezeRegressionSuite,replayFrozenRegressionSuite,frozenRegressionReviewHistory,recordFrozenRegressionReview} from './discovery-regression-suite.mjs';
 import {ruleTrialLedger,decideRuleTrial} from './discovery-rule-approval.mjs';
 import {shadowStatus,setShadowStatus,evaluateShadow,recordShadowSnapshot,shadowHistory} from './discovery-shadow.mjs';
 import {releasePreflight,releasePreflightHistory,captureReleasePreflight} from './discovery-release-preflight.mjs';
@@ -184,6 +185,16 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/signals/manual'&&req.method==='POST')return send(res,201,{item:addManualSignal(store,await body(req))});
     if(pathname==='/api/discovery/quality'&&req.method==='GET')return send(res,200,discoveryQualityReport(store));
+    if(pathname==='/api/discovery/regression-suite'&&req.method==='GET')
+      return send(res,200,{suite:frozenRegressionSuiteBoard(store),review:frozenRegressionReviewHistory(store)});
+    if(pathname==='/api/discovery/regression-suite'&&req.method==='POST')
+      return send(res,200,await ownerWrite(req,pathname,d=>freezeRegressionSuite(store,d)));
+    if(pathname==='/api/discovery/regression-suite/replay'&&req.method==='GET')
+      return send(res,200,replayFrozenRegressionSuite(store,{
+        suiteRevision:u.searchParams.has('revision')?Number(u.searchParams.get('revision')):undefined,
+        policyId:u.searchParams.get('policy')||'require_workaround'}));
+    if(pathname==='/api/discovery/regression-suite/review'&&req.method==='POST')
+      return send(res,200,await ownerWrite(req,pathname,d=>recordFrozenRegressionReview(store,d)));
     if(pathname==='/api/discovery/source-trial-audit'&&req.method==='GET')
       return send(res,200,{report:sourceTrialImpactReport(store),history:sourceTrialAuditHistory(store)});
     if(pathname==='/api/discovery/source-trial-audit'&&req.method==='POST')
