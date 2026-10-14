@@ -1,0 +1,77 @@
+name: One-time production HTTPS evidence (no credentials)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/one-time-live-https-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      RADAR_HTTPS_URL: https://opportunity-radar-servercom-itnci1-f69daa-216-144-229-204.sslip.io
+    steps:
+      - name: Probe DNS, TLS and read-only HTTP endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import dns from 'node:dns/promises';
+          const origin=process.env.RADAR_HTTPS_URL;
+          const url=new URL(origin);
+          const evidence={origin,checkedAt:new Date().toISOString(),dns:[],endpoints:{}};
+          try{
+            const records=await dns.lookup(url.hostname,{all:true,verbatim:true});
+            evidence.dns=records.map(r=>r.address);
+          }catch(e){evidence.dnsError=e?.code||e?.name||'LOOKUP_ERROR';}
+          async function check(path,kind){
+            const target=origin+path;
+            const item={};
+            try {
+              const resp=await fetch(target,{method:'GET',redirect:'manual',
+                headers:{Accept:kind==='json'?'application/json':'text/html'},
+                signal:AbortSignal.timeout(15000)});
+              item.httpStatus=resp.status;item.contentType=resp.headers.get('content-type')||'';
+              const body=await resp.text();
+              item.bodyBytes=Buffer.byteLength(body);
+              if(kind==='json'&&body.length<500000){
+                try{
+                  const d=JSON.parse(body);
+                  if(path==='/api/health'){item.ok=d.ok;item.mode=d.mode;item.status=d.status;}
+                  if(path==='/api/release'){item.application=d.application;item.commit=d.commit;
+                    item.identified=d.identified;item.version=d.version;}
+                }catch{item.jsonParse='failed';}
+              }else if(kind==='html'){item.hasHtml=/<html/i.test(body);}
+            }catch(e){item.transportError=e?.cause?.code||e?.code||e?.name||'FETCH_FAILED';}
+            evidence.endpoints[path]=item;
+          }
+          await check('/api/health','json');
+          await check('/api/release','json');
+          await check('/','html');
+          const health=evidence.endpoints['/api/health'];
+          const release=evidence.endpoints['/api/release'];
+          evidence.verifiedHealth=health.httpStatus===200&&health.ok===true;
+          evidence.verifiedRelease=release.httpStatus===200&&
+            release.identified===true&&/^[a-f0-9]{40}$/i.test(release.commit||'');
+          evidence.verifiedHtml=evidence.endpoints['/'].httpStatus===200&&evidence.endpoints['/'].hasHtml===true;
+          console.log(JSON.stringify(evidence,null,2));
+          const lines=[
+            '## One-time independent HTTPS diagnostics','',
+            '| Signal | Result |','|---|---|',
+            '| DNS | '+(evidence.dns.length?evidence.dns.join(', '):(evidence.dnsError||'unknown'))+' |',
+            '| /api/health | '+(health.httpStatus??health.transportError??'unavailable')+' |',
+            '| /api/release | '+(release.httpStatus??release.transportError??'unavailable')+' |',
+            '| release commit | '+(evidence.verifiedRelease?release.commit:'not verified')+' |',
+            '| root HTML | '+(evidence.endpoints['/'].httpStatus??evidence.endpoints['/'].transportError??'unavailable')+' |',
+            '| Health/Release/HTML verified | '+[evidence.verifiedHealth,evidence.verifiedRelease,evidence.verifiedHtml].join(' / ')+' |',
+            '','Read-only. No login, production token, database, or write endpoint used.',''
+          ];
+          const fs=await import('node:fs');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n'));
+          NODE
