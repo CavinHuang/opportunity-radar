@@ -6,7 +6,7 @@ export function productionHeartbeat(store){
  const state=productionRuleStatus(store);
  const transition=state.history.at(-1)||null;
  const latest=productionMonitorHistory(store).latest;
- const alert=store.eventsLatest(80).find(x=>x.kind==='discovery.production_guard.alert')||null;
+ const alert=store.eventsLatest(80).findLast(x=>x.kind==='discovery.production_guard.alert')||null;
  return {application:'opportunity-radar',watchVersion:1,
   releaseRevision:state.revision,active:!!state.policyId,rolloutPercent:state.percentage,
   lastTransition:transition?.action||null,lastTransitionAt:transition?.at||null,
