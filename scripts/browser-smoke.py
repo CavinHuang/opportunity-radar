@@ -44,6 +44,13 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
                 page.get_by_text('首次使用与数据安全').first.wait_for(timeout=10000)
                 page.get_by_text('备份你的研究资料').first.wait_for(timeout=10000)
                 assert page.locator('[data-action="copy-data-backup"]').count()==1
+                # Read-only source cohort diagnosis must render in real Chromium without changing sources.
+                page.get_by_text('真实问题发现质量',exact=True).first.click()
+                page.locator('[data-action="source-cohort-quality"]').first.click()
+                page.locator('#modal-root').get_by_text('来源错误归因与复核队列').wait_for(timeout=10000)
+                page.locator('#modal-root').get_by_text('按来源域名划分（非独立用户）').wait_for(timeout=10000)
+                page.locator('#modal-root [data-modal-close]').first.click()
+                assert page.locator('#modal-root .modal').count()==0
                 readiness=call('/api/operations/readiness')
                 assert any(c['id']=='backup' and c['ok'] is None for c in readiness['checks'])
                 assert readiness['mode']=='local-first'
