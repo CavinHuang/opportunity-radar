@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {ruleTrialLedger} from './discovery-rule-approval.mjs';
 import {shadowStatus} from './discovery-shadow.mjs';
 import {replayDiscoveryRules} from './discovery-rule-replay.mjs';
+import {sourceTrialReleaseGate} from './discovery-source-trial-audit.mjs';
 
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const key='real_problem_release_preflight';
@@ -9,6 +10,7 @@ const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 
 export function releasePreflight(store){
  const approval=ruleTrialLedger(store),shadow=shadowStatus(store),replay=replayDiscoveryRules(store);
+ const sourceGate=sourceTrialReleaseGate(store,approval.selectedTrial||'require_workaround');
  const policy=replay.policies.find(p=>p.id===approval.selectedTrial);
  const runs=shadow.snapshots.filter(s=>s.policyId===approval.selectedTrial);
  const latest=runs.at(-1)||null;
@@ -19,6 +21,7 @@ export function releasePreflight(store){
   noObservedRegression:Boolean(policy&&policy.delta.falsePositive<=0&&policy.delta.falseNegative<=0&&latest&&
    latest.deltaFalsePositive<=0&&latest.deltaFalseNegative<=0&&!latest.autoStopped),
   sampleEnough:replay.sampleSize>=20&&Boolean(latest&&latest.reviewed>=5),
+  sourceTrialReviewed:sourceGate.cleared,
   shadowStopped:!shadow.active
  };
  const blockers=Object.entries(checks).filter(([,ok])=>!ok).map(([name])=>name);
@@ -26,9 +29,11 @@ export function releasePreflight(store){
   replaySample:replay.sampleSize,ruleDelta:policy?.delta||null,shadowAt:latest?.at||null,
   shadowReviewed:latest?.reviewed||0,shadowDelta:latest?{falsePositive:latest.deltaFalsePositive,falseNegative:latest.deltaFalseNegative}:null,
   shadowAutoStopped:Boolean(latest?.autoStopped),
+  sourceTrialFingerprint:sourceGate.cleared?sourceGate.report.fingerprint:null,
+  sourceTrialSignedAt:sourceGate.signedAt,
   labeledSourceFingerprint:digest(store.list('discovery_quality_labels').map(l=>({id:l.id,label:l.label,labelRevision:l.revision,sourceRevision:store.get('sources',l.id)?.revision||null})).sort((a,b)=>a.id.localeCompare(b.id)))};
  return {ready:blockers.length===0,checks,blockers,evidence,evidenceHash:digest(evidence),
-  productionChanged:false,notice:'仅为上线前材料的保守一致性核查。人工挑选样本不能证明推广效果；不会自动切换生产规则。'};
+  productionChanged:false,notice:'仅为上线前材料的保守一致性核查。人工挑选样本不能证明推广效果；来源级核查、影子评估、规则审批均需一致且全部完成；不会自动切换生产规则。'};
 }
 export function releasePreflightHistory(store){
  const r=store.get('discovery_rule_decisions',key);
