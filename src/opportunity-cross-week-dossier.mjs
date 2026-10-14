@@ -10,6 +10,26 @@ function normalizedOrigin(value){
   u.searchParams.sort();return u.toString();
  }catch{return raw.toLowerCase()}
 }
+
+function dossierReviewFlags(history,originHistory,recurring,asOf=new Date()){
+ const flags=[];
+ const add=(code,severity,message)=>flags.push({code,severity,message});
+ if(!history.length)return [{code:'NO_RESEARCH',severity:'info',message:'尚无研究记录，请先制定真实的验证任务。'}];
+ const latest=history.at(-1);
+ if(!latest.hypothesis?.text)add('NO_HYPOTHESIS','warning','最近一周尚未记录可证伪的研究假设。');
+ if(latest.provenance.unreviewedLinkedEvents>0)add('UNREVIEWED_PROVENANCE','warning','最近一周存在 '+latest.provenance.unreviewedLinkedEvents+' 条未审核来源的关联证据。');
+ if(latest.hypothesis?.referencedEventCount===0)add('NO_LINKED_EVIDENCE','warning','最近一周的研究假设尚未关联可追溯事件。');
+ if(latest.status!=='reviewed')add('WEEK_NOT_REVIEWED','info','最近一周尚未完成正式复盘，不能将其视为已验证。');
+ if(originHistory.some(o=>o.weeks.length>1))add('REUSED_SOURCES','warning','多周重复引用同一来源；不能当作新增独立证据。');
+ if(recurring.some(h=>h.changedConclusion))add('CONFLICTING_FINDINGS','warning','同一文本假设出现不同人工结论，需要核对原因和反证。');
+ const date=asOf instanceof Date?asOf:new Date(asOf);
+ const weekDate=new Date(String(latest.weekStart)+'T00:00:00Z');
+ if(Number.isFinite(date.getTime())&&Number.isFinite(weekDate.getTime())){
+  const days=Math.floor((date.getTime()-weekDate.getTime())/86400000);
+  if(days>=28)add('STALE_RESEARCH','warning','最近研究周距今 '+days+' 天；应重新确认问题是否仍然存在。');
+ }
+ return flags;
+}
 const textKey=x=>String(x??'').trim().replace(/\s+/g,' ').toLowerCase();
 export function crossWeekResearchDossier(store,candidateId){
  if(typeof candidateId!=='string'||!candidateId.trim())throw Object.assign(new Error('无效候选 ID'),{status:400,code:'BAD_CANDIDATE'});
@@ -60,6 +80,6 @@ export function crossWeekResearchDossier(store,candidateId){
    actualHoursClosed:Number(actualHours.toFixed(2)),distinctReviewedOrigins:allOrigins.size,
    repeatedOriginCount:[...allOrigins.values()].filter(x=>x.weeks.length>1).length,
    repeatedHypotheses:recurring.length,changedConclusionHypotheses:recurring.filter(x=>x.changedConclusion).length},
-  originHistory:[...allOrigins.values()],repeatedHypotheses:recurring,readOnly:true,
+  originHistory:[...allOrigins.values()],repeatedHypotheses:recurring,reviewFlags:dossierReviewFlags(history,[...allOrigins.values()],recurring),readOnly:true,
   notice:'档案仅汇集已保存的跨周记录。原始来源按链接和人工标识合并，不代表独立用户；实际小时只计已复盘周。重复假设按规范化文本匹配，不能自动判断语义相同。结论变化仅是人工记录变化，不代表因果验证或商业成功。'};
 }

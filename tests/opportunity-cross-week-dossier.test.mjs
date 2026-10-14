@@ -31,3 +31,31 @@ test('candidate dossier isolates other opportunities and no history stays empty'
   assert.equal(crossWeekResearchDossier(db,'a').weeks[0].result,null);
  }finally{db.close();}
 });
+
+test('dossier flags missing evidence, repeated origins and conflicting conclusions without treating them as users',()=>{
+ const db=openDatabase();try{
+  const id='candidate:review';
+  for(const [i,week,finding] of [[0,'2026-08-03','supported'],[1,'2026-08-10','contradicted']]){
+   const key='week:'+week;
+   db.put('opportunity_weekly_plans',{id:key,weekStart:week,status:'reviewed',items:[{candidateId:id,title:'重复需求',task:'核实',hours:1,budget:0}]});
+   db.put('opportunity_weekly_hypotheses',{id:key,items:[{candidateId:id,hypothesis:'需要核实的问题',finding,eventSeqs:[i+1]}]});
+   db.put('opportunity_weekly_provenance',{id:key,reviews:[{candidateId:id,seq:i+1,classification:'independent_firsthand',origin:'https://example.com/post?utm_source='+i}]});
+  }
+  const r=crossWeekResearchDossier(db,id);
+  const codes=r.reviewFlags.map(x=>x.code);
+  assert.ok(codes.includes('REUSED_SOURCES'));
+  assert.ok(codes.includes('CONFLICTING_FINDINGS'));
+  assert.ok(codes.includes('STALE_RESEARCH'));
+  assert.equal(r.overview.distinctReviewedOrigins,1);
+ }finally{db.close();}
+});
+test('dossier flags no history and pending unreviewed linked events',()=>{
+ const db=openDatabase();try{
+  assert.deepEqual(crossWeekResearchDossier(db,'no-history').reviewFlags.map(x=>x.code),['NO_RESEARCH']);
+  db.put('opportunity_weekly_plans',{id:'week:2026-10-12',weekStart:'2026-10-12',status:'planned',items:[{candidateId:'pending',title:'待研究',task:'验证',hours:2,budget:0}]});
+  db.put('opportunity_weekly_hypotheses',{id:'week:2026-10-12',items:[{candidateId:'pending',hypothesis:'某个假设',eventSeqs:[12]}]});
+  const codes=crossWeekResearchDossier(db,'pending').reviewFlags.map(x=>x.code);
+  assert.ok(codes.includes('UNREVIEWED_PROVENANCE'));
+  assert.ok(codes.includes('WEEK_NOT_REVIEWED'));
+ }finally{db.close();}
+});
