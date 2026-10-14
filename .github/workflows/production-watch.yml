@@ -1,5 +1,11 @@
 name: Independent production watch
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-watch.yml'
+      - 'scripts/production-watch.mjs'
+      - 'scripts/production-watch-acceptance.mjs'
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
@@ -24,8 +30,37 @@ permissions:
   issues: write
 
 jobs:
+  readiness:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HAS_ORIGIN: ${{ vars.RADAR_PRODUCTION_URL != '' }}
+      HAS_PIN: ${{ vars.RADAR_EXPECTED_DEPLOY_SHA != '' }}
+      HAS_WATCH_TOKEN: ${{ secrets.RADAR_WATCH_TOKEN != '' }}
+    steps:
+      - name: Explicit external monitoring readiness, no production probe
+        run: |
+          {
+            echo '## Radar production watch · configuration presence'
+            echo
+            echo '| Requirement | Present |'
+            echo '|---|---|'
+            echo "| Production HTTPS URL | $HAS_ORIGIN |"
+            echo "| Pinned deployment SHA | $HAS_PIN |"
+            echo "| Protected watch secret | $HAS_WATCH_TOKEN |"
+            echo
+            echo '**Presence is not deployment verification.** Confirm a separate live workflow_dispatch / scheduled observation before closing Issue #141.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$HAS_ORIGIN" != 'true' ]; then
+            echo '::warning::Production watch has no configured RADAR_PRODUCTION_URL; not enabled.'
+          fi
+          if [ "$HAS_WATCH_TOKEN" != 'true' ]; then
+            echo '::warning::Only public health monitoring can be verified without protected watch token.'
+          fi
   external-watch:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -68,13 +103,9 @@ jobs:
       - name: Upsert incident issue on failure or rollback; close outage after recovery
         if: env.RADAR_PRODUCTION_URL != ''
         run: node scripts/production-watch-issues.mjs
-      - name: Mark the external check failed when production is unhealthy
+      - name: Evaluate acceptance evidence (full / limited / failure)
         if: env.RADAR_PRODUCTION_URL != ''
-        run: |
-          node --input-type=module -e "
-            import {readFileSync} from 'node:fs';
-            const status=JSON.parse(readFileSync(process.env.RADAR_WATCH_REPORT,'utf8'));
-            if(status.monitoring==='health_only')console.log('::warning::No RADAR_WATCH_TOKEN: health/version only; rollback detection disabled.');
-            if(status.guardStatus==='warming')console.log('::warning::New rollout guard is warming up; repeat the probe after its first monitor snapshot.');
-            if(status.state!=='healthy')process.exit(1);
-          "
+        env:
+          RADAR_REQUIRE_ROLLBACK: ${{ inputs.require_rollback_monitoring }}
+          RADAR_REQUIRE_PIN: ${{ inputs.require_pinned_revision }}
+        run: node scripts/production-watch-acceptance.mjs
