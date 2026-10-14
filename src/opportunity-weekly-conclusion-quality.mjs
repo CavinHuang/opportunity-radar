@@ -1,5 +1,6 @@
 import {weeklyHypothesisBoard} from './opportunity-weekly-hypotheses.mjs';
 import {weeklyResearchPlan} from './opportunity-weekly-plan.mjs';
+import {weeklyEvidenceProvenance} from './opportunity-weekly-provenance.mjs';
 
 // Conservative warning signals, never an automatic verdict about user demand.
 const payment=/付费|支付|购买|订阅|price|pricing|willing(?:ness)? to pay|revenue|paid|payment/i;
@@ -8,6 +9,8 @@ const negative=new Set(['stop','contradicted']);
 export function weeklyConclusionQualityReview(store,options={}){
  const board=weeklyHypothesisBoard(store,options);
  const plan=weeklyResearchPlan(store,options);
+ const provenance=weeklyEvidenceProvenance(store,options);
+ const reviewedBySeq=new Map(provenance.events.filter(x=>x.review).map(x=>[x.seq,x.review]));
  const uses=new Map();
  for(const item of board.items)for(const e of item.linkedEvidence){
   const members=uses.get(e.seq)||new Set();members.add(item.candidateId);uses.set(e.seq,members);
@@ -18,6 +21,13 @@ export function weeklyConclusionQualityReview(store,options={}){
   else{
    if(!linked.length)warnings.push({code:'NO_LINKED_EVIDENCE',message:'没有当前有效的关联事件，不能据此得出支持或反驳结论'});
    if(item.unavailableEvidenceSeqs.length)warnings.push({code:'MISSING_REFERENCES',message:'部分原先关联的事件不再处于当前可检索范围'});
+   if(h.finding!=='unknown'&&linked.some(e=>!reviewedBySeq.has(e.seq)||reviewedBySeq.get(e.seq).classification==='unverified'))
+    warnings.push({code:'UNVERIFIED_ORIGIN',message:'部分关联事件缺少原始来源独立性核查'});
+   const origins=linked.map(e=>reviewedBySeq.get(e.seq)?.origin).filter(Boolean);
+   if(new Set(origins).size<origins.length)
+    warnings.push({code:'DUPLICATE_ORIGIN',message:'多条事件指向同一来源，不能作为独立样本累计'});
+   if(linked.some(e=>['same_origin','repost'].includes(reviewedBySeq.get(e.seq)?.classification)))
+    warnings.push({code:'NONINDEPENDENT_SOURCE',message:'关联事件包含重复来源或转载证据，请人工复核'});
    if(h.finding!=='unknown'){
     if(!linked.some(e=>e.quality==='recorded_observation'))warnings.push({code:'NO_OBSERVATION',message:'结论仅关联活动或人工审核，没有直接观察记录'});
     if(payment.test([h.hypothesis,h.expectedEvidence].join(' '))&&!linked.some(e=>paymentKinds.has(e.kind)))
