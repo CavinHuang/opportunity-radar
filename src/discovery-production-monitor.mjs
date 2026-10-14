@@ -1,5 +1,6 @@
 import {assessRealProblem} from './real-problem.mjs';
 import {productionRuleStatus,selectProductionProblem,changeProductionRule} from './discovery-production-release.mjs';
+import {postReleaseEvidenceReport} from './discovery-post-release.mjs';
 
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const id='real_problem_production_monitor';
@@ -46,14 +47,20 @@ export function captureProductionMonitor(store,{reason,expected_revision,expecte
  const report=productionMonitorReport(store);
  // A single human-confirmed new miss is important enough to stop the stricter rule.
  // No selection-biased aggregate accuracy claim, no automatic release escalation.
- const autoRollback=report.falseNegativeDelta>0||report.falsePositiveDelta>0;
+ const postRelease=postReleaseEvidenceReport(store);
+ const autoRollback=report.falseNegativeDelta>0||report.falsePositiveDelta>0||
+  postRelease.autoRollbackRecommended;
  return store.transaction(()=>{
   const at=new Date().toISOString();
-  const snapshot={...report,at,reason:note,autoRollback};
+  const snapshot={...report,at,reason,autoRollback,
+   postRelease:{status:postRelease.status,launchAt:postRelease.launchAt,
+    baselineVerified:postRelease.baselineVerified,baseline:postRelease.baseline,
+    totals:postRelease.totals,regression:postRelease.regression,
+    evidenceHash:postRelease.evidenceHash}};
   const result=store.put('discovery_rule_decisions',{id,snapshots:[...previous.snapshots,snapshot].slice(-30)},expected_revision);
   if(autoRollback)changeProductionRule(store,{action:'rollback',
-    reason:'人工复核显示生产规则退化，系统自动回滚基线',expected_revision:release.revision});
-  store.event('discovery.production_monitor.snapshot',id,'owner',{revision:result.revision,autoRollback,reviewed:report.reviewed});
+    reason:'人工确认的已暴露规则退化，自动恢复基线并保留对应证据',expected_revision:release.revision});
+  store.event('discovery.production_monitor.snapshot',id,'owner',{revision:result.revision,autoRollback,reviewed:report.reviewed,postReleaseStatus:postRelease.status,evidenceHash:postRelease.evidenceHash});
   return {status:productionMonitorHistory(store),release:productionRuleStatus(store),snapshot};
  });
 }
