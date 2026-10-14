@@ -13,6 +13,8 @@
 `main` 的 **CI 成功**后，[Verified GHCR release image](https://github.com/CavinHuang/opportunity-radar/actions/workflows/publish-release-image.yml) 会针对**刚通过 CI 的确切 Git SHA**构建 `linux/amd64` Docker 镜像。工作流先在隔离环境启动同一镜像，验证 `/api/health`、`/api/release`、`/app.js`，成功后才使用仓库级 `GITHUB_TOKEN` 发布到 GHCR（无需填写个人 PAT）。镜像自带正确的 `RADAR_RELEASE_SHA`，从此不必依赖 Dokploy Dockerfile 构建阶段手工传入 Git SHA。
 
 首次使用时：
+在拉取镜像之前，先查看 [Anonymous GHCR deployment pull verification](https://github.com/CavinHuang/opportunity-radar/actions/workflows/anonymous-ghcr-pull.yml) 的实际运行结果：它使用**不带 GHCR 凭据的独立 GitHub Runner** `docker pull` 已发布镜像，并尝试启动后检查版本。如果工作流成功，可以确认该镜像当前支持**匿名拉取**；若失败则不能假定镜像已公开，需前往 GitHub 包的 Package settings 调整可见性（仅当确实希望镜像公开），或在 Dokploy 为 GHCR 配置只读包访问凭据。匿名拉取结果不是生产部署验收，且 GHCR 可见性可能在未来发生变化。
+
 1. 打开 [Verified GHCR release image Actions](https://github.com/CavinHuang/opportunity-radar/actions/workflows/publish-release-image.yml)，找到最新**已成功发布**的运行记录，复制 Job Summary 中的 **镜像完整 digest 引用**（形如 `ghcr.io/cavinhuang/opportunity-radar@sha256:...`，使用真实输出，不要把示例当实际值）。
 2. 在 Dokploy 创建/编辑 **Application → General → Source: Docker**，Docker Image 填入上一步的完整镜像引用，Registry 为 `ghcr.io`。若 GHCR 包私有，需先在 Dokploy 配置只用于拉取的包读取凭据；公有包则按 Dokploy 支持的公开拉取方式设置。不要假定 GitHub 仓库公开就表示镜像已经可以匿名拉取。参见 [Dokploy Docker Registry 官方指南](https://docs.dokploy.com/docs/core/Docker)。
 3. 配置端口 `4177`、健康路径 `/api/health`、公网域名和 HTTPS，以及**必须持久化**的 `/app/.data`。在 Dokploy Environment 设置强随机 `RADAR_OWNER_TOKEN`，有需要再设置独立的 `RADAR_WATCH_TOKEN`；**不要再设置固定的运行时 `RADAR_RELEASE_SHA`**，否则会覆盖镜像原有身份。
