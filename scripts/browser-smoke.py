@@ -50,6 +50,12 @@ with tempfile.TemporaryDirectory(prefix='radar-browser-smoke-') as directory:
                 page.locator('#modal-root').get_by_text('按来源域名划分（非独立用户）').wait_for(timeout=10000)
                 page.locator('#modal-root [data-modal-close]').first.click()
                 assert page.locator('#modal-root .modal').count()==0
+                page.locator('[data-action="post-release-evidence"]').first.click()
+                page.locator('#modal-root').get_by_text('灰度后证据、人工复核与回滚').wait_for(timeout=10000)
+                page.locator('#modal-root').get_by_text('尚无发布记录').wait_for(timeout=10000)
+                page.locator('#modal-root').get_by_text('无人工复核不表示质量通过').wait_for(timeout=10000)
+                page.locator('#modal-root [data-modal-close]').first.click()
+                assert page.locator('#modal-root .modal').count()==0
                 page.locator('[data-action="frozen-regression-trend"]').first.click()
                 page.locator('#modal-root').get_by_text('冻结回归版本趋势与发布门槛').wait_for(timeout=10000)
                 page.locator('#modal-root').get_by_text('冻结后新增人工审核 0 条',exact=False).wait_for(timeout=10000)

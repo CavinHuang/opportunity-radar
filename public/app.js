@@ -371,7 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
-    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button> <button class="btn btn-sm" data-action="frozen-regression-trend">版本趋势与发布门槛</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button> <button class="btn btn-sm" data-action="source-trial-audit" data-id="view">离线规则影响核查</button> <button class="btn btn-sm" data-action="frozen-regression-suite" data-id="view">固定回归集与规则对照</button> <button class="btn btn-sm" data-action="frozen-regression-trend">版本趋势与发布门槛</button> <button class="btn btn-sm" data-action="post-release-evidence">灰度后证据与回滚</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -1192,6 +1192,49 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     }else{
       modal('保存机会发现评估快照',field('reason','评估样本、误报与漏报的复核说明',{wide:true,type:'textarea',required:true})+'<p class="subtext">仅记录当前人工标注样本，不切换生产规则；标注集变化时不可直接比较。</p>',async d=>api('/discovery/opportunity-benchmark',{method:'POST',body:{reason:d.reason,expected_revision:state.history.revision}}));
     }
+    break;
+  }
+  case 'post-release-evidence':{
+    const {report:r,history}=await api('/discovery/post-release-evidence');
+    const stateNames={no_release_record:'尚无发布记录',rolled_back:'已回滚基线',
+      release_state_unverified:'发布状态异常，需人工检查',unverified_launch_baseline:'缺少可核对的发布前证据',
+      confirmed_post_release_regression:'发布后人工发现退化，建议立即回滚',
+      awaiting_post_release_review:'尚无受控变更原帖的新人工复核',
+      no_known_post_release_regression:'已有部分人工复核，暂未发现退化（不能推断整体正确率）'};
+    const n=r.totals;
+    const summary='<p class="subtext">发布状态：'+esc(stateNames[r.status]||r.status)+
+      ' · 当前策略 '+esc(r.policyId||'基础规则')+' · 比例 '+Number(r.percentage||0)+
+      '% · 当前发布版本 '+r.releaseRevision+'</p>'+
+      '<p class="subtext">发布时刻 '+esc(r.launchAt||'未验证')+
+      ' · 发布前证据 '+(r.baselineVerified?'已找到匹配的发布前存档':'缺失或无法核对')+'</p>'+
+      '<p class="subtext">冻结集版本 '+esc(r.baseline?.frozenSuiteRevision??'未知')+
+      ' · 预发布样本指纹 '+esc(r.baseline?.frozenSuiteFingerprint||'未知')+'</p>'+
+      '<p class="subtext">检查原帖 '+n.examined+' · 进入灰度桶 '+n.exposed+' · 灰度结果发生变化 '+
+      n.exposureChanged+' · 发布后人工新复核 '+n.reviewedSinceRelease+
+      ' · 其中受控桶 '+n.exposedReviewedSinceRelease+
+      ' · 变化原帖经复核 '+n.changedReviewedSinceRelease+'</p>'+
+      '<p class="subtext">发布后新增漏报 '+n.newMisses+' · 新增误报 '+n.newFalsePositives+
+      ' · 减少误报 '+n.removedFalsePositives+' · 救回正例 '+n.rescuedTruePositives+
+      ' · 过期标签 '+n.staleLabels+' · 无复核时间 '+n.labelsWithoutTimestamp+'</p>'+
+      '<p class="subtext">'+(r.autoRollbackRecommended?'发现已暴露且经人工复核的规则退化：监控记录或自动巡检将回滚；也可以直接执行基线回滚。':
+      '当前页面只读，不会执行灰度或修改规则；无人工复核不表示质量通过。')+'</p>';
+    const affected=(r.changedExamples||[]).slice(0,12).map(x=>
+      '<div class="source-row"><div class="grow"><a href="'+esc(x.url)+
+      '" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+      '<p class="subtext">'+esc(x.host)+' · 人工 '+esc(x.label)+' · 基础规则 '+
+      (x.baseline?'保留':'过滤')+' → 灰度规则 '+(x.production?'保留':'过滤')+
+      ' · 复核 '+esc(x.reviewedAt)+'</p></div>'+
+      '<button class="btn btn-sm" data-action="quality-label" data-id="'+esc(x.sourceId)+'">核对标签</button></div>').join('');
+    const snapshots=history.slice(-8).reverse().map(x=>'<p class="subtext">'+esc(x.at||'未知时间')+
+      ' · 发布版本 '+Number(x.releaseRevision||0)+' · 已复核 '+Number(x.postRelease?.totals?.reviewedSinceRelease||0)+
+      ' · '+esc(x.postRelease?.status||'旧版监控快照')+(x.autoRollback?' · 已自动回滚':'')+'</p>').join('');
+    modal('灰度后证据、人工复核与回滚',
+      summary+'<h4>受影响原帖的发布后人工复核</h4>'+
+      (affected||'<p class="subtext">当前暂无受控变更原帖的新增人工审核。</p>')+
+      '<h4>本次与历史巡检记录</h4>'+
+      (snapshots||'<p class="subtext">尚未记录自动巡检结果。</p>')+
+      '<p class="subtext">证据指纹：'+esc(r.evidenceHash)+'</p>'+
+      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'production-monitor':{
