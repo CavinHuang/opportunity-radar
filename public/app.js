@@ -675,6 +675,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
       '<p class="subtext">已复盘投入 '+r.overview.actualHoursClosed+'h · 重复假设 '+r.overview.repeatedHypotheses+' · 明确结论变化 '+r.overview.changedConclusionHypotheses+'</p>'+
       '<h4>跨周研究记录</h4>'+(weeks||'<p class="subtext">此机会尚无研究周记录</p>')+
       '<h4>重复验证的假设</h4>'+(repeated||'<p class="subtext">尚无跨周重复假设</p>')+
+      '<h4>待复核事项</h4>'+(r.reviewFlags?.map(x=>'<p class="subtext">'+esc(x.message)+'</p>').join('')||'<p class="subtext">未检测到预设复核提醒；不等于需求已得到验证。</p>')+
       '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
