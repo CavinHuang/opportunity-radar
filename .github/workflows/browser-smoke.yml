@@ -6,6 +6,7 @@ on:
       - 'src/**'
       - 'scripts/browser-smoke.py'
       - 'scripts/browser-guidance-feedback.py'
+      - 'scripts/browser-evidence-comparison.py'
       - '.github/workflows/browser-smoke.yml'
   workflow_dispatch:
 permissions:
@@ -30,6 +31,8 @@ jobs:
         run: python scripts/browser-smoke.py
       - name: Research advice response and follow-up browser journey
         run: python scripts/browser-guidance-feedback.py
+      - name: Read-only task comparison and explicit owner review journey
+        run: python scripts/browser-evidence-comparison.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

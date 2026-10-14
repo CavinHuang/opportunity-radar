@@ -55,3 +55,12 @@ test('legacy ungrouped review results remain reachable without claiming priority
  assert.match(html,/暂无待核查的重点线索/);assert.match(html,/弱相关与未分组 · 1 条待复查/);
  assert.match(html,/data-evidence-url="https:\/\/example.org\/legacy"/);
 });
+test('AI task comparison keeps model judgments separate and requires owner to enter their own review',()=>{
+ const html=context.renderEvidenceComparison({url:'https://example.org/hit',notice:'未访问全文，不保存人工分类',comparison:{
+  taskRelation:'different_task',relationReason:'<script>different root cause</script>',
+  originalEvidence:{quote:'Original task quote',url:'https://example.org/original'},externalEvidence:{quote:'External quote',url:'https://example.org/hit'},
+  solutionCoverage:'unknown',coverageReason:'No verified capabilities',coverageQuote:null,nextCheck:'Try original input before accepting a solution'}},'id');
+ assert.match(html,/可能是不同任务/);assert.match(html,/方案覆盖未知/);assert.match(html,/AI 对照草稿 · 未经人工核查/);
+ assert.match(html,/自行填写/);assert.doesNotMatch(html,/<script>|name="classification"|name="notes"/);
+ assert.match(html,/type="button".*data-action="workbench-review-item"/);assert.match(html,/返回复核列表/);
+});
