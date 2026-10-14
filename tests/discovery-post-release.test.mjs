@@ -121,3 +121,21 @@ test('fresh gray rollout always gets first immediate monitor snapshot despite pr
   assert.equal(guard.tick().skipped,'not_due');
  }finally{db.close();}
 });
+
+test('new post-release human-confirmed miss bypasses fifteen-minute snapshot throttling',()=>{
+ const db=openDatabase();try{
+  setup(db);
+  const now=Date.now();
+  db.put('discovery_rule_decisions',{id:'real_problem_production_monitor',
+   snapshots:[{releaseRevision:1,at:new Date(now).toISOString(),autoRollback:false}]});
+  const guard=createProductionGuard(db,{clock:()=>now,logger:quiet});
+  assert.equal(guard.tick().skipped,'not_due');
+  addExposed(db,{sourceId:'fresh-miss'});
+  const result=guard.tick();
+  assert.equal(result.checked,true);
+  assert.equal(result.autoRollback,true);
+  assert.equal(productionRuleStatus(db).policyId,null);
+  assert.equal(productionMonitorHistory(db).latest.postRelease.status,'confirmed_post_release_regression');
+  assert.ok(db.eventsLatest(20).some(e=>e.kind==='discovery.production_guard.alert'));
+ }finally{db.close();}
+});
