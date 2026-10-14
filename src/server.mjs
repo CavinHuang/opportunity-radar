@@ -31,6 +31,7 @@ import {weeklyResearchPlan,saveWeeklyResearchPlan,reviewWeeklyResearchPlan} from
 import {updateWeeklyResearchProgress,weeklyResearchTrend,carryPreviousWeekTasks} from './opportunity-weekly-execution.mjs';
 import {weeklyResearchEvidence} from './opportunity-weekly-evidence.mjs';
 import {weeklyHypothesisBoard,saveWeeklyHypothesis} from './opportunity-weekly-hypotheses.mjs';
+import {weeklyConclusionQualityReview} from './opportunity-weekly-conclusion-quality.mjs';
 import {investigateExternalEvidence,externalResearchBrief} from './opportunity-external-research.mjs';
 import {sourceOperations} from './source-operations.mjs';
 import {makeCommunityFeed} from './third-party-feed.mjs';
@@ -218,6 +219,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const id=decodeURIComponent(problemCheck[1]);
       return send(res,200,{review:await ownerWrite(req,pathname,d=>verifyProblem(store,id,d))});
     }
+    if(pathname==='/api/discovery/weekly-conclusion-quality'&&req.method==='GET')return send(res,200,weeklyConclusionQualityReview(store));
     if(pathname==='/api/discovery/weekly-research-hypotheses'&&req.method==='GET')return send(res,200,weeklyHypothesisBoard(store));
     if(pathname==='/api/discovery/weekly-research-hypotheses'&&req.method==='POST')return send(res,200,{item:await ownerWrite(req,pathname,d=>saveWeeklyHypothesis(store,d))});
     if(pathname==='/api/discovery/weekly-research-evidence'&&req.method==='GET')return send(res,200,weeklyResearchEvidence(store));
