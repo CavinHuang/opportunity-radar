@@ -371,6 +371,7 @@ npm run data -- verify --input ./private-backups/radar-YYYYMMDD.sqlite</pre>
   const qTotal=S.sourceQuality?.overview||{};
   const qualityPanel=`<section class="card card-pad source-quality-panel">
     <div class="flex between"><div><strong>信息源质量反馈</strong><p class="subtext">优先衡量可追溯的消费者经历，而不是抓取数量。所有记录随人工研判实时更新。</p></div><span class="mini-chip">观察数据 · 非商机评分</span></div>
+    <div class="flex mt"><button class="btn btn-sm" data-action="source-cohort-quality">来源错误归因与人工复核</button><span class="subtext">查看按原帖域名划分的漏报、误报和待标注线索</span></div>
     <div class="source-quality-stats">
       <div><strong>${Number(qTotal.uniqueSignals||0)}</strong><small>去重公开信号</small></div>
       <div><strong>${Number(qTotal.linkedOpportunities||0)}</strong><small>已关联机会</small></div>
@@ -985,6 +986,40 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     const names={friction:'使用摩擦',corroboration:'多帖迹象',domainFit:'领域匹配',competitiveClarity:'竞品线索',validationReadiness:'可验证性'};
     const fields=Object.entries(names).map(([k,label])=>field(k,label+'（0–5）',{type:'number',min:0,max:5,value:c.weights[k]})).join('')+field('focusDomains','重点领域 ID（英文逗号分隔）',{wide:true,value:(c.focusDomains||[]).join(',')});
     modal('调整关注指数权重',fields,async d=>await api('/opportunity-scoreboard/config',{method:'POST',body:{expected_revision:c.revision,weights:Object.fromEntries(Object.keys(names).map(k=>[k,Number(d[k])])),focusDomains:d.focusDomains.split(',').map(x=>x.trim()).filter(Boolean)}}));
+    break;
+  }
+  case 'source-cohort-quality':{
+    const r=await api('/discovery/source-cohort-quality');
+    const totals=r.totals;
+    const rate=x=>x===null?'样本不足':Math.round(x*100)+'%（人工标注样本内）';
+    const cohorts=r.cohorts.slice(0,15).map(x=>'<div class="source-row"><div class="grow"><strong>'+
+      esc(x.host)+'</strong><p class="subtext">进入窗口 '+x.inWindow+' · 当前可见 '+x.visible+' · 有效人工标注 '+x.reviewed+' · 待审核 '+x.unlabeled+
+      ' · 过期标注 '+x.stale+' · 误报 '+x.falsePositive+' · 漏报 '+x.falseNegative+'</p>'+
+      '<p class="subtext">人工标签覆盖 '+(x.coverage===null?'无记录':Math.round(x.coverage*100)+'%')+
+      ' · 样本精确率 '+(x.reviewedSampleRates?rate(x.reviewedSampleRates.precision):'样本不足')+
+      ' · 样本召回率 '+(x.reviewedSampleRates?rate(x.reviewedSampleRates.recall):'样本不足')+'</p>'+
+      '<p class="subtext">关联人工反馈（不等于正确率）：首页有用 '+x.contextualFeedback.homeUseful+
+      ' / 首页误报 '+x.contextualFeedback.homeRejected+
+      ' · 建议采纳 '+x.contextualFeedback.guidanceAccepted+
+      ' / 调整 '+x.contextualFeedback.guidanceAdapted+
+      ' / 拒绝 '+x.contextualFeedback.guidanceDeclined+
+      ' · 结果回填 '+x.contextualFeedback.followedUp+'</p></div></div>').join('');
+    const names={false_negative:'漏报',false_positive:'误报',stale_label:'过期标注',
+      uncertain_label:'待确认',unlabeled_negative:'待查漏报',unlabeled_positive:'待查误报'};
+    const items=r.queue.map(x=>'<div class="source-row"><div class="grow"><strong>'+esc(names[x.issue]||x.issue)+
+      '</strong> · <a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>'+
+      '<p class="subtext">'+esc(x.host)+' · '+esc(x.explanation)+'</p></div>'+
+      '<button class="btn btn-sm" data-action="quality-label" data-id="'+esc(x.sourceId)+'">人工核查</button></div>').join('');
+    modal('来源错误归因与复核队列',
+      '<p class="subtext">当前窗口 '+totals.inWindow+' 条原帖 · 前50条候选中可见的原帖 '+totals.visible+
+      ' · 有效人工标注 '+totals.reviewed+' · 误报 '+totals.falsePositive+' · 漏报 '+totals.falseNegative+
+      ' · 过期标注 '+totals.stale+' · 暂不确定 '+totals.uncertain+' · 窗口外标签 '+totals.labelsOutsideWindow+'</p>'+
+      '<h4>按来源域名划分（非独立用户）</h4>'+
+      (cohorts||'<p class="subtext">还没有可分析的来源记录。</p>')+
+      (r.moreCohorts?'<p class="subtext">只展示部分来源；其余仍纳入汇总。</p>':'')+
+      '<h4>优先人工复核</h4>'+(items||'<p class="subtext">暂无待复核原帖。</p>')+
+      '<p class="subtext">队列优先已确认的错误，再处理过期与未标注记录；同优先级轮询不同来源。未显示 '+totals.unseenPending+' 条待处理记录。</p>'+
+      '<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
   case 'opportunity-benchmark':{
