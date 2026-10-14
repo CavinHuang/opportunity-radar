@@ -16,13 +16,17 @@
 
 services:
   radar:
-    build: .
+    build:
+      context: .
+      args:
+        RADAR_RELEASE_SHA: ${RADAR_RELEASE_SHA:-}
     # image: ghcr.io/cavinhuang/opportunity-radar:latest   # 使用预构建镜像时替换 build
     container_name: opportunity-radar
     environment:
       # 必填：暴露到网络时的唯一 owner 鉴权
       RADAR_OWNER_TOKEN: ${RADAR_OWNER_TOKEN:?请在环境变量中设置强口令 RADAR_OWNER_TOKEN}
       RADAR_AGENT_TOKEN: ${RADAR_AGENT_TOKEN:-}
+      RADAR_RELEASE_SHA: ${RADAR_RELEASE_SHA:-}
       RADAR_HOST: 0.0.0.0
       RADAR_PORT: 4177
       # 可选：信息源 / LLM 起草 / GitHub 证据核验

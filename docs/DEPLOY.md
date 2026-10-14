@@ -52,6 +52,25 @@ docker compose ps
 curl http://127.0.0.1:4177/api/health
 ```
 
+
+## 发布版本核验（只读）
+
+不能仅凭 `/api/health` 的 200 或 GitHub CI 绿色状态宣称“生产版已更新”。必须核对**运行中进程的完整 Git SHA**：
+
+1. 发布时将正在部署的 **完整 40 位提交 SHA** 注入 `RADAR_RELEASE_SHA`。本仓库的 Dockerfile 支持同名 build arg（`--build-arg RADAR_RELEASE_SHA="$(git rev-parse HEAD)"`）；docker compose 可以设置 `RADAR_RELEASE_SHA="$(git rev-parse HEAD)" docker compose up -d --build`。**不要把旧 SHA 永久固定在 Dokploy 环境变量里**，否则以后的自动部署会报告旧版本或给出错误身份。若平台不能保证每次部署更新 SHA，请保持为空，由核验工具明确报告“无法确认版本”。
+2. 部署并检查 SQLite 持久卷、最近的备份及服务日志（这些无法仅通过公开 HTTP 核验）。
+3. 对真实 HTTPS 站点运行：
+
+```bash
+node scripts/verify-release.mjs --url https://your-radar.example --expected-sha "$(git rev-parse HEAD)"
+```
+
+核验依次读取公开的 `GET /api/release`、`GET /api/health`、`GET /app.js`，要求身份合法、SHA 完全匹配、健康且前端已提供；不发送 Owner/Agent Token、不读取私人研究记录、不写数据库。目标域名必须是 HTTPS，不允许凭据、路径或重定向。仅本地开发测试可以指定 `--allow-http-loopback`。
+
+也可在 GitHub 仓库设置 Actions **Variables → RADAR_PRODUCTION_URL**（完整 HTTPS 站点根地址），手动运行 **Production release verification**（选择 main）。该 workflow 未配置目标地址时会明确失败，而非假装已部署；它不会启动 Dokploy 部署。
+
+注意：`/api/release` 中的提交 SHA 来自发布器提供的值，属于**部署声明**，不是不可伪造的远程证明。还应在平台部署记录中核对镜像、构建日志与 Git commit，确认不是错误配置的旧 SHA 或错误服务器。生产数据库备份和真实用户流程需另外由 Owner 验收。
+
 ## 升级
 
 ```bash

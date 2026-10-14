@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'Dockerfile'
+      - 'src/release-metadata.mjs'
+      - 'scripts/verify-release.mjs'
       - 'docker-compose.yml'
       - '.dockerignore'
       - '.github/workflows/docker.yml'
@@ -23,11 +25,24 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            RADAR_RELEASE_SHA=${{ github.sha }}
           push: false
           load: true
           tags: opportunity-radar:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify immutable Docker release identity
+        run: |
+          docker run -d --rm --name radar-release-ci \
+            -e RADAR_HOST=0.0.0.0 -e RADAR_OWNER_TOKEN=ci-release-owner \
+            -p 4920:4177 opportunity-radar:ci
+          trap 'docker rm -f radar-release-ci 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4920/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/verify-release.mjs --allow-http-loopback --url http://127.0.0.1:4920 --expected-sha "$GITHUB_SHA"
       - name: Runtime smoke — health, owner auth, data persistence across restart
         run: |
           docker run -d --name radar-ci \

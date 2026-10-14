@@ -52,6 +52,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
+import {releaseMetadata} from './release-metadata.mjs';
 import { createService } from './service.mjs';
 import { verifyGitHubEvidence } from './github.mjs';
 import { agentSetupSummary } from './agent-setup.mjs';
@@ -129,6 +130,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     guardHost(req);
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(files[pathname]&&req.method==='GET'){const filename=path.join(root,'public',files[pathname]);const content=await readFile(filename);res.writeHead(200,{'Content-Type':mime[path.extname(filename)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(content);}
+    if(pathname==='/api/release'&&req.method==='GET')return send(res,200,releaseMetadata());
     if(pathname==='/api/health')return send(res,200,{ok:true,mode:'local-first',agentEnabled:Boolean(process.env.RADAR_AGENT_TOKEN),githubVerificationEnabled:Boolean(process.env.GITHUB_TOKEN),feedCount:store.list('feeds').filter(x=>x.enabled).length,sourceHealth:sourceHealth(store),llmEnabled:Boolean(process.env.RADAR_LLM_BASE_URL&&process.env.RADAR_LLM_MODEL&&process.env.RADAR_LLM_API_KEY)});
     protectOrigin(req);
     if(pathname==='/mcp'&&req.method==='POST'){

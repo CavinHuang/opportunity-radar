@@ -86,6 +86,13 @@ Dokploy → Domain → 添加你的域名 → 勾选 HTTPS（Let's Encrypt 自�
 
 点击 **Deploy**，等构建完成（零依赖镜像，构建通常在一分钟内）。之后每次 push 到 `main` 会按 Auto Deploy 设置自动重新构建。
 
+
+### 发布版本确认
+
+如果 Dokploy 支持为本次 Dockerfile 构建动态传入 Git commit，可将**对应的完整 40 位 SHA**设置为 Docker build arg `RADAR_RELEASE_SHA`。也可以在发布流程中使用动态生成的运行时同名环境变量（但不能把一个固定值留在后台用于所有后续版本）。如果没有可靠的动态注入能力，版本会返回 `identified:false`，请先通过部署详情确认 Git commit，不要伪造通过结果。
+
+仓库有手动 GitHub Action **Production release verification**；先配置仓库 Actions 变量 `RADAR_PRODUCTION_URL` 为实际 HTTPS 地址，然后手动在 main 上运行。验证脚本 `scripts/verify-release.mjs` 只做公开接口只读检查，不会读取数据库或调用部署 API。详情见 [DEPLOY.md](DEPLOY.md)。
+
 ## 安全要点
 
 - `RADAR_OWNER_TOKEN` 用强随机值（`openssl rand -hex 24`）；泄露即等于交出全部数据与管理权限。
