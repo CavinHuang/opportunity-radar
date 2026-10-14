@@ -11,7 +11,7 @@
 1. 在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 设置 `RADAR_PRODUCTION_URL` 为完整 **HTTPS 站点根地址**，例如 `https://radar.example.com`（不要带路径、查询、认证信息）。未配置时工作流明确提示“监控未启用”，不应将绿色的跳过状态理解为已被监控。
 2. 如需要监控已启动版本是否与指定部署一致，可选设置变量 `RADAR_EXPECTED_DEPLOY_SHA` 为 **当前部署完整 40 位 Git commit**。**必须随部署同步更新**，否则会报告不一致；不设置时只检查发布身份有效、服务可达，不验证等于最新 main。
 
-**生产首次验收建议**：手动运行 **Independent production watch** 时默认开启 `require_rollback_monitoring=true` 和 `require_pinned_revision=true`。因此需同时配置有效生产 HTTPS URL、当前部署 SHA、和 GitHub/Dokploy 双端一致的专用监控密钥；否则手动验收明确失败。确实只想验证公开健康与版本时，可以主动将 `require_rollback_monitoring` 改为 `false`，但只能声明完成了有限验收。`expected_sha` 手动输入可覆盖仓库变量。
+**生产首次验收建议**：手动运行 **Independent production watch** 时默认开启 `require_rollback_monitoring=true` 和 `require_pinned_revision=true`。可以直接在手动界面输入 `production_url`（完整 HTTPS 根地址）与 `expected_sha`（已部署40位SHA），无需预先设置同名 Actions Variables；仍需 GitHub/Dokploy 双端一致的专用监控密钥，才能获得完整 `accepted` 验收结果。否则手动验收明确失败或仅得到有范围限制的 `limited` 结果。确实只想验证公开健康与版本时，可以主动将 `require_rollback_monitoring` 改为 `false`，但只能声明完成了有限验收。`expected_sha` 手动输入可覆盖仓库变量。
 3. 若还要获知灰度自动回滚，在 Dokploy 的 Radar 服务环境变量里设置高强度随机密钥 `RADAR_WATCH_TOKEN`（至少32字符），并在 GitHub Actions Secrets 中配置**同值** `RADAR_WATCH_TOKEN`。部署新版本并检查 `GET /api/operations/watch` 的鉴权：无密钥则返回503，错误密钥401，正确密钥仅返回当前灰度启用状态、百分比、发布 revision、最近一次巡检时间及已脱敏的最近一次回滚告警。
 4. 合并后选择 Actions → **Independent production watch** → Run workflow 执行一次手动检查。定时 cron 表达式为 `*/15 * * * *`。自动 Issue 告警需要该 workflow 的 `issues:write` 权限；如果仓库组织策略不允许，应在运行日志中明确处理权限报错，而不是默默跳过。
 5. 可在完成生产访问权限后，用 `node scripts/production-watch.mjs` 手动验证。脚本从 `RADAR_PRODUCTION_URL`、`RADAR_WATCH_TOKEN`、`RADAR_EXPECTED_DEPLOY_SHA` 读取设置，仅发起对指定 HTTPS 站点的 GET 请求。
@@ -57,3 +57,11 @@ GitHub 的配置检查与真实网络验收是两种不同结果：
 - 若在手动输入中关闭“要求固定 SHA”或“要求回滚监控”，即使剩余检查通过，也只能得到 `limited`，不能用这次结果关闭 #141 的**完整生产验收**任务。
 
 **下一步**：查看合并 `main` 后的配置就绪作业，按实际缺失项配置生产环境，手动运行一次真实巡检，把运行链接、部署 SHA 与实测结果写入 #141。必要时再等到下次计划任务执行完成，才能确认持续监控已启用。不要在 Issue 或 Actions 日志中填写密钥值。
+
+
+## 一次性手动检查：不误操作正式故障记录
+
+- 在 [Independent production watch → Run workflow](https://github.com/CavinHuang/opportunity-radar/actions/workflows/production-watch.yml) 直接填写 `production_url` 和 `expected_sha`，可以无需预设仓库变量执行**一次**手动远程检查。只填写公开 HTTPS 网站根地址（不包含用户名、密码、Token、URL path/query），不要把临时内部地址或任何秘密放进 workflow 输入；它们可能出现在 Actions 运行记录中。
+- 手动输入仅用于这一次核验，不会自动保存为仓库变量。**定时生产监控仍必须设置 Actions Variable `RADAR_PRODUCTION_URL`**（和推荐固定的部署 SHA），并实际观察 scheduled 运行成功。
+- 因为手动输入可能不同于正式生产地址，**手动检查不创建、不重开、也不关闭生产告警 Issue**。只有定时任务使用仓库中持久化的规范生产目标进行 Incident Issue 对账。故障/恢复去重逻辑保持不变。
+- 首次无密钥时，可以主动关闭 `require_rollback_monitoring`，做一次只读健康/版本检查，结果必须为 `limited`，**绝不当作完整验收**。完整验收仍要求生产容器与 GitHub Actions Secrets 配置匹配的 `RADAR_WATCH_TOKEN`，且部署版本 SHA 已核验。
