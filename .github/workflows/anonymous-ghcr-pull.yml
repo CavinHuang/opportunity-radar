@@ -1,0 +1,78 @@
+name: Anonymous GHCR deployment pull verification
+
+on:
+  # Initial bootstrap against the first known published release image.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/anonymous-ghcr-pull.yml'
+      - 'tests/anonymous-ghcr-pull-workflow.test.mjs'
+  # For future images, confirm registry accessibility after the trusted publisher finishes.
+  workflow_run:
+    workflows: [Verified GHCR release image]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-pull:
+    if: >-
+      github.event_name == 'push' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VERIFIED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'dd7fe3cde824880bd6292d907e5e888b55d29f4d' }}
+      IMAGE_REPOSITORY: ghcr.io/cavinhuang/opportunity-radar
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pull release anonymously in a fresh Docker client
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERIFIED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid release commit'; exit 1; }
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          # DOCKER_CONFIG is deliberately empty; no GHCR login or credential helper.
+          image="$IMAGE_REPOSITORY:sha-$VERIFIED_SHA"
+          echo "Checking unauthenticated pull: $image"
+          if ! docker pull "$image"; then
+            echo '::error::The release image could not be pulled without credentials. Check GHCR package visibility, or configure read-only credentials in Dokploy.'
+            exit 1
+          fi
+          docker image inspect "$image" --format '{{json .RepoDigests}}'
+          echo "VERIFIED_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Launch the anonymously pulled image and check embedded release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name radar-ghcr-anonymous \
+            -e RADAR_OWNER_TOKEN=synthetic-anonymous-registry-check \
+            -p 127.0.0.1:4933:4177 "$VERIFIED_IMAGE"
+          trap 'docker rm -f radar-ghcr-anonymous >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4933/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/verify-release.mjs --allow-http-loopback \
+            --url http://127.0.0.1:4933 --expected-sha "$VERIFIED_SHA"
+          {
+            echo '## Anonymous GHCR pull: verified'
+            echo
+            echo "- Artifact: \`$VERIFIED_IMAGE\`"
+            echo "- Embedded commit: \`$VERIFIED_SHA\`"
+            echo
+            echo 'An isolated GitHub-hosted runner pulled and started this image without registry credentials.'
+            echo 'This verifies registry pull accessibility, **not** a Dokploy production deployment or HTTPS endpoint.'
+          } >> "$GITHUB_STEP_SUMMARY"
