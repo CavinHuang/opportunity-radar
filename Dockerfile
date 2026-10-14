@@ -7,6 +7,9 @@ ENV NODE_ENV=production \
     RADAR_HOST=0.0.0.0 \
     RADAR_PORT=4177
 
+ARG RADAR_RELEASE_SHA=""
+ENV RADAR_RELEASE_SHA=$RADAR_RELEASE_SHA
+
 WORKDIR /app
 COPY package.json ./
 COPY src ./src
