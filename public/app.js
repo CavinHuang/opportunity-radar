@@ -645,8 +645,8 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
   }
   case 'weekly-research-evidence':{
     const r=await api('/discovery/weekly-research-evidence');
-    const rows=r.items.map(x=>'<div class="source-row"><strong>'+esc(x.title)+'</strong><p class="subtext">'+esc(x.task)+' · '+x.evidenceCount+' 条研究事件 · '+x.progressCount+' 次手动进度</p>'+
-      (x.evidence.length?x.evidence.map(e=>'<p class="subtext">'+esc(e.at)+' · '+esc(e.label)+'</p>').join(''):'<p class="subtext">本周暂无可关联的研究事件</p>')+'</div>').join('');
+    const rows=r.items.map(x=>'<div class="source-row"><strong>'+esc(x.title)+'</strong><p class="subtext">'+esc(x.task)+' · '+x.evidenceCount+' 条研究事件 · '+x.progressCount+' 次手动进度 · 观察 '+x.quality.recordedObservations+' · 人工判断 '+x.quality.ownerAssessments+' · 仅操作 '+x.quality.activityOnly+' · 反证提示 '+x.counterEvidence+'</p>'+
+      (x.evidence.length?x.evidence.map(e=>'<p class="subtext">'+esc(e.at)+' · '+esc(e.label)+' · '+esc(e.quality)+'</p>').join(''):'<p class="subtext">本周暂无可关联的研究事件</p>')+'</div>').join('');
     modal('本周研究证据关联',rows||'<p class="subtext">尚无本周任务</p>'+'<p class="subtext">'+esc(r.notice)+'</p>',async()=>{});
     break;
   }
@@ -655,7 +655,7 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     if(plan.status!=='planned'||!plan.items.length)throw new Error('请先创建本周研究计划');
     const options=plan.items.map(x=>'<option value="'+esc(x.candidateId)+'">'+esc(x.title)+'</option>').join('');
     const latest=plan.progress.slice(-8).reverse().map(x=>'<p class="subtext">'+esc(x.candidateId)+' · '+esc(x.status)+' · '+esc(x.actualHours)+'h · '+esc(x.note)+'</p>').join('');
-    modal('记录本周执行进度','<div class="field wide"><label>研究任务</label><select name="candidateId">'+options+'</select></div><div class="field wide"><label>进度</label><select name="status"><option value="in_progress">进行中</option><option value="blocked">受阻</option><option value="completed">已完成</option></select></div>'+field('actualHours','已累计投入小时',{type:'number',value:0})+field('note','本次进度、阻碍或观察（至少10字）',{wide:true,type:'textarea',required:true})+'<h4>最近进展</h4>'+(latest||'<p class="subtext">尚无进度</p>'),async d=>api('/discovery/weekly-research-plan/progress',{method:'POST',body:{candidateId:d.candidateId,status:d.status,actualHours:Number(d.actualHours),note:d.note,expected_revision:plan.revision}}));
+    modal('记录本周执行进度','<div class="field wide"><label>研究任务</label><select name="candidateId">'+options+'</select></div><div class="field wide"><label>进度</label><select name="status"><option value="in_progress">进行中</option><option value="blocked">受阻</option><option value="completed">已完成</option></select></div>'+field('actualHours','已累计投入小时',{type:'number',value:0})+field('note','本次进度、阻碍或观察（至少10字）',{wide:true,type:'textarea',required:true})+'<div class="field wide"><label><input type="checkbox" name="acknowledgeEvidenceGap"/> 我已检查证据缺口，并愿意人工确认完成</label></div>'+'<h4>最近进展</h4>'+(latest||'<p class="subtext">尚无进度</p>'),async d=>api('/discovery/weekly-research-plan/progress',{method:'POST',body:{candidateId:d.candidateId,status:d.status,actualHours:Number(d.actualHours),note:d.note,acknowledgeEvidenceGap:d.acknowledgeEvidenceGap==='on',expected_revision:plan.revision}}));
     break;
   }
   case 'weekly-research-trend':{
