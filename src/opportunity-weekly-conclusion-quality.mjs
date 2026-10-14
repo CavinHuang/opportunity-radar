@@ -1,5 +1,6 @@
 import {weeklyHypothesisBoard} from './opportunity-weekly-hypotheses.mjs';
 import {weeklyResearchPlan} from './opportunity-weekly-plan.mjs';
+import {weeklyEvidenceProvenance} from './opportunity-weekly-provenance.mjs';
 
 // Conservative warning signals, never an automatic verdict about user demand.
 const payment=/付费|支付|购买|订阅|price|pricing|willing(?:ness)? to pay|revenue|paid|payment/i;
