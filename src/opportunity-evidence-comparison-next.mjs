@@ -2,7 +2,8 @@ import {evidenceReviewBoard} from './opportunity-evidence-review.mjs';
 import {draftEvidenceComparison} from './opportunity-evidence-comparison.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const reasons={LLM_UNGROUNDED_QUOTE:'引用未通过核对，未保存草稿',LLM_INVALID_RESPONSE:'模型返回格式无效，未保存草稿',
- LLM_NOT_CONFIGURED:'研究模型尚未配置',LLM_HTTP_ERROR:'模型服务请求失败',BAD_LLM_ENDPOINT:'模型地址配置无效'};
+ LLM_NOT_CONFIGURED:'研究模型尚未配置',LLM_HTTP_ERROR:'模型服务请求失败',BAD_LLM_ENDPOINT:'模型地址配置无效',
+ LLM_TIMEOUT:'模型响应超时，未保存新草稿，可单独重试',LLM_UNAVAILABLE:'暂时无法连接研究模型，可稍后重试'};
 function pendingHits(board){
  const saved=new Set(board.comparisons.map(x=>x.url));
  return [...board.queue.priority,...board.queue.other,...board.queue.differentTask].filter(x=>!saved.has(x.url));
