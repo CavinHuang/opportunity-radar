@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {evidenceQuotationContext} from '../src/evidence-quotations.mjs';
+import {evidenceQuotationContext,evidenceModelContext} from '../src/evidence-quotations.mjs';
 import {validateEvidenceComparison} from '../src/opportunity-evidence-comparison.mjs';
 const originals=[{sourceId:'source-a',url:'https://example.org/original',title:'Cannot import CSV into Excel',text:'I manually import CSV every day and spend 3 hours fixing errors.'}];
 const hit={url:'https://example.org/external',title:'CSV &amp; Excel workaround',excerpt:'I can&#x27;t import&nbsp;CSV &gt; 10MB. The importer still needs manual fixes.'};
@@ -47,4 +47,25 @@ test('segmentation retains short trailing constraints instead of silently droppi
  const c=evidenceQuotationContext([{...originals[0],text}],hit);
  assert.ok(c.quotations.original.some(x=>x.quote.endsWith('NOT')));
  for(const x of c.quotations.original)assert.ok(x.quote.length>=8&&x.quote.length<=240);
+});
+
+test('compact model input preserves all source text and short constraints without duplicating full excerpts',()=>{
+ const source={...originals[0],title:'NO',text:'Distinct evidence sentinel. '+('Recurring CSV import requires manual fixes. '.repeat(35))+' End constraint.'};
+ const external={...hit,title:'NO',excerpt:'Do not trust automatically mounted drives. '+('Existing workaround description. '.repeat(10))};
+ const context=evidenceQuotationContext([source],external),compact=evidenceModelContext([source],external);
+ const clean=s=>s.replace(/\s+/g,'');
+ assert.equal(clean(compact.quotations.original.map(x=>x.quote).join('')),clean(source.title+source.text));
+ assert.equal(clean(compact.quotations.external.map(x=>x.quote).join('')),clean(context.external.title+context.external.excerpt));
+ assert.equal(compact.originals[0].text,undefined);assert.equal(compact.external.excerpt,undefined);
+ assert.equal(compact.quotations.original[0].contextOnly,true);assert.equal(compact.quotations.original[0].quoteId,null);
+ const serialized=JSON.stringify(compact);
+ assert.equal(serialized.split('Distinct evidence sentinel.').length-1,1);
+ const previous=JSON.stringify({originals:[source],external:context.external,quotations:context.quotations});
+ assert.ok(serialized.length<previous.length*0.7,`${serialized.length} vs ${previous.length}`);
+});
+test('short context-only fragments cannot support a definite task judgment',()=>{
+ const short=[{...originals[0],title:'NO',text:'NEVER'}];
+ const c=evidenceModelContext(short,{...hit,title:'YES',excerpt:'ALWAYS'});
+ assert.equal(c.quotations.original.length,2);assert.ok(c.quotations.original.every(x=>x.contextOnly&&x.quoteId===null));
+ assert.throws(()=>validateEvidenceComparison({...verdict(),originalEvidence:{quoteId:''},externalEvidence:{quoteId:''},solutionCoverage:'unknown',coverageQuoteId:''},short,hit),{code:'LLM_UNGROUNDED_QUOTE'});
 });
