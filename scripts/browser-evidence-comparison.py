@@ -23,13 +23,16 @@ db.put('opportunity_external_research',{id:'signal:a',candidateFingerprint:ctx.f
  results:[{url:'https://example.org/export',title:'CSV Excel export tool',excerpt:'This tool exports Excel sheets to CSV; it does not import CSV.',triageType:'possible_alternative'}]});
 db.close();
 const model=http.createServer(async(req,res)=>{
- for await(const chunk of req){}
+ let body='';for await(const chunk of req)body+=chunk;
+ const prompt=JSON.parse(JSON.parse(body).messages[1].content);
+ const original=prompt.quotations.original.find(x=>x.quote.includes('I manually import CSV'));
+ const external=prompt.quotations.external.find(x=>x.quote.includes('it does not import CSV'));
  res.writeHead(200,{'Content-Type':'application/json'});
  res.end(JSON.stringify({choices:[{message:{content:JSON.stringify({
  taskRelation:'different_task',relationReason:'原帖需要导入，外部工具描述导出，方向不同。',
- originalEvidence:{sourceId:'a',quote:'I manually import CSV every day'},externalEvidence:{quote:'it does not import CSV'},
+ originalEvidence:{quoteId:original.quoteId},externalEvidence:{quoteId:external.quoteId},
  solutionCoverage:'not_described',coverageReason:'片段未描述原帖需要的导入办法，不能推断没有其他方案。',
- coverageQuote:'',nextCheck:'检查工具是否另有导入入口；若支持原帖输入，则撤回不同任务判断。'
+ coverageQuoteId:'',nextCheck:'检查工具是否另有导入入口；若支持原帖输入，则撤回不同任务判断。'
  })}}]}));
 });
 await new Promise(resolve=>model.listen(49624,'127.0.0.1',resolve));
@@ -79,6 +82,7 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             page.locator('#modal-root [data-action="workbench-evidence-compare"]').click()
             page.locator('#modal-root').get_by_text('可能是不同任务', exact=True).wait_for(timeout=10000)
             assert page.locator('#modal-root').get_by_text('I manually import CSV every day', exact=False).count() == 1
+            assert call(path)['comparisons'][0]['citationFormat'] == 'indexed-quotes-v1'
             assert page.locator('#dialog-form button[type="submit"]').count() == 0
             assert call(path)['reviews'] == []
             saved = call(path)['comparisons']
