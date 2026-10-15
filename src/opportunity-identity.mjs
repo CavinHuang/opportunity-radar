@@ -19,9 +19,15 @@ export function resolveOpportunityIdentity(store,candidate,{at=new Date().toISOS
 export function persistOpportunityIdentities(store,items,{at=new Date().toISOString()}={}){
  const results=[];
  for(const item of items){
+  const prior=item.analysisId&&store.list('home_opportunity_identity_events').find(x=>x.candidateId===item.id&&x.analysisId===item.analysisId);
+  const existing=prior&&store.get('home_opportunity_identities',prior.identityId);
+  if(existing){
+   results.push({candidateId:item.id,identityId:existing.id,firstSeenAt:existing.firstSeenAt,observations:existing.observations,knownSources:existing.sourceUrls.length,novelty:'seen_before',addedSourceCount:0});
+   continue;
+  }
   const identity=resolveOpportunityIdentity(store,item,{at});
   const saved=store.put('home_opportunity_identities',identity,identity.revision);
-  store.put('home_opportunity_identity_events',{id:randomUUID(),identityId:saved.id,candidateId:item.id,at,addedSourceCount:identity.addedSourceCount,sourceUrls:item.sourceUrls.slice(0,8)});
+  store.put('home_opportunity_identity_events',{id:randomUUID(),identityId:saved.id,candidateId:item.id,...(item.analysisId?{analysisId:item.analysisId}:{}),at,addedSourceCount:identity.addedSourceCount,sourceUrls:item.sourceUrls.slice(0,8)});
   results.push({candidateId:item.id,identityId:saved.id,firstSeenAt:saved.firstSeenAt,observations:saved.observations,knownSources:saved.sourceUrls.length,novelty:identity.change,addedSourceCount:identity.addedSourceCount});
  }
  return results;

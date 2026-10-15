@@ -366,6 +366,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/home/discovery'&&req.method==='GET')return send(res,200,homeDiscoveryDashboard(store));
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
+    if(pathname==='/api/home/opportunities/retry'&&req.method==='POST')return send(res,200,{discovery:await scanHomeOpportunities(store,{retryIncomplete:true})});
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
       const scan=await scanSources(store,{});
       return send(res,200,{scan,discovery:await scanHomeOpportunities(store,{scanStats:{feeds:scan.feeds,received:scan.received,added:scan.added,filtered:scan.filtered,duplicates:scan.duplicates,errors:scan.errors.length}})});
