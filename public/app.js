@@ -70,7 +70,10 @@ function renderEvidenceReviewQueue(r,id){
  }).join('');
  if(!r.results.length)return '<p class="subtext">当前检索没有可审核的结果</p>';
  const p=queue.priorityProgress;
- return `<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.differentTask?.length?`<details><summary>AI 判断任务不同 · ${queue.differentTask.length} 条待复查（可能误判）</summary>${rows(queue.differentTask)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
+ const saved=new Set((r.comparisons||[]).map(x=>x.url));
+ const remaining=[...queue.priority,...queue.other,...(queue.differentTask||[])].filter(x=>!saved.has(x.url)).length;
+ const advance=remaining?`<p class="subtext">已有 AI 草稿 ${(r.comparisons||[]).length}/${r.results.length} · 未审核线索待对照 ${remaining}</p><button type="button" class="btn btn-sm" data-action="workbench-evidence-next" data-id="${esc(id)}">继续 AI 对照（最多2条）</button>`:'<p class="subtext">当前未审核线索暂无待执行的 AI 对照；仍需人工核查原网页。</p>';
+ return `${advance}<p class="subtext">重点线索人工分类 ${Number(p.reviewed)}/${Number(p.total)} · 全部结果 ${queue.reviewed.length}/${r.results.length}。自动初筛仅用于排序，不代表需求或方案已核实。</p><h4>优先核查 · ${queue.priority.length} 条</h4>${rows(queue.priority)||'<p class="subtext">暂无待核查的重点线索，请复查下方结果以免漏判。</p>'}${queue.other.length?`<details><summary>弱相关与未分组 · ${queue.other.length} 条待复查（可能漏判）</summary>${rows(queue.other)}</details>`:''}${queue.differentTask?.length?`<details><summary>AI 判断任务不同 · ${queue.differentTask.length} 条待复查（可能误判）</summary>${rows(queue.differentTask)}</details>`:''}${queue.reviewed.length?`<details><summary>已人工分类 · ${queue.reviewed.length} 条（可修改）</summary>${rows(queue.reviewed)}</details>`:''}`;
 }
 
 function renderEvidenceComparison(draft,id){
@@ -79,6 +82,12 @@ function renderEvidenceComparison(draft,id){
  const coverage={reported_full:'片段声称有完整覆盖的办法',reported_partial:'片段描述部分覆盖的办法',not_described:'片段未描述覆盖办法',unknown:'方案覆盖未知'};
  const quote=(label,e)=>e?`<p class="subtext"><strong>${esc(label)}：</strong>${esc(e.quote)} <a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">核对原网页</a></p>`:'';
  return `<p class="subtext">AI 对照草稿 · 未经人工核查</p><h4>${esc(relations[c.taskRelation]||'任务关系未知')}</h4><p>${esc(c.relationReason)}</p>${quote('原帖引用',c.originalEvidence)}${quote('外部引用',c.externalEvidence)}<h4>${esc(coverage[c.solutionCoverage]||'方案覆盖未知')}</h4><p>${esc(c.coverageReason)}</p>${quote('方案线索引用',c.coverageQuote?{quote:c.coverageQuote,url:draft.url}:null)}<p><strong>下一项核查：</strong>${esc(c.nextCheck)}</p><p class="subtext">${esc(draft.notice)}</p><button type="button" class="btn btn-sm" data-action="workbench-review-item" data-id="${esc(id)}" data-evidence-url="${esc(draft.url)}">打开人工审核（自行填写）</button> <button type="button" class="btn btn-sm" data-action="workbench-evidence-review" data-id="${esc(id)}">返回复核列表</button>`;
+}
+
+function renderEvidenceComparisonBatch(batch,id){
+ const p=batch.progress;
+ const rows=batch.results.map(x=>`<div class="source-row"><div class="grow"><strong>${esc(x.title)}</strong><p class="subtext">${x.status==='saved'?'草稿已保存，未经人工审核':esc(x.reason)}</p><button type="button" class="btn btn-sm" data-action="workbench-evidence-compare" data-id="${esc(id)}" data-evidence-url="${esc(x.url)}">${x.status==='saved'?'查看对照草稿':'单独重试这条'}</button></div></div>`).join('');
+ return `<p>已有 AI 草稿 ${Number(p.compared)}/${Number(p.total)} · 未审核线索待对照 ${Number(p.pending)} · 本次会话暂跳过 ${Number(p.skipped)}</p>${rows}${p.available?`<button type="button" class="btn btn-sm" data-action="workbench-evidence-next" data-id="${esc(id)}">继续接下来的线索（最多2条）</button>`:`<p class="subtext">${p.pending?'其余待对照线索本次暂时跳过，可回列表单独重试。':'当前未审核线索已无待执行的 AI 对照。'}</p>`}<button type="button" class="btn btn-sm" data-action="workbench-evidence-review" data-id="${esc(id)}">返回复核列表</button><p class="subtext">${esc(batch.notice)}</p>`;
 }
 
 function failingSourceItem(h){const n=h?.failing||0;if(!n)return'';return `<div class="note-box" style="border-color:#eed7d4;background:#fdf4f2;flex:1;min-width:180px"><strong style="color:#b1514b">${n} 个来源异常</strong><p class="subtext" style="margin:4px 0 0">连续采集失败，请检查</p><button class="btn btn-sm" data-action="manage-sources" style="margin-top:8px">查看来源</button></div>`;}
@@ -968,14 +977,33 @@ async function perform(action,id,statusParam){const p=S.project;switch(action){
     modal('外部证据逐条核查',renderEvidenceReviewQueue(r,id),async()=>{},{readOnly:true});
     break;
   }
+  case 'workbench-evidence-next':{
+    if(S.evidenceComparisonBusy){toast('已有对照执行中，请等待完成');break;}
+    S.evidenceComparisonBusy=true;
+    try{
+      const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
+      if(!board.current)throw new Error('证据已变化，请重新打开复核列表');
+      const key=JSON.stringify([id,board.candidateFingerprint,board.searchRevision]);
+      S.comparisonSkips??={};
+      toast('正在对照接下来的线索（最多2条）');
+      const {batch}=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-comparison-next',{method:'POST',body:{candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision,limit:2,skipUrls:S.comparisonSkips[key]||[]}});
+      S.comparisonSkips[key]=batch.skipUrls;
+      modal('继续 AI 任务对照',renderEvidenceComparisonBatch(batch,id),async()=>{},{readOnly:true});
+    }finally{S.evidenceComparisonBusy=false;}
+    break;
+  }
   case 'workbench-evidence-compare':
   case 'workbench-evidence-recompare':{
+    if(S.evidenceComparisonBusy){toast('已有对照执行中，请等待完成');break;}
+    S.evidenceComparisonBusy=true;
+    try{
     const url=S.pendingEvidenceUrl;
     const board=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-review');
     if(!board.current||!board.results.some(x=>x.url===url))throw new Error('证据已变化，请重新打开复核列表');
     toast('正在对照原帖任务与外部线索');
     const {draft}=await api('/opportunity-scan/'+encodeURIComponent(id)+'/evidence-comparison',{method:'POST',body:{url,candidateFingerprint:board.candidateFingerprint,searchRevision:board.searchRevision,refresh:action==='workbench-evidence-recompare'}});
     modal('AI 证据对照 · '+draft.title,renderEvidenceComparison(draft,id),async()=>{},{readOnly:true});
+    }finally{S.evidenceComparisonBusy=false;}
     break;
   }
   case 'workbench-review-item':{

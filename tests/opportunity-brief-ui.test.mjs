@@ -74,3 +74,12 @@ test('cached model mismatch stays folded and editable while homepage separates m
  const card=context.renderHypothesisResearch({researchSummary:{modelComparisons:{analyzed:1,total:35,same_task:0,different_task:1,uncertain:0},progress:{reviewed:0,total:35,pending:35}}});
  assert.match(card,/AI 任务对照 1\/35/);assert.match(card,/人工分类 0\/35/);assert.match(card,/未审核草稿/);
 });
+test('continuation shows partial failures without marking them complete or hiding the retry entry',()=>{
+ const html=context.renderEvidenceComparisonBatch({progress:{compared:1,total:35,pending:34,skipped:1,available:33},
+  results:[{url:'https://example.org/failed',title:'<script>failure</script>',status:'failed',reason:'引用未通过核对'},
+   {url:'https://example.org/saved',title:'Saved',status:'saved'}],notice:'失败不计为完成'},'id');
+ assert.match(html,/已有 AI 草稿 1\/35/);assert.match(html,/本次会话暂跳过 1/);assert.match(html,/单独重试这条/);
+ assert.match(html,/继续接下来的线索/);assert.match(html,/未经人工审核/);assert.doesNotMatch(html,/<script>/);
+ const paused=context.renderEvidenceComparisonBatch({progress:{compared:34,total:35,pending:1,skipped:1,available:0},results:[]},'id');
+ assert.match(paused,/其余待对照线索本次暂时跳过/);assert.doesNotMatch(paused,/data-action="workbench-evidence-next"/);
+});

@@ -47,6 +47,13 @@ test('real HTTP comparison authenticates, fences search versions and persists on
   const replay=await request(payload,{'Idempotency-Key':'read-only-draft'});
   assert.equal(replay.data.draft.cached,true);assert.equal(replay.data.draft.readOnly,true);assert.equal(modelCalls,1);
   assert.equal(replay.data.draft.generatedAt,result.data.draft.generatedAt);
+  const nextPath=base+'/api/opportunity-scan/signal%3Aa/evidence-comparison-next';
+  const nextRequest=async(payload,key='comparison-test-owner')=>fetch(nextPath,{method:'POST',headers:{'Content-Type':'application/json','X-Radar-Owner-Key':key},body:JSON.stringify(payload)});
+  assert.equal((await nextRequest(payload,'wrong')).status,401);
+  assert.equal((await nextRequest({...payload,searchRevision:0})).status,409);
+  const continued=await nextRequest(payload);assert.equal(continued.status,200);
+  const batch=(await continued.json()).batch;assert.equal(batch.status,'complete');assert.equal(batch.results.length,0);
+  assert.equal(modelCalls,1);assert.equal(db.list('opportunity_evidence_reviews').length,0);
  }finally{
   db.close();await new Promise(r=>server.close(r));closeStore();await new Promise(r=>model.close(r));rmSync(directory,{recursive:true,force:true});
  }

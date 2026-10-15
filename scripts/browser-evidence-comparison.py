@@ -73,7 +73,10 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             page.locator('#modal-root [data-action="workbench-evidence-review"]').click()
             comparison = page.locator('#modal-root [data-action="workbench-evidence-compare"]')
             assert comparison.get_attribute('type') == 'button'
-            comparison.click()
+            page.locator('#modal-root [data-action="workbench-evidence-next"]').click()
+            page.locator('#modal-root').get_by_text('已有 AI 草稿 1/1', exact=False).wait_for(timeout=10000)
+            assert len(call(path)['comparisons']) == 1
+            page.locator('#modal-root [data-action="workbench-evidence-compare"]').click()
             page.locator('#modal-root').get_by_text('可能是不同任务', exact=True).wait_for(timeout=10000)
             assert page.locator('#modal-root').get_by_text('I manually import CSV every day', exact=False).count() == 1
             assert page.locator('#dialog-form button[type="submit"]').count() == 0
@@ -96,7 +99,7 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             assert not errors, errors
             browser.close()
         print(json.dumps({'synthetic': True, 'comparisonVisible': True,
-                          'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
+                          'boundedContinuation': True, 'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
     finally:
         server.terminate()
         try:

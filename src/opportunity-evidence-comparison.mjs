@@ -32,7 +32,7 @@ export function validateEvidenceComparison(parsed,originals,hit){
 }
 
 /** Persist model drafts separately; never classify owner evidence or fetch arbitrary post URLs. */
-export async function draftEvidenceComparison(store,id,{url,candidateFingerprint,searchRevision,refresh=false}={},
+async function generateEvidenceComparison(store,id,{url,candidateFingerprint,searchRevision,refresh=false}={},
  {fetchImpl=globalThis.fetch,env=process.env}={}){
  const board=evidenceReviewBoard(store,id);
  if(!board.current||candidateFingerprint!==board.candidateFingerprint||searchRevision!==board.searchRevision)
@@ -75,4 +75,16 @@ export async function draftEvidenceComparison(store,id,{url,candidateFingerprint
    searchRevision:board.searchRevision,items:[...fresh.comparisons.filter(x=>x.url!==url),draft]},row?.revision||0);
   return draft;
  });
+}
+
+const pendingComparisons=new WeakMap();
+/** Share duplicate requests only while they run; failures remain retryable. */
+export function draftEvidenceComparison(store,id,input={},options={}){
+ let pending=pendingComparisons.get(store);
+ if(!pending){pending=new Map();pendingComparisons.set(store,pending);}
+ const key=JSON.stringify([id,input?.candidateFingerprint,input?.searchRevision,input?.url,input?.refresh===undefined?false:input.refresh]);
+ if(pending.has(key))return pending.get(key);
+ const task=generateEvidenceComparison(store,id,input,options).finally(()=>pending.delete(key));
+ pending.set(key,task);
+ return task;
 }
