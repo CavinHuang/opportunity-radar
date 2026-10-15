@@ -7,6 +7,9 @@ import {evidenceQuotationContext} from './evidence-quotations.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const text=(value,max)=>typeof value==='string'?value.trim().slice(0,max):'';
 const normalize=value=>String(value||'').replace(/\s+/g,' ').trim();
+const providerError=e=>e.name==='TimeoutError'||e.name==='AbortError'?
+ fail('LLM_TIMEOUT','模型响应超时，未保存新草稿；可稍后重试或直接人工核查',504):
+ fail('LLM_UNAVAILABLE','暂时无法连接研究模型，未保存新草稿；可稍后重试',502);
 function quoted(quote,source){
  return typeof quote==='string'&&normalize(quote).length>=8&&quote.length<=280&&normalize(source).includes(normalize(quote));
 }
@@ -63,10 +66,16 @@ async function generateEvidenceComparison(store,id,{url,candidateFingerprint,sea
  const prompt={task:'对照原帖与这条外部线索，判断是否同一具体用户任务、片段是否描述了覆盖该任务的办法，并提出一个可证伪的下一项核查。短片段没提到方案不是没有方案。',
   schema:{taskRelation:'same_task | different_task | uncertain',relationReason:'中文依据',originalEvidence:{quoteId:'从original组选择，或空字符串'},externalEvidence:{quoteId:'从external组选择，或空字符串'},solutionCoverage:'reported_full | reported_partial | not_described | unknown',coverageReason:'中文依据',coverageQuoteId:'从external组选择方案能力的引用，或空字符串',nextCheck:'中文，具体检查什么以及哪种结果会推翻判断'},
   originals,external:quoteContext.external,quotations:quoteContext.quotations};
- const response=await fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
+ let response;
+ try{response=await fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
   body:JSON.stringify({model,messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(prompt)}],temperature:0.1,max_tokens:1500}),signal:AbortSignal.timeout(35000)});
+ }catch(e){throw providerError(e);}
  if(!response.ok)throw fail('LLM_HTTP_ERROR','模型请求失败 HTTP '+response.status,502);
- const data=await response.json(),raw=text(data?.choices?.[0]?.message?.content,14000);
+ let data;try{data=await response.json()}catch(e){
+  if(e instanceof SyntaxError)throw fail('LLM_INVALID_RESPONSE','模型服务返回了无效 JSON，未保存新草稿',502);
+  throw providerError(e);
+ }
+ const raw=text(data?.choices?.[0]?.message?.content,14000);
  let parsed;try{parsed=JSON.parse(raw.replace(/^```(?:json)?\s*/,'').replace(/```$/,'').trim())}catch{throw fail('LLM_INVALID_RESPONSE','模型未返回结构化对照结果',502)}
  const comparison=validateEvidenceComparison(parsed,originals,hit);
  const current=evidenceReviewBoard(store,id);

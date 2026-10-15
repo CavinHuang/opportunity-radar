@@ -131,3 +131,22 @@ test('automatic comparison drafts survive closing and reopening SQLite without c
   assert.equal(evidenceReviewBoard(db,'signal:a').comparisons.length,1);assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,0);
  }finally{db?.close();rmSync(dir,{recursive:true,force:true});}
 });
+test('provider timeouts and connection failures return stable actionable errors without changing saved drafts',async()=>{
+ const {db,input}=setup();try{
+  await draftEvidenceComparison(db,'signal:a',input,{env,fetchImpl:response(verdict())});
+  const saved=db.get('opportunity_evidence_comparisons','signal:a');
+  for(const [error,code,status] of [[new DOMException('timeout','TimeoutError'),'LLM_TIMEOUT',504],
+   [new DOMException('aborted','AbortError'),'LLM_TIMEOUT',504],[new TypeError('fetch failed'),'LLM_UNAVAILABLE',502]]){
+   await assert.rejects(draftEvidenceComparison(db,'signal:a',{...input,refresh:true},{env,fetchImpl:async()=>{throw error}}),{code,status});
+   assert.equal(db.get('opportunity_evidence_comparisons','signal:a').revision,saved.revision);
+  }
+  assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,0);
+ }finally{db.close();}
+});
+test('response-body timeouts and malformed provider JSON are classified before any draft is saved',async()=>{
+ const {db,input}=setup();try{
+  for(const [error,code] of [[new DOMException('timeout','TimeoutError'),'LLM_TIMEOUT'],[new SyntaxError('bad JSON'),'LLM_INVALID_RESPONSE']])
+   await assert.rejects(draftEvidenceComparison(db,'signal:a',input,{env,fetchImpl:async()=>({ok:true,json:async()=>{throw error}})}),{code});
+  assert.equal(db.get('opportunity_evidence_comparisons','signal:a'),null);
+ }finally{db.close();}
+});

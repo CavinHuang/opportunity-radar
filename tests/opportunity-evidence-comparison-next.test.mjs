@@ -74,3 +74,14 @@ test('continuation skips explicit owner-reviewed URLs without treating them as g
   assert.equal(result.status,'complete');assert.equal(evidenceReviewBoard(db,'signal:a').reviews.length,1);
  }finally{db.close();}
 });
+test('continuation explains timeouts and network failures while keeping affected URLs pending',async()=>{
+ const {db,input}=setup();try{
+  const batch=await continueEvidenceComparisons(db,'signal:a',input,{env,fetchImpl:async(u,o)=>{
+   const url=JSON.parse(JSON.parse(o.body).messages[1].content).external.url;
+   throw url.endsWith('/first')?new DOMException('timeout','TimeoutError'):new TypeError('network down');
+  }});
+  assert.deepEqual(batch.results.map(x=>x.code),['LLM_TIMEOUT','LLM_UNAVAILABLE']);
+  assert.equal(batch.progress.compared,0);assert.equal(batch.progress.pending,3);assert.equal(batch.progress.skipped,2);
+  assert.match(batch.results[0].reason,/超时/);assert.match(batch.results[1].reason,/无法连接/);
+ }finally{db.close();}
+});
