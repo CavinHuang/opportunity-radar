@@ -113,7 +113,7 @@ async function classifyJev(candidates,{env,fetchImpl,run}){
  if(candidates.length&&!out.size)throw Object.assign(new Error('Jev 未完成有效分析，请重试'),{analysis});
  return {engine:'jev',results:out,analysis};
 }
-async function executeHomeScan(store,{env=process.env,fetchImpl=globalThis.fetch,scanStats=null,retryIncomplete=false}={}){
+async function executeHomeScan(store,{env=process.env,fetchImpl=globalThis.fetch,scanStats=null,retryIncomplete=false,onProgress}={}){
  const all=homeDiscoveryCandidates(store);
  const candidates=selectBriefCandidates(all.items,store);
  const userFeedback=store.list('home_opportunity_feedback').map(f=>{
@@ -122,7 +122,7 @@ async function executeHomeScan(store,{env=process.env,fetchImpl=globalThis.fetch
  }).filter(f=>f.title&&['useful','false_positive'].includes(f.verdict));
  let result=null,reason=null,failedAnalysis=null;
  let run;
- try{run=homeAnalysisRun(store,candidates,{env,retryIncomplete});result=await classifyLLM(candidates,{env,fetchImpl,feedback:userFeedback,store,run})||await classifyJev(candidates,{env,fetchImpl,run});
+ try{run=homeAnalysisRun(store,candidates,{env,retryIncomplete,onProgress});result=await classifyLLM(candidates,{env,fetchImpl,feedback:userFeedback,store,run})||await classifyJev(candidates,{env,fetchImpl,run});
   if(!run.current())throw new Error('分析期间模型或反馈已变化，请重新分析');
  }
  catch(e){result=null;failedAnalysis=e.analysis||null;reason='AI 筛选失败：'+safe(e.message,150);}

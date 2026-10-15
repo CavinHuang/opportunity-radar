@@ -1,3 +1,4 @@
+import {startHomeAnalysisJob,currentHomeAnalysisJob} from './home-analysis-jobs.mjs';
 import {modelDiagnostics,probeModel} from './model-transport.mjs';
 import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
 import {opportunityDiscoveryBenchmark,opportunityBenchmarkHistory,captureOpportunityBenchmark} from './opportunity-discovery-benchmark.mjs';
@@ -366,6 +367,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/home/discovery'&&req.method==='GET')return send(res,200,homeDiscoveryDashboard(store));
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
+    if(pathname==='/api/home/opportunities/jobs/current'&&req.method==='GET')return send(res,200,{job:currentHomeAnalysisJob(store)});
+    if(pathname==='/api/home/opportunities/jobs'&&req.method==='POST')return send(res,202,startHomeAnalysisJob(store,await body(req)));
     if(pathname==='/api/home/opportunities/retry'&&req.method==='POST')return send(res,200,{discovery:await scanHomeOpportunities(store,{retryIncomplete:true})});
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
       const scan=await scanSources(store,{});

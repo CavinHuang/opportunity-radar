@@ -16,15 +16,9 @@ test('home recovery distinguishes old results from fresh findings and links a re
  S.homeAnalysisBusy=true;assert.match(context.homeAnalysisStatus({status:'filtered_partial'}),/data-action="retry-home-analysis" disabled/);
 });
 
-test('repeat clicks during home retry issue one request; failures release the button for retry',async()=>{
- let release,calls=0,fail=true;const S={},rendered=[];
- const context=vm.createContext({S,render:()=>rendered.push(S.homeAnalysisBusy),refresh:async()=>{},toast:()=>{},api:async(path,options)=>{
-  assert.equal(path,'/home/opportunities/retry');assert.equal(options.method,'POST');calls++;
-  await new Promise(r=>{release=r;});if(fail)throw new Error('temporary connection failure');return {discovery:{status:'filtered'}};
- }});
+test('home retry action uses the background retry mode without scanning feeds',async()=>{
+ const calls=[];
+ const context=vm.createContext({startHomeAnalysis:async mode=>calls.push(mode)});
  vm.runInContext(actionCode,context);
- const first=context.perform('retry-home-analysis');await context.perform('retry-home-analysis');assert.equal(calls,1);
- release();await assert.rejects(first,/connection failure/);assert.equal(S.homeAnalysisBusy,false);
- fail=false;const retry=context.perform('retry-home-analysis');release();await retry;
- assert.equal(calls,2);assert.equal(S.homeAnalysisBusy,false);assert.ok(rendered.includes(true));
+ await context.perform('retry-home-analysis');assert.deepEqual(calls,['retry']);
 });

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('function homeAnalysisStatus('),source.indexOf('\nfunction failingSourceItem'));
-const context=vm.createContext({S:{},esc:x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))});
+const context=vm.createContext({S:{},renderHomeAnalysisJob:()=>'',esc:x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))});
 vm.runInContext(code,context);
 test('homepage separates support leads and product hypotheses with citations and a falsifiable next action',()=>{
  const html=context.renderProductHypotheses({status:'filtered',items:[
