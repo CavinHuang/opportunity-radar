@@ -69,7 +69,7 @@ test('bounded candidate budget prioritizes recurring costs and reduces single-ho
   assert.equal(selectBriefCandidates(items,db).length,12);
  }finally{db.close();}
 });
-test('scan sends original context to model and persists grounded briefs, then downgrades changed evidence',async()=>{
+test('scan sends original context to model and persists grounded briefs, then hides changed evidence while retaining its audit snapshot',async()=>{
  const db=openDatabase();try{
   db.put('sources',{id:'s1',title:'I cannot reconcile invoice copies',description:text,url:originals[0].url,status:'new'});
   const env={RADAR_LLM_BASE_URL:'https://models.example/v1',RADAR_LLM_API_KEY:'synthetic',RADAR_LLM_MODEL:'test'};
@@ -81,7 +81,8 @@ test('scan sends original context to model and persists grounded briefs, then do
   assert.equal(out.productHypotheses,1);assert.equal(out.items[0].opportunityBrief.kind,'product_hypothesis');
   assert.equal(db.list('opportunities').length,0);
   const s=db.get('sources','s1');db.put('sources',{...s,description:'I manually copy invoices each week but cannot match numbers.'},s.revision);
-  assert.notEqual(homeOpportunitySnapshot(db).items[0].opportunityBrief.kind,'product_hypothesis');
+  assert.equal(homeOpportunitySnapshot(db).items.length,0);
+  assert.equal(db.get('home_opportunity_scans','latest').items[0].opportunityBrief.kind,'product_hypothesis');
  }finally{db.close();}
 });
 test('homepage discovery reaches a workflow behind more than 400 newer noisy records',async()=>{

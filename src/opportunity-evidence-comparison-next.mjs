@@ -3,6 +3,7 @@ import {draftEvidenceComparison} from './opportunity-evidence-comparison.mjs';
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const reasons={LLM_UNGROUNDED_QUOTE:'引用未通过核对，未保存草稿',LLM_INVALID_RESPONSE:'模型返回格式无效，未保存草稿',
  LLM_NOT_CONFIGURED:'研究模型尚未配置',LLM_HTTP_ERROR:'模型服务请求失败',BAD_LLM_ENDPOINT:'模型地址配置无效',
+ LLM_OUTPUT_TRUNCATED:'模型输出被截断，未保存新草稿',BAD_MODEL_TIMEOUT:'模型超时配置无效',
  LLM_TIMEOUT:'模型响应超时，未保存新草稿，可单独重试',LLM_UNAVAILABLE:'暂时无法连接研究模型，可稍后重试'};
 function pendingHits(board){
  const saved=new Set(board.comparisons.map(x=>x.url));
@@ -23,7 +24,7 @@ export async function continueEvidenceComparisons(store,id,{candidateFingerprint
   try{return {url:hit.url,title:hit.title,status:'saved',draft:await draftEvidenceComparison(store,id,
    {url:hit.url,candidateFingerprint,searchRevision},options)};}
   catch(e){return {url:hit.url,title:hit.title,status:'failed',code:e.code==='STALE_EVIDENCE'?'STALE_EVIDENCE':reasons[e.code]?e.code:'MODEL_UNAVAILABLE',
-   reason:reasons[e.code]||'对照未完成，可单独重试或直接人工核查'};}
+   ...(e.modelCall?{modelCall:e.modelCall}:{}),reason:(e.modelCall?e.message:reasons[e.code])||'对照未完成，可单独重试或直接人工核查'};}
  }));
  const fresh=evidenceReviewBoard(store,id);
  if(!fresh.current||fresh.candidateFingerprint!==candidateFingerprint||fresh.searchRevision!==searchRevision||results.some(x=>x.code==='STALE_EVIDENCE'))

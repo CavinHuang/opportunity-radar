@@ -1,3 +1,5 @@
+import {startHomeAnalysisJob,currentHomeAnalysisJob} from './home-analysis-jobs.mjs';
+import {modelDiagnostics,probeModel} from './model-transport.mjs';
 import {discoveryQualityReport as problemDiscoveryQualityReport,labelDiscoveryExample} from './discovery-quality-evaluation.mjs';
 import {opportunityDiscoveryBenchmark,opportunityBenchmarkHistory,captureOpportunityBenchmark} from './opportunity-discovery-benchmark.mjs';
 import {sourceCohortQualityReview} from './source-cohort-quality.mjs';
@@ -164,6 +166,8 @@ export function createServer(){return http.createServer(async(req,res)=>{
     if(agentTool&&req.method==='POST'){authorize(req,'agent');return send(res,200,{result:service.tool(agentTool[1],await body(req))});}
     if(!pathname.startsWith('/api/'))return send(res,404,{error:'NOT_FOUND'});
     authorize(req,'owner');
+    if(pathname==='/api/operations/models'&&req.method==='GET')return send(res,200,modelDiagnostics());
+    if(pathname==='/api/operations/models/probe'&&req.method==='POST'){const input=await body(req);if(!['llm','jev'].includes(input.kind))throw Object.assign(new Error('只能检查 llm 或 jev'),{status:400,code:'BAD_MODEL_KIND'});return send(res,200,await probeModel(input.kind));}
     if(pathname==='/api/operations/readiness'&&req.method==='GET')return send(res,200,readinessSummary(store,{ownerProtected:Boolean(process.env.RADAR_OWNER_TOKEN)}));
     if(pathname==='/api/source-operations'&&req.method==='GET')return send(res,200,sourceOperations(store));
     if(pathname==='/api/source-quality'&&req.method==='GET')return send(res,200,sourceQualityReport(store));
@@ -363,6 +367,9 @@ export function createServer(){return http.createServer(async(req,res)=>{
     }
     if(pathname==='/api/home/discovery'&&req.method==='GET')return send(res,200,homeDiscoveryDashboard(store));
     if(pathname==='/api/home/opportunities'&&req.method==='GET')return send(res,200,homeOpportunitySnapshot(store));
+    if(pathname==='/api/home/opportunities/jobs/current'&&req.method==='GET')return send(res,200,{job:currentHomeAnalysisJob(store)});
+    if(pathname==='/api/home/opportunities/jobs'&&req.method==='POST')return send(res,202,startHomeAnalysisJob(store,await body(req)));
+    if(pathname==='/api/home/opportunities/retry'&&req.method==='POST')return send(res,200,{discovery:await scanHomeOpportunities(store,{retryIncomplete:true})});
     if(pathname==='/api/home/opportunities/scan'&&req.method==='POST'){
       const scan=await scanSources(store,{});
       return send(res,200,{scan,discovery:await scanHomeOpportunities(store,{scanStats:{feeds:scan.feeds,received:scan.received,added:scan.added,filtered:scan.filtered,duplicates:scan.duplicates,errors:scan.errors.length}})});
@@ -514,7 +521,7 @@ export function createServer(){return http.createServer(async(req,res)=>{
       const saved=store.put('evidence',{...e,verificationState:state.state,verificationReason:state.reason,checks:state.checks||[],verifiedAt:new Date().toISOString()},e.revision);
       store.event('evidence.verified',e.id,'system',state,e.projectId);return send(res,200,{item:saved});}
     return send(res,404,{error:'NOT_FOUND',message:'Unknown endpoint'});
-  }catch(e){console.error(`[${new Date().toISOString()}] ${e.code||'ERROR'}: ${e.message}`);send(res,e.status||500,{error:e.code||'INTERNAL_ERROR',message:e.status?e.message:'服务出现错误，请检查终端日志'});}
+  }catch(e){console.error(`[${new Date().toISOString()}] ${e.code||'ERROR'}: ${e.message}`);send(res,e.status||500,{error:e.code||'INTERNAL_ERROR',message:e.status?e.message:'服务出现错误，请检查终端日志',...(e.modelCall?{modelCall:e.modelCall}:{})});}
 });}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const server=createServer();

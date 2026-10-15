@@ -1,3 +1,4 @@
+import {requestModelJSON} from './model-transport.mjs';
 // Jev System One 适配层：结构化判定模型（非 LLM），三种题型 Noul / Choice / Score。
 // 协议：POST https://openrouter.ai/api/alpha/decisions
 //   body: { model, state, questions: {name: {type, instructions, criteria}} }
@@ -23,24 +24,14 @@ export function jevConfig(env=process.env){
  *   - choice criteria: {"选项名":"描述",…}
  *   - score criteria: ["级别1","级别2",…]
  * fetchImpl 可注入用于测试。返回 {answers:{name:{…}}}。 */
-export async function jevSystemOne(state,questions,{apiKey,apiUrl=JEV_DEFAULT_URL,model=JEV_DEFAULT_MODEL,fetchImpl=globalThis.fetch,siteUrl,siteName}={}){
+export async function jevSystemOne(state,questions,{apiKey,apiUrl=JEV_DEFAULT_URL,model=JEV_DEFAULT_MODEL,fetchImpl=globalThis.fetch,siteUrl,siteName,env=process.env}={}){
  if(!apiKey)throw fail('JEV_NOT_CONFIGURED','JEV_API_KEY 未配置，无法调用 Jev System One',503);
  if(!state)throw fail('BAD_REQUEST','state 不能为空');
  if(!questions||!Object.keys(questions).length)throw fail('BAD_REQUEST','questions 不能为空');
  const headers={'Content-Type':'application/json',Authorization:`Bearer ${apiKey}`};
  if(siteUrl)headers['HTTP-Referer']=siteUrl;
  if(siteName)headers['X-OpenRouter-Title']=siteName;
- const response=await fetchImpl(apiUrl,{
-  method:'POST',headers,
-  body:JSON.stringify({model,state,questions}),
-  signal:AbortSignal.timeout(15000),
- });
- if(!response.ok){
-  const text=await response.text().catch(()=>'');
-  const code=response.status===401?'JEV_UNAUTHORIZED':response.status===402?'JEV_OUT_OF_CREDITS':'JEV_HTTP_ERROR';
-  throw fail(code,`Jev 请求失败（HTTP ${response.status}）：${text.slice(0,200)}`,response.status>=500?502:response.status);
- }
- const data=await response.json();
+ const {data}=await requestModelJSON({kind:'jev',env:{...env,JEV_API_KEY:apiKey,JEV_API_URL:apiUrl,JEV_MODEL:model},fetchImpl,headers,payload:{state,questions},operation:'signal_prefilter'});
  const answers=data?.answers;
  if(!answers)throw fail('JEV_BAD_RESPONSE','Jev 返回缺少 answers',502);
  return answers;

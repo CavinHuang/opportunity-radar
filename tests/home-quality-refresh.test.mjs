@@ -11,7 +11,7 @@ function harness(){
  const requests=[];
  const rendered=[];
  const S={view:'brief',briefTab:'opportunities',signalStatus:'new',signalOffset:0,signalQuery:'',signalSourceId:'',booting:true};
- const context=vm.createContext({S,
+ const context=vm.createContext({S,homeJobPollFailures:0,acceptHomeAnalysisJob:()=>{},scheduleHomeAnalysisPolling:()=>{},
   api:async path=>{requests.push(path);return path==='/home/problem-quality'?quality:{items:[],projects:[]};},
   render:()=>rendered.push(S.discoveryQuality),toast:()=>{},t:x=>x});
  vm.runInContext(refreshSource,context);

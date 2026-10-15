@@ -22,9 +22,20 @@ const ctx=candidateContext(db,'signal:a');
 db.put('opportunity_external_research',{id:'signal:a',candidateFingerprint:ctx.fingerprint,
  results:[{url:'https://example.org/export',title:'CSV Excel export tool',excerpt:'This tool exports Excel sheets to CSV; it does not import CSV.',triageType:'possible_alternative'}]});
 db.close();
+let homeCalls=0,releaseHome=null;
 const model=http.createServer(async(req,res)=>{
+ if(req.url==='/release-home'){releaseHome?.();res.end('OK');return;}
+ if(req.url==='/stats'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({homeCalls}));return;}
  let body='';for await(const chunk of req)body+=chunk;
- const prompt=JSON.parse(JSON.parse(body).messages[1].content);
+ const request=JSON.parse(body);
+ if(request.messages.length===1){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:'OK'}}]}));return;}
+ const prompt=JSON.parse(request.messages[1].content);
+ if(prompt.candidates){
+  const attempt=++homeCalls;
+  if(attempt===2)await new Promise(resolve=>{releaseHome=resolve;});
+  const rows=attempt===1?[]:prompt.candidates.map(x=>({id:x.id,verdict:'keep',reason:'用户的重复导入任务需要核查'}));
+  res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:JSON.stringify(rows)}}]}));return;
+ }
  const original=prompt.quotations.original.find(x=>x.quote.includes('I manually import CSV'));
  const external=prompt.quotations.external.find(x=>x.quote.includes('it does not import CSV'));
  res.writeHead(200,{'Content-Type':'application/json'});
@@ -40,8 +51,8 @@ const {createServer}=await import('./src/server.mjs');
 createServer().listen(49625,'127.0.0.1');
 """
 
-def call(path):
-    req = urllib.request.Request(BASE + path, headers={'X-Radar-Owner-Key': KEY})
+def call(path, payload=None):
+    req = urllib.request.Request(BASE + path, data=json.dumps(payload).encode() if payload is not None else None, headers={'X-Radar-Owner-Key': KEY})
     with urllib.request.urlopen(req, timeout=10) as response:
         return json.load(response)
 
@@ -100,10 +111,45 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             assert page.locator('#dialog-form select[name="classification"]').input_value() == 'uncertain'
             assert call(path)['reviews'] == []
             page.locator('#modal-root .modal-close').click()
+            page.locator('[data-action="model-diagnostics"]').click()
+            page.locator('#modal-root').get_by_text('研究与草稿模型', exact=True).wait_for()
+            assert page.locator('#dialog-form button[type="submit"]').count() == 0
+            page.locator('#modal-root [data-action="model-probe"][data-id="llm"]').click()
+            page.locator('#modal-root').get_by_text('最小请求已通过；真实任务仍需验证。', exact=True).wait_for(timeout=10000)
+            assert call('/api/operations/models')['recent'][0]['operation'] == 'connectivity_probe'
+            assert call(path)['comparisons'][0]['generatedAt'] == saved[0]['generatedAt']
+            assert call(path)['reviews'] == []
+            page.locator('#modal-root .modal-close').click()
+            failed_scan = call('/api/home/opportunities/retry', {})['discovery']
+            assert failed_scan['status'] == 'filter_failed'
+            page.locator('[data-action="show-opportunities"]').click()
+            retry_home = page.locator('[data-action="retry-home-analysis"]').first
+            retry_home.wait_for()
+            assert page.get_by_text('不重新扫描信息源。原帖、模型或反馈变化后，会重新分析对应候选。', exact=True).count() >= 1
+            retry_home.click()
+            page.locator('[aria-label="首页检索任务"]').get_by_text('正在分析候选', exact=True).wait_for(timeout=10000)
+            running = call('/api/home/opportunities/jobs/current')['job']
+            assert running['inProgress'] is True
+            page.reload(wait_until='networkidle')
+            page.locator('[aria-label="首页检索任务"]').get_by_text('正在分析候选', exact=True).wait_for(timeout=10000)
+            attached = call('/api/home/opportunities/jobs/current')['job']
+            assert attached['jobId'] == running['jobId']
+            with urllib.request.urlopen('http://127.0.0.1:49624/stats') as stats_response:
+                assert json.load(stats_response)['homeCalls'] == 2
+            with urllib.request.urlopen('http://127.0.0.1:49624/release-home') as release_response:
+                assert release_response.status == 200
+            page.locator('[data-action="retry-home-analysis"]').first.wait_for(state='detached')
+            page.locator('[aria-label="首页检索任务"]').get_by_text('本轮分析完成', exact=True).wait_for(timeout=10000)
+            complete = call('/api/home/opportunities')
+            assert complete['status'] == 'filtered'
+            assert complete['analysis']['unclassified'] == 0
+            assert complete['accepted'] == 1
+            assert call(path)['reviews'] == []
+            assert call(path)['comparisons'][0]['generatedAt'] == saved[0]['generatedAt']
             assert not errors, errors
             browser.close()
         print(json.dumps({'synthetic': True, 'comparisonVisible': True,
-                          'boundedContinuation': True, 'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
+                          'backgroundJobReattached': True, 'homeAnalysisRecovery': True, 'modelDiagnosticsProbe': True, 'boundedContinuation': True, 'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
     finally:
         server.terminate()
         try:
