@@ -24,7 +24,9 @@ db.put('opportunity_external_research',{id:'signal:a',candidateFingerprint:ctx.f
 db.close();
 const model=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
- const prompt=JSON.parse(JSON.parse(body).messages[1].content);
+ const request=JSON.parse(body);
+ if(request.messages.length===1){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:'OK'}}]}));return;}
+ const prompt=JSON.parse(request.messages[1].content);
  const original=prompt.quotations.original.find(x=>x.quote.includes('I manually import CSV'));
  const external=prompt.quotations.external.find(x=>x.quote.includes('it does not import CSV'));
  res.writeHead(200,{'Content-Type':'application/json'});
@@ -100,10 +102,19 @@ with tempfile.TemporaryDirectory(prefix='radar-comparison-browser-') as director
             assert page.locator('#dialog-form select[name="classification"]').input_value() == 'uncertain'
             assert call(path)['reviews'] == []
             page.locator('#modal-root .modal-close').click()
+            page.locator('[data-action="model-diagnostics"]').click()
+            page.locator('#modal-root').get_by_text('研究与草稿模型', exact=True).wait_for()
+            assert page.locator('#dialog-form button[type="submit"]').count() == 0
+            page.locator('#modal-root [data-action="model-probe"][data-id="llm"]').click()
+            page.locator('#modal-root').get_by_text('最小请求已通过；真实任务仍需验证。', exact=True).wait_for(timeout=10000)
+            assert call('/api/operations/models')['recent'][0]['operation'] == 'connectivity_probe'
+            assert call(path)['comparisons'][0]['generatedAt'] == saved[0]['generatedAt']
+            assert call(path)['reviews'] == []
+            page.locator('#modal-root .modal-close').click()
             assert not errors, errors
             browser.close()
         print(json.dumps({'synthetic': True, 'comparisonVisible': True,
-                          'boundedContinuation': True, 'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
+                          'modelDiagnosticsProbe': True, 'boundedContinuation': True, 'savedDraftReused': True, 'ownerNotesNotPrefilled': True, 'ownerReviews': 0}, ensure_ascii=False))
     finally:
         server.terminate()
         try:

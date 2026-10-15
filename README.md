@@ -392,3 +392,11 @@ CI：`.github/workflows/ci.yml` 已配置；真正的远程 CI 运行及证据�
 ---
 
 项目工作文档：[V1.2 PRD](docs/PRD_V1.2.md) · [Agent 业务契约](docs/AGENT_TOOL_CONTRACT.md) · [首版验收标准](docs/ACCEPTANCE_GATES.md)
+
+### 模型调用诊断
+
+首页与信息源页面的「模型诊断」分别展示研究模型和 Jev 配置、当前进程最近 40 次调用元数据，支持对两个配置各执行一次最小连接测试。测试仅发送固定公开示例，不修改机会、研究或人工审核记录。可通过 Owner 鉴权的 `GET /api/operations/models` 查看，`POST /api/operations/models/probe` 接收 `{"kind":"llm"}` 或 `{"kind":"jev"}`；Agent Token 不可访问。
+
+信号预筛优先使用 Jev，未配置时使用原有可选 LLM 预筛；首页产品假设优先使用 `RADAR_LLM_*`，未配置时才使用 Jev；研究草稿和证据对照只使用研究模型。失败不会自动切换到 Jev，也不把探测成功当成真实任务验收通过。
+
+首页分析、研究草稿及证据对照的请求和响应体共享 `RADAR_LLM_TIMEOUT_MS`（默认 90000），Jev 使用 `JEV_TIMEOUT_MS`（默认 15000）；二者均需为 1000–180000 的整数。连接测试也使用相同配置。诊断保留主机名、模型、调用编号、耗时、HTTP 状态、允许列出的上游错误码与请求编号；不保存密钥、请求正文、完整 URL 或上游原始错误文本。HTTP 503 不再被解释为两个模型都不可用。记录在服务重启后清空，历史有效草稿仍可复用。
